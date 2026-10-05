@@ -128,10 +128,10 @@ module tb_terminal_fsm;
         end
         fp_payload_buf[10] = 8'h00;  // result=PASS（覆盖第一个 r2 字节位置前先设 result）
         // 等等，RESULT 载荷布局是 result(1B)+hd(1B)+r2(8B) = 地址 [0]=result, [1]=hd, [2..9]=r2
-        fp_payload_buf[0] = 8'h00;  // result = 0 (PASS)
-        fp_payload_buf[1] = 8'h05;  // hd = 5
+        fp_payload_buf[0] = 8'h00;
+        fp_payload_buf[1] = 8'h05;
         for (i = 0; i < 8; i = i + 1) begin
-            fp_payload_buf[2 + i] = 8'hC0 + i;  // r2 = C0..C7
+            fp_payload_buf[2 + i] = ~(8'hA1 + i);  // r2 = ~C2
         end
 
         repeat (3) @(negedge clk);
@@ -171,8 +171,9 @@ module tb_terminal_fsm;
         // TB 发 RESULT（PASS + R2）——先重填载荷（CHALLENGE 种子已覆盖！）
         fp_payload_buf[0] = 8'h00;                   // result = PASS
         fp_payload_buf[1] = 8'h05;                   // hd = 5
+        // R2 = ~C2（C2 修复后第一次 C2 = A1..A8，R2 = ~A1..~A8 = 5E..57）
         for (i = 0; i < 8; i = i + 1)
-            fp_payload_buf[2 + i] = 8'hC0 + i;       // r2 = C0..C7
+            fp_payload_buf[2 + i] = ~(8'hA1 + i);
         feed_frame(24'h0093, 8'd10);
 
         // DUT 验 R2 后应发 CONFIRM

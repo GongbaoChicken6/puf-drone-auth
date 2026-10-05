@@ -82,11 +82,16 @@ module terminal_fsm # (
     // PUF 响应缓冲（4 种子 → 4×8B 响应 = 32B，W3 桩 = 种子直通）
     reg [7:0]  resp_buf [0:31];
 
-    // 基站模板（R2 验证用，W3 用固定期望值；W3+ 升级为 BRAM 模板）
+    // C2 反挑战计数器 + 动态 R2（防重放，审查盲区 #2 修复）
+    // C2 每次 auth_start 递增 → R2 = ~C2 也变 → 旧 R2 无法重放
+    reg [7:0]  c2_counter [0:7];
     reg [7:0]  r2_expected [0:7];
     integer    j;
     initial begin
-        for (j = 0; j < 8; j = j + 1) r2_expected[j] = 8'hC0 + j[7:0];
+        for (j = 0; j < 8; j = j + 1) begin
+            c2_counter[j]  = 8'hA0 + j[7:0];
+            r2_expected[j] = ~(8'hA0 + j[7:0]);
+        end
     end
 
     assign auth_busy  = (state != S_IDLE) && (state != S_SESSION);
@@ -173,8 +178,11 @@ module terminal_fsm # (
                         tx_buf[5]  <= 8'hAD;
                         tx_buf[6]  <= 8'hBE;
                         tx_buf[7]  <= 8'hEF;
-                        for (k = 0; k < 8; k = k + 1)
-                            tx_buf[8+k] <= 8'hA0 + k[7:0];  // C2
+                        for (k = 0; k < 8; k = k + 1) begin
+                            c2_counter[k]  <= c2_counter[k] + 8'd1;
+                            r2_expected[k] <= ~(c2_counter[k] + 8'd1);
+                            tx_buf[8+k]    <= c2_counter[k] + 8'd1;
+                        end
                         tx_len <= 6'd16;
                         state  <= S_TX_ACCESS;
                     end
@@ -338,8 +346,11 @@ module terminal_fsm # (
                         tx_buf[5]  <= 8'hAD;
                         tx_buf[6]  <= 8'hBE;
                         tx_buf[7]  <= 8'hEF;
-                        for (k = 0; k < 8; k = k + 1)
-                            tx_buf[8+k] <= 8'hA0 + k;
+                        for (k = 0; k < 8; k = k + 1) begin
+                            c2_counter[k]  <= c2_counter[k] + 8'd1;
+                            r2_expected[k] <= ~(c2_counter[k] + 8'd1);
+                            tx_buf[8+k]    <= c2_counter[k] + 8'd1;
+                        end
                         tx_len <= 6'd16;
                         state  <= S_TX_ACCESS;
                     end
