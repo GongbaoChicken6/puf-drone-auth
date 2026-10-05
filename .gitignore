@@ -1,0 +1,62 @@
+# Vivado generated files
+*.jou
+*.log
+*.str
+*.bak
+*.wdb
+*.wcfg
+*.hw
+*.ip_user_files/
+*.sim/
+*.cache/
+*.hw/
+*.runs/
+*.srcs/
+*.xpr
+*.cache
+*.gps
+*.hw
+*.ip_user_files
+*.runs
+*.sim
+*.cpg
+*.ltx
+*.dcp
+*.bit
+*.xsa
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Simulation
+*.wcfg
+*.wdb
+xsim.dir/
+xsim/*.log
+glbl.v
+
+# Data (large files - keep CSV but exclude raw)
+data/crp_datasets/*.csv.gz
+data/templates/*.pkl
+
+# Reports (generated)
+build/reports/*.txt
+build/reports/*.rpt
