@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>PUF 无人机认证 · 竞赛全周期思维导图</title>
+<style>
+:root{
+  --bg:#0a0e1a;--panel:#0e1520;--border:#1e2840;
+  --text:#dfe7f3;--muted:#7b8ba8;--dim:#4a5a78;
+  --cyan:#22d3ee;--green:#00d68f;--amber:#f59e0b;--red:#ef4444;--blue:#3b82f6;--purple:#a78bfa;--pink:#f472b6;
+  --done:#00d68f;--doing:#22d3ee;--wait:#4a5a78;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.5;overflow-x:hidden}
+.wrap{max-width:1400px;margin:0 auto;padding:20px}
+
+h1{text-align:center;font-size:24px;font-weight:800;margin:24px 0 4px;
+  background:linear-gradient(135deg,var(--cyan),var(--green),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sub{text-align:center;color:var(--muted);font-size:13px;margin-bottom:32px}
+
+/* ===== Legend ===== */
+.legend{display:flex;justify-content:center;gap:16px;margin-bottom:28px;flex-wrap:wrap}
+.legend span{font-size:11px;display:flex;align-items:center;gap:5px}
+.legend .sw{width:12px;height:12px;border-radius:3px}
+
+/* ===== Mind Map ===== */
+.mindmap{position:relative;width:100%;min-height:800px;padding:0 0 40px}
+
+/* Center Node */
+.center-node{position:absolute;left:50%;top:380px;transform:translate(-50%,-50%);z-index:10;
+  background:linear-gradient(135deg,#0c2340,#1a0533);border:2px solid var(--cyan);
+  border-radius:16px;padding:16px 28px;text-align:center;
+  box-shadow:0 0 30px rgba(34,211,238,.3),0 0 60px rgba(34,211,238,.1)}
+.center-node .t{font-size:16px;font-weight:800;color:var(--cyan);white-space:nowrap}
+.center-node .s{font-size:11px;color:var(--muted);margin-top:2px}
+.center-node .pct{font-size:24px;font-weight:800;color:var(--green);margin-top:4px}
+
+/* Branch containers */
+.branch{position:absolute;width:300px}
+
+/* Node styles */
+.node{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px;position:relative}
+.node .t{font-size:13px;font-weight:600;color:var(--text)}
+.node .d{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4}
+.node .tags{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.node .tag{font-size:9.5px;padding:1px 6px;border-radius:3px;font-weight:600}
+.node .tag.g{background:#052e1a;color:var(--green)}
+.node .tag.c{background:#0c2028;color:var(--cyan)}
+.node .tag.a{background:#2a1a0a;color:var(--amber)}
+.node .tag.w{background:var(--bg3);color:var(--dim)}
+.node.done{border-color:var(--green)}
+.node.done .t{color:var(--green)}
+.node.doing{border-color:var(--cyan)}
+.node.doing .t{color:var(--cyan)}
+.node h4{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+
+/* SVG connections */
+svg.conn{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1}
+
+/* Sub-branch items */
+.sub-items{margin-top:6px}
+.sub-items .si{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);padding:2px 0}
+.sub-items .si::before{content:"▸";color:var(--dim);font-size:10px}
+.sub-items .si.ok::before{content:"✅";font-size:10px}
+.sub-items .si.no::before{content:"⬜";font-size:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>PUF 无人机认证 · 竞赛全周期思维导图</h1>
+<div class="sub">从报名到决赛答辩 · 全部任务 · 依赖关系 · 当前状态 · 2026-10-05</div>
+
+<div class="legend">
+  <span><span class="sw" style="background:var(--green)"></span> 已完成</span>
+  <span><span class="sw" style="background:var(--cyan)"></span> 进行中</span>
+  <span><span class="sw" style="background:var(--border)"></span> 待开始</span>
+  <span><span class="sw" style="background:var(--amber)"></span> 需要板子</span>
+  <span style="color:var(--dim);font-size:10px">── 连线表示依赖/顺序关系</span>
+</div>
+
+<div class="mindmap" id="mindmap">
+<svg class="conn" id="conn-svg"></svg>
+
+<!-- ═══ 中心节点 ═══ -->
+<div class="center-node" style="left:50%;top:380px">
+  <div class="t">🔑 PUF 无人机认证</div>
+  <div class="s">ZC702 · XC7Z020 · AMD 自主选题初级组</div>
+  <div class="pct">40%</div>
+</div>
+
+<!-- ═══ 左上：已完成基础 ═══ -->
+<div class="branch" style="left:20px;top:30px;width:340px">
+  <div class="node done" style="border-color:var(--green)">
+    <h4>✅ 已完成基础设施</h4>
+    <div class="tags"><span class="tag g">9-25</span><span class="tag g">零硬件依赖</span></div>
+    <div class="sub-items">
+      <div class="si ok">竞赛报名确认 (9-22 死线)</div>
+      <div class="si ok">ZC702 到位 + Vivado 2026.1 验证</div>
+      <div class="si ok">设计方案 v2.1→v3.0 (三轮 auto-review, 52 findings→0)</div>
+      <div class="si ok">开源分析报告 (4 仓库逐行分析, 744 行节省)</div>
+      <div class="si ok">通信选型 (433MHz SiK + MAVLink v2, 合规核验)</div>
+      <div class="si ok">W1 双环振比值 RTL (xvlog + Artix-7 综合 ✅)</div>
+      <div class="si ok">B线 Python (crp_pool + template_db + threshold + protocol)</div>
+      <div class="si ok">B线 评估工具 (hamming + compare + quantizer)</div>
+      <div class="si ok">项目仓库 D:puf-drone-auth (11 commits, 67 files)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 右上：W2 代码（已完成）═══ -->
+<div class="branch" style="right:20px;top:30px;width:340px">
+  <div class="node done" style="border-color:var(--green)">
+    <h4 style="color:var(--green)">📦 W2 16 环阵列（代码完成）</h4>
+    <div class="tags"><span class="tag c">xvlog ✅</span><span class="tag c">xsim TB_PASS ✅</span><span class="tag c">1,041 行</span></div>
+    <div class="sub-items">
+      <div class="si ok">ro_array.v — 16 环 + 计数器</div>
+      <div class="si ok">challenge_decode.v — LFSR + Fisher-Yates</div>
+      <div class="si ok">w2_top.v — 顶层 FSM (6 态)</div>
+      <div class="si ok">uart_tx.v / uart_rx.v — PUF-lab 复用</div>
+      <div class="si ok">w2_waiver.xdc — 环振豁免</div>
+      <div class="si ok">tb_challenge_decode.v — 自校验 TB</div>
+      <div class="si">→ 下一步: 上板烧录 + 频率实测</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 左下：W3 协议（进行中）═══ -->
+<div class="branch" style="left:20px;top:580px;width:340px">
+  <div class="node doing" style="border-color:var(--cyan)">
+    <h4 style="color:var(--cyan)">🔄 W3 协议整合</h4>
+    <div class="tags"><span class="tag c">B线完成 ✅</span><span class="tag a">A线待写</span><span class="tag a">需要板2</span></div>
+    <div class="sub-items">
+      <div class="si ok">B线: protocol.py 状态机 + MAVLink v2 帧 (已完成)</div>
+      <div class="si ok">B线: crp_pool.py 线程安全 + JSON 持久化 (已完成)</div>
+      <div class="si ok">B线: hsm.py HSM 接口 (已完成)</div>
+      <div class="si no">A线: mavlink_frame.v — MAVLink 帧构造器 (PL)</div>
+      <div class="si no">A线: crc16_mcrf4xx.v — CRC 核 (翻译 c_library_v2)</div>
+      <div class="si no">A线: terminal_fsm.v — 终端状态机 (纯 PL)</div>
+      <div class="si no">B线: hfida.xml — 自定义 dialect (msgid 0x0090~0x0095)</div>
+      <div class="si no">双线: 接口冻结评审 (格式+位宽+msgid 统一确认)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 右下：W4 实验（待开始）═══ -->
+<div class="branch" style="right:20px;top:580px;width:340px">
+  <div class="node" style="border-color:var(--border)">
+    <h4 style="color:var(--muted)">🧪 W4 实验周（需要板 + 电台）</h4>
+    <div class="tags"><span class="tag a">需要 ZC702</span><span class="tag a">需要电台</span><span class="tag w">W4 目标</span></div>
+    <div class="sub-items">
+      <div class="si no">温度实验 (暖手宝/冰袋, ΔT≤30°C, 70°C 硬停)</div>
+      <div class="si no">ML 攻击实验 (合成 arbiter 基线 + RO 排序重构)</div>
+      <div class="si no">无线链路联调 (电台 air rate 64k / ECC / NETID)</div>
+      <div class="si no">多终端并发演示 (实例 0~3)</div>
+      <div class="si no">AI 扩展最小闭环 (BNN/PQN overlay 或任务帧)</div>
+      <div class="si no">可靠性正式数据采集 (reliability vs 温度曲线)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 底部：W5-W6 交付 ═══ -->
+<div class="branch" style="left:50%;top:820px;transform:translateX(-50%);width:720px">
+  <div class="node" style="border-color:var(--border)">
+    <h4 style="color:var(--muted)">📦 W5-W6 冻结 + 交付</h4>
+    <div class="sub-items" style="columns:2;column-gap:24px">
+      <div class="si no">功能冻结令 (任何新想法→未来工作)</div>
+      <div class="si no">全量指标实测 (ROC/EER + 时延 + 资源 + NIST)</div>
+      <div class="si no">纯 PC 软件基线对比</div>
+      <div class="si no">报告主体成文 (失败分析章节现成)</div>
+      <div class="si no">视频 v1 + 终版</div>
+      <div class="si no">Skill 打包 (PUF 评估 + MAVLink 回环)</div>
+      <div class="si no">复现包 (从零跑通文档)</div>
+      <div class="si no">11-03 晚提交 → 11-04 18:00 硬死线</div>
+      <div class="si no">决赛彩排 + 答辩 QA 演练</div>
+      <div class="si no">个人 Verilog 功课 (决赛基础编程考核)</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /mindmap -->
+
+<script>
+// 连线绘制
+function drawConnections() {
+  const svg = document.getElementById('conn-svg');
+  const mm = document.getElementById('mindmap');
+  const mmRect = mm.getBoundingClientRect();
+  svg.style.width = mmRect.width + 'px';
+  svg.style.height = mm.scrollHeight + 'px';
+  svg.setAttribute('width', mmRect.width);
+  svg.setAttribute('height', mm.scrollHeight);
+
+  // 清空
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  function getCenter(el) {
+    const r = el.getBoundingClientRect();
+    return { x: r.left - mmRect.left + r.width / 2, y: r.top - mmRect.top + r.height / 2 };
+  }
+  function getEdge(el, side) {
+    const r = el.getBoundingClientRect();
+    return { x: r.left - mmRect.left + (side === 'right' ? r.width : side === 'left' ? 0 : r.width/2), y: r.top - mmRect.top + r.height / 2 };
+  }
+
+  // 找到各分支容器
+  const branches = mm.querySelectorAll('.branch');
+  const center = mm.querySelector('.center-node');
+  if (!center) return;
+  const c = getCenter(center);
+
+  // 中心 → 各分支连线
+  branches.forEach(br => {
+    const e = getEdge(br, 'auto');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    // 贝塞尔曲线
+    const startX = c.x, startY = c.y;
+    const endX = e.x, endY = e.y;
+    const midY = startY + (endY - startY) * 0.5;
+    path.setAttribute('d', `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'var(--border)');
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('stroke-dasharray', '6 3');
+    path.setAttribute('opacity', '0.5');
+    svg.appendChild(path);
+  });
+
+  // 箭头标记
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  defs.innerHTML = '<marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--border)"/></marker>';
+  svg.appendChild(defs);
+}
+drawConnections();
+window.addEventListener('resize', drawConnections);
+</script>
+</body>
+</html>

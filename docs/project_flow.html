@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PUF 无人机认证 · 竞赛全周期总控面板</title>
+<style>
+:root{
+  --bg:#0a0e1a;--bg2:#0e1420;--bg3:#131a2a;--border:#1e2840;
+  --text:#dfe7f3;--muted:#7b8ba8;--dim:#4a5a78;
+  --cyan:#22d3ee;--green:#00d68f;--amber:#f59e0b;--red:#ef4444;--blue:#3b82f6;--purple:#a78bfa;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.55}
+.wrap{max-width:1300px;margin:0 auto;padding:24px 20px 80px}
+
+/* Hero */
+.hero{text-align:center;padding:48px 0 36px;border-bottom:1px solid var(--border)}
+.hero h1{font-size:clamp(26px,4.5vw,44px);font-weight:800;letter-spacing:-1px;
+  background:linear-gradient(135deg,var(--cyan),var(--blue),var(--green));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:10px}
+.hero p{color:var(--muted);font-size:15px}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:32px 0}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+.stat .v{font-size:28px;font-weight:800}
+.stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+.stat .v.g{color:var(--green)} .stat .v.c{color:var(--cyan)}
+.stat .v.a{color:var(--amber)} .stat .v.b{color:var(--blue)}
+
+/* Section */
+section{margin-top:48px}
+h2{font-size:17px;font-weight:700;color:var(--text);border-left:3px solid var(--cyan);padding-left:12px;margin-bottom:6px}
+.sub{font-size:12px;color:var(--muted);margin-bottom:16px;padding-left:15px}
+
+/* Flow Diagram */
+.flow{position:relative;padding:20px 0}
+.phase{display:flex;align-items:center;gap:10px;margin:0 0 4px}
+.phase .pnum{font-size:11px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:1px;min-width:120px}
+.phase .pstat{font-size:11px;padding:2px 10px;border-radius:10px;font-weight:600}
+.pstat.done{background:#052e1a;color:var(--green)}
+.pstat.now{background:#0c2028;color:var(--cyan)}
+.pstat.wait{background:var(--bg3);color:var(--dim)}
+
+.ftasks{margin-left:120px;margin-bottom:16px}
+.ftask{display:flex;align-items:flex-start;gap:10px;padding:8px 12px;margin:4px 0;
+  background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12.5px}
+.ftask .chk{font-size:14px;flex-shrink:0;width:20px;text-align:center}
+.ftask .nm{font-weight:500;color:var(--text);min-width:200px}
+.ftask .dt{color:var(--dim);font-size:11px;min-width:90px}
+.ftask .st{margin-left:auto}
+.ftask.done .chk::before{content:"✅"}
+.ftask.active .chk::before{content:"🔄"}
+.ftask.pending .chk::before{content:"⏳"}
+.ftask.done{border-left:3px solid var(--green)}
+.ftask.active{border-left:3px solid var(--cyan)}
+.ftask.pending{border-left:3px solid var(--border)}
+
+.arrow-down{display:flex;justify-content:center;margin:8px 0}
+.arrow-down svg{width:24px;height:36px}
+
+/* Task Cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px}
+.card .head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.card .head .ico{font-size:18px}
+.card h3{font-size:13.5px;font-weight:600;flex:1}
+.card .badge{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600}
+.card .badge.done{background:#052e1a;color:var(--green)}
+.card .badge.now{background:#0c2028;color:var(--cyan)}
+.card .badge.wait{background:var(--bg3);color:var(--dim)}
+.card p{font-size:12px;color:var(--muted);line-height:1.5;margin:6px 0}
+.card .items{margin-top:8px}
+.card .items li{font-size:11.5px;color:var(--muted);padding:3px 0;border-bottom:1px solid var(--bg3);list-style:none;display:flex;align-items:center;gap:6px}
+.card .items li:last-child{border:none}
+.card .items li.ok::before{content:"✓";color:var(--green);font-weight:700}
+.card .items li.no::before{content:"○";color:var(--dim)}
+
+/* Dependency Graph */
+.deps{position:relative;padding:20px 0}
+.deps svg{width:100%;height:auto}
+
+/* Metrics Grid */
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.mc{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center}
+.mc .v{font-size:22px;font-weight:800}
+.mc .v.g{color:var(--green)} .mc .v.c{color:var(--cyan)}
+.mc .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}
+
+/* Table */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--border)}
+td{padding:8px 10px;border-bottom:1px solid var(--bg3)}
+tr:last-child td{border:none}
+
+/* Badge variants */
+.b-green{background:#052e1a;color:var(--green)}
+.b-cyan{background:#0c2028;color:var(--cyan)}
+.b-amber{background:#2a1a0a;color:var(--amber)}
+.b-dim{background:var(--bg3);color:var(--dim)}
+
+footer{text-align:center;color:var(--dim);font-size:12px;margin-top:56px;padding-top:20px;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header style="text-align:center;padding:36px 0 24px">
+  <h1 style="font-size:26px;font-weight:800;margin-bottom:6px">🔑 PUF 无人机认证 · 竞赛全周期总控</h1>
+  <p style="color:var(--muted);font-size:14px">2026 全国大学生嵌入式芯片与系统设计竞赛 · FPGA 创新设计赛道 · AMD 自主选题初级组</p>
+</header>
+
+<!-- 总体进度 -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:24px 0">
+  <div class="stat"><div class="v g">2</div><div class="l">周已完成</div></div>
+  <div class="stat"><div class="v c">1</div><div class="l">周进行中</div></div>
+  <div class="stat"><div class="v a">3</div><div class="l">周待启动</div></div>
+  <div class="stat"><div class="v c">67</div><div class="l">文件入库</div></div>
+  <div class="stat"><div class="v c">5,139</div><div class="l">代码行</div></div>
+  <div class="stat"><div class="v g">11</div><div class="l">Git 提交</div></div>
+</div>
+
+<!-- ===== 总流程图 ===== -->
+<section>
+<h2>竞赛全周期流程图</h2>
+<div class="sub">每个方块 = 一个任务节点 · 颜色 = 状态（🟢完成 🟡进行中 ⚪待开始）· 箭头 = 依赖关系</div>
+
+<div class="flow">
+
+<!-- PHASE 0: Foundation -->
+<div class="phase"><span class="pnum">PHASE 0</span><span class="pstat done">✅ 完成</span><span style="color:var(--muted);font-size:12px">基础设施（9-21~9-24）</span></div>
+<div class="ftasks">
+  <div class="ftask done"><span class="chk"></span><span class="nm">竞赛报名确认</span><span class="dt">9-22 死线</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">板卡盘点 + ZC702 到位</span><span class="dt">9-25 确认</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">仓库建立 (D:puf-drone-auth, git init)</span><span class="dt">9-25</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">设计方案 v2.1→v2.2→v3.0 + 三轮 auto-review (52 findings→0)</span><span class="dt">9-25</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">通信选型定稿 (433MHz SiK + MAVLink v2, 联网核验)</span><span class="dt">9-25</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">Vivado 2026.1 安装验证 (D:ivado)</span><span class="dt">9-25</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">Python 3.13 环境 + pymavlink/sklearn/numpy/scipy 安装</span><span class="dt">9-25</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">4 个开源仓库克隆分析 (fpga_puf/PUF-lab/c_library_v2/esp32-puf)</span><span class="dt">9-25</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">开源代码深度分析报告 (逐行, ~4300字)</span><span class="dt">9-25</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">完整可执行设计方案 v3.0 (修复 26 项审查发现)</span><span class="dt">9-25</span><span class="st"><span class="badge b-green">✓</span></span></div>
+</div>
+
+<div class="arrow-down"><svg width="24" height="36" viewBox="0 0 24 36"><path d="M12 0 L12 28 M6 22 L12 30 L18 22" stroke="var(--cyan)" stroke-width="2" fill="none"/></svg></div>
+
+<!-- PHASE 1: W1 Signal -->
+<div class="phase"><span class="pnum">PHASE 1</span><span class="pstat done">✅ 完成</span><span style="color:var(--muted);font-size:12px">W1 信号验证（9-25~9-28）</span></div>
+<div class="ftasks">
+  <div class="ftask done"><span class="chk"></span><span class="nm">ro_ring.v — 5 级反相器环振 (KEEP/DONT_TOUCH)</span><span class="dt">已完成</span><span class="st"><span class="badge b-green">✓ xvlog</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">ro_div.v — 纹波分频器 (12 级)</span><span class="dt">已完成</span><span class="st"><span class="badge b-green">✓ xvlog</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">ro_ratio_top.v — 零引脚顶层 + VIO 读出</span><span class="dt">已完成</span><span class="st"><span class="badge b-green">✓ xvlog</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">w1_ro_waiver.xdc — 环振组合环豁免 (2 行)</span><span class="dt">已完成</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">xvlog 语法检查 — 6 个 .v 全通过</span><span class="dt">已完成</span><span class="st"><span class="badge b-green">✓ exit 0</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">Artix-7 代理综合 — 实测 490 LUT / 695 FF</span><span class="dt">已完成</span><span class="st"><span class="badge b-green">✓ 实测</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">xsim 仿真 — challenge_decode TB_PASS (100×确定性 + 置换)</span><span class="dt">已完成</span><span class="st"><span class="badge b-green">✓ TB_PASS</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">板 ZC702 烧录 + VIO 读数 (需板在手)</span><span class="dt">等板到</span><span class="st"><span class="badge b-dim">等板</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">一号验证点: 双板频差实测</span><span class="dt">等板 2</span><span class="st"><span class="badge b-dim">等板 2</span></span></div>
+</div>
+
+<div class="arrow-down"><svg width="24" height="36" viewBox="0 0 24 36"><path d="M12 0 L12 28 M6 22 L12 30 L18 22" stroke="var(--cyan)" stroke-width="2" fill="none"/></svg></div>
+
+<!-- PHASE 2: W2 Array -->
+<div class="phase"><span class="pnum">PHASE 2</span><span class="pstat now">🔄 代码完成</span><span style="color:var(--muted);font-size:12px">W2 阵列 + 协议（当前阶段）</span></div>
+<div class="ftasks">
+  <div class="ftask done"><span class="chk"></span><span class="nm">ro_array.v — 16 环 + 计数器 + 配对选择</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓ xvlog</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">challenge_decode.v — LFSR + Fisher-Yates + pair_table</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓ xvlog</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">w2_top.v — 顶层 FSM (6 态)</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓ xvlog</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">uart_tx.v / uart_rx.v — PUF-lab 复用重构</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓ xvlog</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">w2_waiver.xdc — 16 环组合环豁免</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">tb_challenge_decode.v — 自校验 testbench</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">B线: crp_pool.py (线程安全 + JSON 持久化)</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">B线: template_db.py (HD 匹配 + 稳定性掩码)</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">B线: threshold.py (双阈值 + 灰区)</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">B线: protocol.py (HF-IDA 状态机 + MAVLink v2 帧)</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">B线: hsm.py (HSM 接口, HMAC-SHA256 模拟)</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">B线: main.py (CLI + REPL)</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">B线: hamming_analysis.py (HD 分析, 适配 CSV+64-bit)</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">B线: compare_devices.py (跨设备 HD 矩阵)</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓</span></span></div>
+  <div class="ftask done"><span class="chk"></span><span class="nm">B线: quantizer.py (比值→bit 量化)</span><span class="dt">代码完成</span><span class="st"><span class="badge b-green">✓</span></span></div>
+</div>
+
+<div class="arrow-down"><svg width="24" height="36" viewBox="0 0 24 36"><path d="M12 0 L12 28 M6 22 L12 30 L18 22" stroke="var(--cyan)" stroke-width="2" fill="none"/></svg></div>
+
+<!-- PHASE 3: W3 Protocol -->
+<div class="phase"><span class="pnum">PHASE 3</span><span class="pstat now">🔄 下一步</span><span style="color:var(--muted);font-size:12px">W3 协议整合 + 联调</span></div>
+<div class="ftasks">
+  <div class="ftask pending"><span class="chk"></span><span class="nm">mavlink_frame.v — MAVLink v2 帧构造器 (PL)</span><span class="dt">W3 任务</span><span class="st"><span class="badge b-cyan">待写</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">crc16_mcrf4xx.v — CRC 核 (翻译自 c_library_v2)</span><span class="dt">W3 任务</span><span class="st"><span class="badge b-cyan">待写</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">hfida.xml — 自定义 MAVLink dialect 定义</span><span class="dt">W3 任务</span><span class="st"><span class="badge b-cyan">待写</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">B线 protocol 集成测试 (pymavlink ↔ RTL)</span><span class="dt">W3 任务</span><span class="st"><span class="badge b-cyan">待做</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">接口冻结评审 (A线↔B线 格式确认)</span><span class="dt">W3 末</span><span class="st"><span class="badge b-cyan">里程碑</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">第 2 块板到位 (跨芯片互斥演示用)</span><span class="dt">越早越好</span><span class="st"><span class="badge b-amber">紧迫</span></span></div>
+</div>
+
+<div class="arrow-down"><svg width="24" height="36" viewBox="0 0 24 36"><path d="M12 0 L12 28 M6 22 L12 30 L18 22" stroke="var(--cyan)" stroke-width="2" fill="none"/></svg></div>
+
+<!-- PHASE 4: W4 Experiments -->
+<div class="phase"><span class="pnum">PHASE 4</span><span class="pstat wait">⏳ 待开始</span><span style="color:var(--muted);font-size:12px">W4 实验 + 特色演示</span></div>
+<div class="ftasks">
+  <div class="ftask pending"><span class="chk"></span><span class="nm">温度实验 (暖手宝/冰袋, ΔT≤30°C, 70°C 硬停)</span><span class="dt">W4</span><span class="st"><span class="badge b-dim">待板</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">ML 攻击实验 (合成 arbiter 基线 + RO 排序重构)</span><span class="dt">W4</span><span class="st"><span class="badge b-dim">待做</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">无线链路联调 (电台参数: air rate 64k / ECC / NETID)</span><span class="dt">W4</span><span class="st"><span class="badge b-dim">需电台</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">多终端并发演示 (实例 0~3)</span><span class="dt">W4</span><span class="st"><span class="badge b-dim">需板</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">AI 扩展最小闭环 (BNN/PQN overlay 或任务帧替代)</span><span class="dt">W4</span><span class="st"><span class="badge b-dim">条件项</span></span></div>
+</div>
+
+<div class="arrow-down"><svg width="24" height="36" viewBox="0 0 24 36"><path d="M12 0 L12 28 M6 22 L12 30 L18 22" stroke="var(--cyan)" stroke-width="2" fill="none"/></svg></div>
+
+<!-- PHASE 5: W5 Freeze -->
+<div class="phase"><span class="pnum">PHASE 5</span><span class="pstat wait">⏳ 待开始</span><span style="color:var(--muted);font-size:12px">W5 冻结 + 全量指标</span></div>
+<div class="ftasks">
+  <div class="ftask pending"><span class="chk"></span><span class="nm">功能冻结令 (任何新想法→未来工作)</span><span class="dt">W5 周 1</span><span class="st"><span class="badge b-dim">—</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">全量指标实测 (ROC/EER + 时延分解 + 资源 + NIST)</span><span class="dt">W5 周 2</span><span class="st"><span class="badge b-dim">—</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">纯 PC 软件基线对比</span><span class="dt">W5 周 2</span><span class="st"><span class="badge b-dim">—</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">报告主体 + Skill 打包 + 视频 v1</span><span class="dt">W5 周 3</span><span class="st"><span class="badge b-dim">—</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">G5 门禁: 指标全满 + 报告初稿 + 视频 v1</span><span class="dt">W5 末</span><span class="st"><span class="badge b-dim">—</span></span></div>
+</div>
+
+<div class="arrow-down"><svg width="24" height="36" viewBox="0 0 24 36"><path d="M12 0 L12 28 M6 22 L12 30 L18 22" stroke="var(--cyan)" stroke-width="2" fill="none"/></svg></div>
+
+<!-- PHASE 6: W6 Delivery -->
+<div class="phase"><span class="pnum">PHASE 6</span><span class="pstat wait">⏳ 待开始</span><span style="color:var(--muted);font-size:12px">W6 交付 + 提交</span></div>
+<div class="ftasks">
+  <div class="ftask pending"><span class="chk"></span><span class="nm">报告终稿 (含 AI 协作日志 + 失败分析)</span><span class="dt">W6 周 1</span><span class="st"><span class="badge b-dim">—</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">复现包 (从零跑通文档)</span><span class="dt">W6 周 1</span><span class="st"><span class="badge b-dim">—</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">视频终版 (≤3 分钟, 三演示各一段)</span><span class="dt">W6 周 2</span><span class="st"><span class="badge b-dim">—</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">开源仓库整理 + push</span><span class="dt">W6 周 2</span><span class="st"><span class="badge b-dim">—</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">11-03 晚提交 (给 11-04 留缓冲)</span><span class="dt">**硬死线 11-04 18:00**</span><span class="st"><span class="badge b-amber">⚠️</span></span></div>
+</div>
+
+<div class="arrow-down"><svg width="24" height="36" viewBox="0 0 24 36"><path d="M12 0 L12 28 M6 22 L12 30 L18 22" stroke="var(--cyan)" stroke-width="2" fill="none"/></svg></div>
+
+<!-- FINALS -->
+<div class="phase"><span class="pnum">FINALS</span><span class="pstat wait">⏳ 待开始</span><span style="color:var(--muted);font-size:12px">决赛准备 + 现场 (11-05~11-22)</span></div>
+<div class="ftasks">
+  <div class="ftask pending"><span class="chk"></span><span class="nm">演示彩排 (无线+温度, 含降级演练)</span><span class="dt">11-05~19</span><span class="st"><span class="badge b-dim">—</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">答辩 QA 演练 (CRP/中继/信任模型/攻击边界)</span><span class="dt">11-05~19</span><span class="st"><span class="badge b-dim">—</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">个人 Verilog 功课 (决赛基础编程考核)</span><span class="dt">持续</span><span class="st"><span class="badge b-dim">—</span></span></div>
+  <div class="ftask pending"><span class="chk"></span><span class="nm">决赛现场 (南京)</span><span class="dt">11-20~22</span><span class="st"><span class="badge b-dim">—</span></span></div>
+</div>
+
+</div><!-- /flow -->
+</section>
+
+<!-- 板依赖 -->
+<section>
+<h2>需要板子的任务清单</h2>
+<div class="sub">这些任务在板子到手前无法推进——请尽快确认板卡到位时间</div>
+<table>
+<tr><th>任务</th><th>需要的板</th><th>为什么</th></tr>
+<tr><td>W1 双环振频差实测</td><td>ZC702 + 任意第 2 块</td><td>VIO 读频率必须在真板上运行</td></tr>
+<tr><td>W2 频率采集验证</td><td>ZC702</td><td>16 环计数器需要真实时钟源</td></tr>
+<tr><td>跨芯片互斥演示</td><td>ZC702 + 第 2 块</td><td>板 A vs 板 B 的指纹差异需要两颗不同芯片</td></tr>
+<tr><td>温度鲁棒性实验</td><td>ZC702 + 暖手宝/冰袋</td><td>加热需要物理接触板面</td></tr>
+<tr><td>无线链路联调</td><td>ZC702 + 电台对</td><td>UART ↔ 电台需要物理连接</td></tr>
+</table>
+</section>
+
+<footer>
+  PUF Drone Auth · D:puf-drone-auth · 生成于 2026-10-05<br>
+  竞赛全周期任务总控 · 11 commits · 67+ files · 5,139 lines code · 52 review findings resolved
+</footer>
+</div>
+</body>
+</html>
