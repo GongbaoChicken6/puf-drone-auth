@@ -32,6 +32,7 @@ module terminal_fsm # (
     input  wire        fp_frame_err,
     output reg  [4:0]  fp_rd_addr,                 // 载荷读地址（本模块驱动）
     input  wire [7:0]  fp_rd_data ,                // 载荷组合读出
+    output wire        fp_rx_inhibit,               // 载荷保护：读载荷期间阻止新帧接收
     // -- TX 接口（mavlink_frame）---------------------------------------------
     output reg         mf_start  ,                 // 启动组帧
     output reg  [23:0] mf_msg_id ,
@@ -89,6 +90,10 @@ module terminal_fsm # (
     end
 
     assign auth_busy  = (state != S_IDLE) && (state != S_SESSION);
+    // 载荷保护：S_PROC_SEEDS/S_PROC_EXTRA/S_VERIFY_R2 期间读 fp 载荷缓冲，
+    // 阻止 frame_parser 接收新帧覆盖缓冲（并发竞态修复）
+    assign fp_rx_inhibit = (state == S_PROC_SEEDS) || (state == S_PROC_EXTRA)
+                        || (state == S_VERIFY_R2);
     assign auth_result = result_r;
     assign mf_sysid  = 8'h01;
     assign mf_compid = 8'h02;

@@ -4,6 +4,11 @@
 // 职责：从字节流中提取完整 MAVLink v2 帧，CRC 校验后上报 msg_id + 载荷。
 //   是 mavlink_frame.v（发送侧）的镜像，共享 crc16_mcrf4xx 核与契约。
 //
+// 载荷保护（并发竞态修复）：
+//   rx_inhibit=1 时解析器停留在 S_SEARCH，不接收新帧。
+//   terminal_fsm 在 S_PROC_SEEDS/S_PROC_EXTRA/S_VERIFY_R2（读载荷期间）
+//   应置高 rx_inhibit，防止新帧的载荷覆盖正在被读取的缓冲。
+//
 // 容错设计（契约 §6.1 第 6 条，审查 B-F12）：
 //   - S_SEARCH 态忽略一切非 STX 字节（电台噪声天然容忍）
 //   - LEN > MAX_PAYLOAD 或未知 msgid → frame_err + 回 S_SEARCH
@@ -24,6 +29,7 @@ module frame_parser # (
 ) (
     input  wire        clk       ,   // 系统时钟
     input  wire        rst       ,   // 高有效同步复位
+    input  wire        rx_inhibit,   // 载荷保护：=1 时停留在搜索态（防缓冲被覆盖）
     // -- 字节输入（接 uart_rx 的 rx_byte / rx_valid）------------------------
     input  wire [7:0]  rx_byte   ,   // 收到的字节
     input  wire        rx_valid  ,   // 字节有效（单拍脉冲）
@@ -163,7 +169,9 @@ module frame_parser # (
                 // 搜索 STX。所有非 0xFD 字节被静默丢弃（噪声容忍）。
                 //------------------------------------------------
                 S_SEARCH: begin
-                    if (rx_valid && rx_byte == 8'hFD) begin
+                    // rx_inhibit=1 时忽略一切（terminal_fsm 正在读载荷缓冲，
+                    // 新帧写入会覆盖——并发竞态保护，审查遗漏项修复）
+                    if (rx_valid && rx_byte == 8'hFD && !rx_inhibit) begin
                         crc_init <= 1'b1;           // CRC 载入 FFFF
                         hdr_cnt  <= 4'd0;
                         pay_cnt  <= 6'd0;

@@ -37,6 +37,7 @@ module tb_frame_parser;
     frame_parser # (.PARSER_TIMEOUT(128)) dut (
         .clk            (clk            ),
         .rst            (rst            ),
+        .rx_inhibit     (1'b0           ),   // TB 不需要载荷保护
         .rx_byte        (rx_byte        ),
         .rx_valid       (rx_valid       ),
         .msg_id         (msg_id         ),
