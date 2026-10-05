@@ -135,6 +135,22 @@ msgid == 0x0093 → 0x5D;  0x0094 → 0x5E;  0x0095 → 0x5F;
 default → 0x00（未知消息，帧应被丢弃）
 ```
 
+### 6.1 最小集成契约（terminal_fsm 作者必读，auto-review B-F1/F2/F3/F8 结论）
+
+1. **FIFO 强制**：`mavlink_frame` 的 `frame_valid` 以每拍 1 字节输出，而 `uart_tx` 忙时**静默丢弃** `tx_valid`（UART 一字节 ≈8680 拍）。**禁止 frame_valid 直连 tx_valid**——必须经 ≥12B（建议 64B）FIFO：写使能 = frame_valid，读节奏 = 每 tx_done 取 1 字节。
+2. **载荷窗口**：`payload_valid` 只允许在 `payload_phase=1` 期间断言（本模块已输出该信号）；窗口外字节被静默丢弃。字节短缺超过 `PAYLOAD_TIMEOUT` 拍 → `frame_err` + 回 IDLE（不挂死）。
+3. **SEQ/ID 稳定窗**：`seq_num / sys_id / comp_id` 从 start 前一拍到 frame_done 保持稳定（SEQ 在帧头第 5 字节被采样）；SEQ 自增在 frame_done 之后进行。sysid/compid 本模块无默认值，terminal_fsm 必须显式驱动 8'h01/8'h02（与 protocol.py 默认一致）。
+4. **start 纪律**：仅在 busy=0（或复位后）断言，单拍；busy 期间的 start 被静默忽略。
+5. **frame_err**：单拍脉冲，上游必须粘滞捕获（tb_mavlink_frame.v 的 err_seen 已示范）。
+6. **无线链路容错**（W4 联调验收项）：terminal_fsm 帧解析器必须容忍电台噪声产生的垃圾字节——超时（§5 的 2s）+ 回 STX 搜索 + CRC 失败计数；uart_rx 无 framing-error 输出，字节流不保证干净。
+
+### 6.2 板级前置（W3 顶层 w3_top.v 验收项）
+
+- **时钟单点参数**：顶层以 FREQ_HZ 参数推导 uart 的 CLKS_PER_BIT 与测窗 MEAS_CYCLES，禁止散落硬编码 868/100000（时钟换档时避免 RO 标定静默漂移）；加 1Hz LED 心跳实证时钟频率。
+- **复位同步器**：板上异步复位源须经异步断言/同步释放 2FF 后再进全同步复位域。
+- **XDC 三件套**：时钟约束 + UART/电台引脚 + w2_waiver.xdc 必须一起 add_files 进 build_w3.tcl（waiver 遗漏 → LUTLP-1 挡比特流；若手绕 DRC → 组合环被优化、RO 频率全错的静默灾难）。
+- **比特流-协议配对**：W2 比特流（裸频率协议）与 W3 比特流（MAVLink）不可与错误的 PC 侧脚本混用，README 须写明配对表。
+
 ## 7. 变更控制
 
 - 本契约的任何修改必须**同步修改 protocol.py 并重跑黄金向量生成**，双侧一起提交

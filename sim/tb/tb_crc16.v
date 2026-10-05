@@ -125,6 +125,18 @@ module tb_crc16;
         if (crc === 16'hF7F2) begin errors=errors+1; $display("[T6 FAIL] corrupted frame matched!"); end
         else                  $display("[T6 PASS] corrupted frame -> %h (differs)", crc);
 
+        // ---------------- T7: init 与 dv 同拍 —— init 优先，字节被丢 ----------------
+        do_init;                              // 此任务内部 init 与 dv 从不同拍
+        @(negedge clk);
+        init <= 1'b1; din <= 8'hAA; dv <= 1'b1;   // 构造同拍
+        @(negedge clk);
+        init <= 1'b0; dv <= 1'b0;
+        @(negedge clk);
+        if (crc !== 16'hFFFF) begin
+            errors = errors + 1; $display("[T7 FAIL] init&&dv same cycle: crc=%h expect FFFF (byte should drop)", crc);
+        end else
+            $display("[T7 PASS] init&&dv same cycle: byte dropped (init priority)");
+
         // ---------------- 总结 ----------------
         repeat (5) @(negedge clk);
         if (errors == 0) $display("TB_CRC16_PASS");

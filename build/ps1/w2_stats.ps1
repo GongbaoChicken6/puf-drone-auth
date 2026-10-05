@@ -14,6 +14,4 @@ foreach ($f in $files) {
   $lines = (Get-Content $f).Count
   Write-Output ("{0}  lines={1}  BOM={2}" -f $f, $lines, $hasBom)
 }
-Move-Item 'D:\puf-drone-auth\build\run_xvlog_w2.ps1' 'D:\puf-drone-auth\build\ps1\run_xvlog_w2.ps1' -Force
-Move-Item 'D:\puf-drone-auth\build\run_xsim_w2.ps1' 'D:\puf-drone-auth\build\ps1\run_xsim_w2.ps1' -Force
-Write-Output "moved helper scripts to build\ps1\"
+// (Move-Item side effect removed per review F4: running a stats script must not relocate files)
