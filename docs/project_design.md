@@ -57,7 +57,7 @@ R1 (64 bit, MAVLink 帧) ◄─────────────────�
 | 信号/参数 | 位宽 | 产生方 | 消费方 | 说明 |
 |---|---|---|---|---|
 | 挑战种子 seed | 64 bit (8B) | PC CSPRNG | challenge_decode | MAVLink payload 传输 |
-| 配对表 (每轮) | 8×4 bit = 32 bit | challenge_decode | ro_array mux 网络 | 8 对,每对 4 bit 环号索引 |
+| 配对表 (每轮) | PAIRS×2×IDX_W bit (16环=64bit) | challenge_decode | ro_array mux | IDX_W = $clog2(N_RINGS) |
 | 配对表 (全部 8 轮) | 8 轮 × 32 bit | challenge_decode | 轮控 FSM | 存储在寄存器组中 |
 | pair_win (每轮) | 8 bit | ro_array 比较器 | resp_buffer | 1 = B 环快, 0 = A 环快 |
 | R1 (最终响应) | **64 bit (8B)** | resp_buffer 累积 | mavlink_frame → PC | 8 轮 × 8 bit |
@@ -183,6 +183,10 @@ class HSM:
 ```
 
 **黄金模型任务**（P2-1 减负）：先写 Python 版本（~50 行），生成期望配对表 → 与 RTL 仿真输出对拍。
+
+#### 测量域适配（P1-3 补丁）
+
+W1 用固定不对称分频防混叠，W2 动态配对后不能预分配。**推荐方案：W2 用"UART 发频率值"而非"PL 内比较胜者"**——PL 只做每环独立计数器（复用 W1 架构），频率值经 UART 发 PC，比较逻辑在 Python 端完成。混叠问题完全消失，PL 逻辑量减半，板到手前可纯仿真验证。W3 才把比较器移入 PL（届时用参考环法防混叠）。
 
 #### W2 验收判据（P1-4 修复：拆分为两条）
 

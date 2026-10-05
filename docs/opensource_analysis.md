@@ -29,7 +29,7 @@ controller.v（协议 FSM）
 
 ```verilog
 module arbel(input X, input Y, input C, output W, output Z);
-    mux2x1 M1(X, Y, C, W1);   // C=0: W=X; C=1: W=Y
+    mux2x1 M1(X, Y, C, W1);   // C=1: W=X; C=0: W=Y (勘误:原报告写反)
     mux2x1 M2(Y, X, C, Z1);   // C=0: Z=Y; C=1: Z=X  （交叉）
     not N1(W2, W1); not N(W, W2);   // 双反相（延迟）
     not N7(Z2, Z1); not N8(Z, Z2);  // 双反相（延迟）
@@ -145,7 +145,7 @@ MAVLink v2 帧格式（10 字节头 + 载荷 + 2 字节 CRC）：
 
 ### 4.1 Python 工具（B 线金矿）
 
-#### hamming_analysis.py（241 行）—— **~95% 直接复用**
+#### hamming_analysis.py（241 行）—— **~85% 复用（需改输入格式）**
 
 核心功能链：
 1. 读 hex 文件 → 转二进制串
@@ -158,7 +158,7 @@ MAVLink v2 帧格式（10 字节头 + 载荷 + 2 字节 CRC）：
 - 第 70 行：输入文件路径 → 改为读 CSV（VIO 输出格式）
 - 添加：与模板的 HD（而非仅自身间 HD）→ 约 +20 行
 
-#### compare_devices.py（154 行）—— **100% 直接复用**
+#### compare_devices.py（154 行）—— **~85% 复用（需同步改输入格式）**
 
 输入一个目录（每设备一个 txt），输出跨设备 HD 矩阵。
 用于验证 uniqueness（预期跨设备 HD ≈ 50%）。
@@ -215,8 +215,8 @@ m.mav.parse_buffer(data)  # 返回消息列表
 | uart_tx.v | PUF-lab | 90% | 复制+改命名+加复位 | ~130 行 |
 | uart_rx.v | PUF-lab | 90% | 同上 | ~130 行 |
 | crc16_lfsr.v | c_library_v2 | 70% | C→Verilog 翻译 | ~60 行设计时间 |
-| hamming_analysis.py | esp32-puf | 95% | 改位数参数+CSV 输入 | ~230 行 |
-| compare_devices.py | esp32-puf | 100% | 直接用 | ~154 行 |
+| hamming_analysis.py | esp32-puf | ~85% | 改位数(L73)+重写read_hex(L33-38为CSV)+加模板HD(+20行) | ~200行 |
+| compare_devices.py | esp32-puf | ~85% | 同 hamming 的 CSV 适配+多测量取均值 | ~130行 |
 | find_stable_bits() | esp32-puf | 90% | 嵌入 template_db.py | ~40 行 |
 | challenge→选路概念 | PUF-lab arbel.v | 参考 | mux 树结构启发 | 设计时间 |
 | FSM 骨架 | PUF-lab controller.v | 参考 | 状态转移流程 | 设计时间 |
