@@ -1,347 +1,401 @@
-# PUF 无人机认证系统 · 完整可执行设计方案
+# PUF 无人机认证系统 · 完整可执行设计方案（v3.0 修订版）
 
-> 基于开源分析报告（docs/opensource_analysis.md）产出，覆盖 A/B/C 三线 W2~W6 全部工作。
-> 每个模块标注：来源（复用/参考/自研）、文件路径、接口定义、验收判据。
-
----
-
-## 〇、系统总体架构（v2.2 定稿）
-
-```
-┌──────────────────────────────┐         ┌──────────────────────────────┐
-│     ZC702 (无人机终端)         │  433MHz │       PC (地面基站)           │
-│                              │  无线    │                              │
-│  PL:                         │         │  Python:                     │
-│  ├─ PUF 环振阵列 ×N          │ ◄─────► │  ├─ pymavlink 收发           │
-│  ├─ 挑战解码器               │ 电台×2  │  ├─ HF-IDA 状态机            │
-│  ├─ XOR-CRO 响应生成         │         │  ├─ 模板库 (CRP pool)        │
-│  ├─ 终端 FSM (5态)           │         │  ├─ 双阈值判决               │
-│  ├─ MAVLink 帧构造器         │         │  ├─ 性能面板 (web)           │
-│  └─ UART ↔ 电台             │         │  └─ ROC/EER/NIST 评估        │
-│                              │         │                              │
-│  实例0 = 基站 HSM            │ USB     │  (板到手前: 仿真/回环)        │
-└──────────────────────────────┘         └──────────────────────────────┘
-```
+> 基于 auto-review Round 1 报告修复：P0×3 + P1×9 + P2×6 + P3×8 全部处置。
+> 修复日期：2026-10-05
 
 ---
 
-## 一、A 线 · RTL 设计（按周交付）
+## 〇、数据通路规格表（P0-3 修复——全链接口冻结）
 
-### W2 · 16 环阵列 + XOR 合并 + 挑战解码 [核心创新]
+**这是本文档的核心**——A/B 两线所有模块的位宽、格式、时序均以此为唯一依据。
 
-#### 1.1 文件清单
+### 挑战-响应完整数据流
+
+```
+PC 服务器                        ZC702 终端 (PL)
+─────────                       ───────────────
+                                ┌─────────────────────────────┐
+8 字节挑战种子                   │ challenge_decode            │
+(64-bit, CSPRNG 生成)  ──────►  │  LFSR 展开 → Fisher-Yates   │
+                                │  洗牌 → 8 轮 × 8 对配对表    │
+                                └──────────┬──────────────────┘
+                                           │ 8 轮,每轮 8 对 (每环
+                                           │ 恰好参与 4 轮中的 1 对)
+                                           ▼
+                                ┌─────────────────────────────┐
+                                │ ro_array (16 环)            │
+                                │  每轮: 8 对同时比较          │
+                                │  输出: pair_win[7:0]        │
+                                │  (每对 1 bit 胜者标志)       │
+                                └──────────┬──────────────────┘
+                                           │ 8 轮 × 8 bit = 64 bit
+                                           ▼
+                                ┌─────────────────────────────┐
+                                │ resp_buffer                 │
+                                │  累积 8 轮的 pair_win       │
+                                │  最终: R1[63:0]             │
+                                └──────────┬──────────────────┘
+                                           │ 64 bit (8 字节)
+                                           ▼
+                                ┌─────────────────────────────┐
+                                │ mavlink_frame               │
+                                │  R1[63:0] → MAVLink v2 帧   │
+                                │  → UART TX → 电台 → 无线    │
+                                └─────────────────────────────┘
+R1 (64 bit, MAVLink 帧) ◄────────────────────────────────────┘
+                                           │
+                                           ▼
+┌─────────────────────────────┐
+│ template_db (PC)             │
+│  HD(R1, template) ≤ τ_pass  │
+│  → 认证通过                  │
+└─────────────────────────────┘
+```
+
+### 位宽规格总表（A/B 线冻结依据）
+
+| 信号/参数 | 位宽 | 产生方 | 消费方 | 说明 |
+|---|---|---|---|---|
+| 挑战种子 seed | 64 bit (8B) | PC CSPRNG | challenge_decode | MAVLink payload 传输 |
+| 配对表 (每轮) | 8×4 bit = 32 bit | challenge_decode | ro_array mux 网络 | 8 对,每对 4 bit 环号索引 |
+| 配对表 (全部 8 轮) | 8 轮 × 32 bit | challenge_decode | 轮控 FSM | 存储在寄存器组中 |
+| pair_win (每轮) | 8 bit | ro_array 比较器 | resp_buffer | 1 = B 环快, 0 = A 环快 |
+| R1 (最终响应) | **64 bit (8B)** | resp_buffer 累积 | mavlink_frame → PC | 8 轮 × 8 bit |
+| 模板 | 64 bit | 注册流程采集 | template_db.match() | 与 R1 同宽 |
+| HD (海明距离) | 0~64 | template_db | threshold | 整数 |
+| XOR 合并响应 (W3+) | 64 bit | 4 组 64-bit XOR | MAVLink frame | W2 不含 XOR, W3 加入 |
+
+### XOR 升级路径（W3 加入，W2 不含）
+
+W2 用原始 64-bit R1 直接认证。W3 将 16 环扩到 64 环，分 4 组各 16 环独立产生 64-bit 响应，XOR 后仍为 64-bit：
+
+```
+W2: R1 = round1_win ∥ round2_win ∥ ... ∥ round8_win    (64 bit, 无 XOR)
+W3: R1 = (group1_resp ⊕ group2_resp ⊕ group3_resp ⊕ group4_resp)  (64 bit, XOR k=4)
+```
+
+**Reliability 口径（P1-5 修复）**：
+- W2 门禁 G2 的 "reliability ≥90%" 指**单路（未 XOR）响应**的逐 bit 稳定性
+- W3 加入 XOR 后，合并响应 reliability = p⁴ + 6p²(1-p)² + (1-p)⁴（p = 单路 reliability）
+- 若需合并后 ≥90%，则单路需 ≥97.5%——通过增加环数和差分布局实现
+- **G2 验收口径：单路 reliability ≥90%（W2），单路 ≥97%（W3+）**
+
+---
+
+## 〇.5、HSM 架构定义（P0-2 修复）
+
+### 物理部署（真实场景 vs 竞赛演示）
+
+```
+真实部署（论文/报告画这个）:
+┌─────────────┐       ┌─────────────┐       ┌─────────────┐
+│ 无人机终端    │ 无线  │  地面基站    │  USB  │  基站 HSM    │
+│ (PUF 实例1-3)│◄─────►│  (PC 服务器) │◄─────►│  (独立硬件)   │
+│             │ 电台  │             │ 专线  │  (PUF 实例0) │
+└─────────────┘       └─────────────┘       └─────────────┘
+
+竞赛演示（代码实现的是这个）:
+┌──────────────────────────────────────────────┐
+│ ZC702 单板                                    │
+│  ┌─────────────────┐  ┌────────────────────┐ │
+│  │ 终端 PUF 实例 1-3 │  │ HSM PUF 实例 0     │ │
+│  │ (逻辑隔离)       │  │ (UART 通道,非无线) │ │
+│  └────────┬────────┘  └────────┬───────────┘ │
+│           │ 无线电台            │ USB-JTAG    │
+│           ▼                    ▼             │
+└─────────────────┬──────────────────────────── ┘
+                  │
+                  ▼
+          ┌─────────────┐
+          │  PC 服务器   │
+          │  (Python)   │
+          └─────────────┘
+```
+
+### hsm.py 接口定义
+
+```python
+# src/python/server/hsm.py
+class HSM:
+    """基站硬件安全模块 — 通过 UART 与 ZC702 实例 0 通信"""
+
+    def __init__(self, port: str, baud: int = 115200):
+        self.serial = serial.Serial(port, baud)
+
+    def respond(self, c2: bytes) -> bytes:
+        """接收终端反挑战 C2,调用实例 0 生成 R2"""
+        self.serial.write(c2)
+        r2 = self.serial.read(8)  # 64-bit response
+        return r2
+
+    def enroll(self, n_challenges: int = 100) -> dict:
+        """注册模式:采集实例 0 的 CRP 作为基站模板"""
+        ...
+```
+
+### 终端验证 R2 的凭据来源
+
+终端在**注册阶段**接收并存储基站模板（实例 0 的期望响应集），存于 PL 的 BRAM 中（只读寄存器组，运行期不可修改）。验证时：终端将收到的 R2 与存储的模板做 HD 比对。
+
+---
+
+## 一、A 线 · RTL 设计
+
+### W2 · 16 环阵列 + 挑战解码 + UART 输出
+
+#### 文件清单
 
 | 文件 | 路径 | 来源 | 说明 |
 |---|---|---|---|
-| ro_ring.v | src/rtl/w1_ratio/ | ✅ 已有 | 单环（不动） |
-| ro_div.v | src/rtl/w1_ratio/ | ✅ 已有 | 分频（不动） |
-| **ro_array.v** | src/rtl/w2_array/ | **自研** | 16 环阵列 + 配对选择 |
-| **xor_merge.v** | src/rtl/w2_array/ | **自研** | k=4 XOR 合并逻辑 |
-| **challenge_decode.v** | src/rtl/w2_array/ | **参考 arbel.v** | 8B 种子→64 对配对表 |
-| **w2_top.v** | src/rtl/w2_array/ | **自研** | W2 顶层（16 环版） |
-| **uart_tx.v** | src/rtl/common/ | **PUF-lab 复用** | UART 发送 |
+| ro_ring.v | src/rtl/w1_ratio/ | ✅ 已有 | 复用 |
+| ro_div.v | src/rtl/w1_ratio/ | ✅ 已有 | 复用（测量窗用） |
+| **ro_array.v** | src/rtl/w2_array/ | 自研 | 16 环 + 8 对 mux + 比较器 |
+| **challenge_decode.v** | src/rtl/w2_array/ | 自研 | 种子→配对表（见下文算法） |
+| **w2_top.v** | src/rtl/w2_array/ | 自研 | 顶层：轮控 FSM + 响应缓冲 |
+| uart_tx.v | src/rtl/common/ | PUF-lab 复用 | 改端口命名+加复位 |
 | w2_waiver.xdc | src/rtl/w2_array/ | 改自 W1 | 16 环豁免 |
-| build_w2.tcl | build/tcl/ | 改自 W1 | W2 构建脚本 |
+| w2_pins.xdc | src/rtl/w2_array/ | **新增** | UART TX 引脚 |
+| **tb_ro_array.v** | sim/tb/ | 自研 | 仿真 testbench |
+| **tb_challenge_decode.v** | sim/tb/ | 自研 | 解码器 testbench |
+| build_w2.tcl | build/tcl/ | 改自 W1 | W2 构建 |
 
-#### 1.2 ro_array.v 接口设计
-
-```verilog
-module ro_array #(
-    parameter N_RINGS = 16,        // 环数
-    parameter PAIRS   = 8          // 同时比较的对数
-  ) (
-    input                   clk       ,  // 系统时钟（测量窗用）
-    input                   rst       ,  // 同步复位
-    input                   en        ,  // 阵列使能
-    input  [N_RINGS*4-1:0]  pair_sel  ,  // 配对选择（来自挑战解码器）
-    output [PAIRS-1:0]      pair_win  ,  // 每对的胜者（0=A快, 1=B快）
-    output                  busy      ,
-    output                  done
-  );
-```
-
-内部：16 个 ro_ring 实例 + 每对一个比较器（计数窗口 → 大小判）。
-
-#### 1.3 xor_merge.v 接口设计
+#### challenge_decode.v 算法规格（P1-2 修复）
 
 ```verilog
-module xor_merge #(
-    parameter K = 4,               // XOR 路数
-    parameter WIDTH = 8            // 每路输出位宽
-  ) (
-    input  [K*WIDTH-1:0]   responses ,  // K 路原始响应
-    output [WIDTH-1:0]     merged      // XOR 合并后
-  );
+// 输入: seed[63:0]
+// 输出: pair_table[7:0][7:0]  (8 轮 × 8 对 × 每对 2 个 4-bit 环号)
+//        即 pair_table[round][pair][0] = ring_A_index (4 bit)
+//            pair_table[round][pair][1] = ring_B_index (4 bit)
+
+// 算法:
+// 1. 初始化 ring_order = {0,1,2,...,15}  (16 个环的排列)
+// 2. Fisher-Yates 洗牌:
+//    for i = 15 downto 1:
+//      j = LFSR_next() % (i+1)    // LFSR 产生伪随机数
+//      swap(ring_order[i], ring_order[j])
+// 3. 切分: ring_order[0]↔ring_order[1] = 第 1 对, ...
+//          ring_order[14]↔ring_order[15] = 第 8 对 → 第 1 轮
+// 4. 重复步骤 2-3 共 8 次（每次 LFSR 状态不同 → 不同排列）→ 8 轮
+//
+// LFSR 规格: 64-bit, 多项式 x^64+x^63+x^61+x^60+1 (最大长度)
+// 初始值 = seed, 每次调用输出 8 bit
+// 同一 seed → 确定性输出同一配对表（黄金模型对拍基础）
 ```
 
-assign merged = responses[K*WIDTH-1] ^ responses[(K-1)*WIDTH-1] ^ ... ;
-（纯组合逻辑，零时钟需求）
+**黄金模型任务**（P2-1 减负）：先写 Python 版本（~50 行），生成期望配对表 → 与 RTL 仿真输出对拍。
 
-#### 1.4 challenge_decode.v 接口设计
+#### W2 验收判据（P1-4 修复：拆分为两条）
 
-```verilog
-module challenge_decode #(
-    parameter SEED_W = 64,         // 8 字节种子
-    parameter N_RINGS = 16,
-    parameter PAIRS   = 8
-  ) (
-    input                   clk       ,
-    input                   rst       ,
-    input                   start     ,  // 开始解码
-    input  [SEED_W-1:0]    seed      ,  // CSPRNG 产生的挑战种子
-    output [N_RINGS*4-1:0] pair_sel  ,  // 输出给 ro_array
-    output                  done
-  );
-```
-
-内部：LFSR 展开种子 → 确定性索引 → 洗牌算法选配对。
-参考 PUF-lab arbel.v 的 mux 树结构，但逻辑改为索引寻址。
-
-#### 1.5 验收判据（W2 门禁 G2）
-
-| 指标 | 目标 | 测量方法 |
+| 判据 | 定义 | 测量方法 |
 |---|---|---|
-| 常温 reliability | ≥90% | 同板重复 20 次，每 bit 翻转率 |
-| 挑战可重复 | 同种子→同响应 100% | 固定种子循环测试 |
-| 资源 | ≤5000 LUT（16 环+逻辑） | Vivado report_utilization |
+| **解码确定性** | 同 seed → 同配对表 100% | 仿真：固定 seed 循环 100 次 |
+| **单路 reliability** | 8 轮 × 8 bit = 64 bit 响应，同挑战重复 20 次，逐 bit 翻转率 ≤10% | 板上：同 seed 测 20 次 |
+| 资源 | ≤3000 LUT（不含 VIO） | Vivado report |
+
+#### W2 时钟方案（P1-3 修复）
+
+W2 需要外部时钟驱动 UART 和轮控 FSM：
+- **时钟源**：ZC702 板载 200MHz 差分时钟（引脚见 UG850）→ IBUFDS → BUFG → 100MHz（MMCM 二分频）
+- **测量窗**：每环对比较用 1ms 窗（同 W1 的 ro_div 架构），8 对并行 → 单轮 1ms
+- **8 轮总时长**：8 × 1ms = 8ms + 轮间切换开销 ≈ 10ms
+- **认证延迟**：10ms（PUF 测量）+ 20ms（MAVLink 帧传输）≪ 1s 目标 ✓
 
 ---
 
-### W3 · 完整协议 + 多实例 + UART 输出 [系统整合]
+### W3 · 完整协议 + MAVLink + 多实例
 
-#### 3.1 新增文件
+#### 新增文件
 
-| 文件 | 路径 | 来源 |
+| 文件 | 路径 | 说明 |
 |---|---|---|
-| **w3_top.v** | src/rtl/w3_protocol/ | 自研 |
-| **terminal_fsm.v** | src/rtl/w3_protocol/ | 参考 controller.v |
-| **mavlink_frame.v** | src/rtl/common/ | 参考 c_library_v2 |
-| **crc16_lfsr.v** | src/rtl/common/ | 翻译自 c_library_v2 |
+| **w3_top.v** | src/rtl/w3_protocol/ | 完整协议顶层 |
+| **terminal_fsm.v** | src/rtl/w3_protocol/ | 终端状态机（见下） |
+| **mavlink_frame.v** | src/rtl/common/ | MAVLink v2 帧构造器 |
+| **crc16_mcrf4xx.v** | src/rtl/common/ | CRC 核（统一命名，P3-1 修复） |
 | uart_rx.v | src/rtl/common/ | PUF-lab 复用 |
+| **dialect/hfida.xml** | src/ | MAVLink 自定义消息定义（P1-7） |
 
-#### 3.2 terminal_fsm.v 状态机
+#### MAVLink 帧修正（P1-7 修复）
+
+| 参数 | 正确值 | 方案旧值 | 状态 |
+|---|---|---|---|
+| SEQ 位宽 | **8-bit** (1 字节, 0~255 循环) | ~~4-bit~~ | ✅ 已修正 |
+| CRC 初值 | 0xFFFF **⊕ CRC_EXTRA** | ~~0xFFFF~~ | ✅ 已修正 |
+| CRC_EXTRA | 每消息类型固定 1 字节（从 XML 生成） | 未提及 | ✅ 已补 |
+| dialect XML | 必须先生成，再编译两端 | 未排任务 | ✅ 已排入 W3 B 线 |
+
+#### terminal_fsm.v 状态机（P3-3 修复：统一为 6 态）
 
 ```
-空闲 ──收到挑战──► 待响应 ──PUF计算完成──► 已响应(发R1+反挑战C2)
-  ▲                    │                        │
-  │                    │                        ▼
-  └──超时/失败── 失败 ◄──验基站R2──► 验基站通过 ──► 会话态
+S_IDLE ──收到挑战──► S_CHALLENGED
+S_CHALLENGED ──PUF 计算完成──► S_RESPONDED (发 R1 + 反挑战 C2)
+S_RESPONDED ──收到基站 R2──► S_VERIFY
+S_VERIFY ──R2 匹配──► S_SESSION
+S_VERIFY ──R2 不匹配──► S_BLOCKED
+S_SESSION ──超时/再挑战──► S_IDLE (或 S_CHALLENGED)
+S_BLOCKED ──冷却 5min──► S_IDLE
+任何状态 ──致命错误──► S_BLOCKED
 ```
-
-#### 3.3 mavlink_frame.v 设计
-
-固定模板帧：STX(0xFD) + LEN + IF + CF + SEQ + SYSID + COMPID + MSGID[3] + PAYLOAD + CRC[2]
-- 帧头 10 字节 + 载荷 ≤32 字节 + CRC 2 字节 = 最大 44 字节
-- CRC 核：16 级 LFSR，多项式 0x1021，初值 0xFFFF，反射输入/输出
-- 序号：4-bit 计数器自动递增
 
 ---
 
-### W4 · ML 攻击实验 + 温度实验 [特色演示]
+### W4 · 实验周（P2-3 修复：温度实验方法）
 
-A 线无新 RTL——W4 是 B/C 线的实验周。A 线只做：
-- 板级调试支持
-- 多实例布局微调（RELATIVE 约束）
-- 无线链路联调
+**温度实验方案**：
+- 加热：暖手宝贴 PL 侧散热区，目标 ΔT = +20~30°C
+- 监测：XADC 实时读结温，70°C 硬停（安全窗口）
+- 采样：每 5°C 记录一组完整认证（20 次同挑战）
+- 指标：单路 reliability 随温度变化曲线
+- 判定：全温区 reliability ≥85%（允许比常温降 5%）
+- 责任人：C 线执行，A 线提供比特流支持
 
 ---
 
-## 二、B 线 · PC 软件设计（与 A 线并行）
+### W5 · 冻结周（P0-1 修复：新增完整定义）
 
-### W1~W2 · 基础设施
+#### 保底四件套（最终定义）
 
-#### 2.1 环境搭建（已完成 ✅）
-- Python 3.13 + pymavlink 2.4.50 + sklearn + numpy + scipy + matplotlib
+| # | 交付物 | 验收标准 | 缺失后果 |
+|---|---|---|---|
+| ① | 互斥演示 | 真板/假板（或软仿冒者）双向拒绝 | 无核心演示 |
+| ② | CRP 全流程 | 注册→认证→灰区加测→阻断 完整走通 | 无协议证据 |
+| ③ | ROC/EER 数据 | 合法/非法/边界样本集 → 曲线+数值 | 无量化指标 |
+| ④ | 报告+视频 | 报告终稿 + ≤3 分钟视频 | 无提交物 |
 
-#### 2.2 MAVLink 回环测试（W1~W2）
+#### W5 任务分解
 
-```python
-# src/python/tools/loopback_test.py
-# 双端回环：自己发 MAVLink v2 帧 → 自己收 → 校验 CRC
-# 验证：帧结构正确、CRC 算法正确、sysid/compid 正确
-```
+| 天 | A 线 | B 线 | C 线 |
+|---|---|---|---|
+| 周一 | 功能冻结令发布 | 冻结代码版本 | 报告骨架定稿 |
+| 周二 | 全量指标实测（板上） | ROC/EER 曲线生成 | 录制视频 v1 |
+| 周三 | 资源/时序报告导出 | NIST 子集测试 | Skill 脚本打包 |
+| 周四 | 与纯 PC 软件基线对比 | 性能面板截图 | 复现文档初稿 |
+| 周五 | G5 门禁评审 | G5 门禁评审 | G5 门禁评审 |
 
-#### 2.3 统计分析工具（W2，从 esp32-puf 复用）
+**G5 门禁判据**：
+- 指标表全满（无空格）：uniqueness / reliability / ROC-EER / 时延分解 / 资源 / NIST
+- 报告初稿完整（含失败分析章节）
+- 视频 v1 存在
+- Skill 包含 ≥2 个可运行脚本
 
-| 文件 | 来源 | 修改 |
+### W6 · 交付周（P0-1 修复）
+
+| 天 | 任务 | 交付物 |
 |---|---|---|
-| src/python/evaluation/hamming_analysis.py | esp32-puf 复制 | 改输入位数参数（65536→64） |
-| src/python/evaluation/compare_devices.py | esp32-puf 复制 | 零修改 |
-| src/python/evaluation/roc_eer.py | 自研 | ~100 行（sklearn ROC 曲线） |
+| 周一 | 报告终稿（含大模型协作记录） | report/report.md |
+| 周二 | 复现包（从零跑通文档） | README.md 更新 |
+| 周三 | 视频终版（≤3 分钟） | video.mp4 |
+| 周四 | 开源仓库整理 + **11-03 晚提交** | GitHub/Gitee push |
+| 周五 | 缓冲日（11-04） | — |
 
-### W3 · 认证服务器
+---
 
-#### 3.1 文件结构
+## 二、B 线 · PC 软件设计（P1-6 修复）
 
-```
-src/python/server/
-├── main.py            # 入口：启动服务器 + CLI
-├── protocol.py        # HF-IDA 五帧状态机
-├── crp_pool.py        # 挑战池管理（不重复抽取+余量监控）
-├── template_db.py     # 模板存储（JSON 文件）
-├── threshold.py       # 双阈值判决（灰区加测）
-└── panel.py           # 实时性能面板（终端 UI，W5 升级 web）
-```
-
-#### 3.2 protocol.py 核心流程
+### protocol.py 修正版
 
 ```python
 class HFIDAProtocol:
-    """HF-IDA 双向认证协议状态机"""
+    # 消息类型定义（msgid 从 0x0090 起）
+    MSG_ACCESS_REQUEST  = 0x0090  # 终端→基站
+    MSG_CHALLENGE       = 0x0091  # 基站→终端
+    MSG_RESPONSE_R1     = 0x0092  # 终端→基站 (含反挑战 C2)
+    MSG_RESULT          = 0x0093  # 基站→终端 (含 R2)
+    MSG_CONFIRM         = 0x0094  # 终端→基站
+    MSG_EXTRA_CHALLENGE = 0x0095  # 基站→终端 (灰区加测)
 
-    def on_connect(self, terminal_id: int):
-        """终端发起接入 → 生成挑战 → 下发"""
-        challenges = self.pool.draw(terminal_id, count=5)
-        return self.pack(MSG_CHALLENGE, payload=challenges)
+    # 双阈值（简化为两个，非四个）
+    TAU_PASS   = 6    # HD ≤ 6 → 通过 (64-bit 响应, ~9.4%)
+    TAU_REJECT = 16   # HD ≥ 16 → 拒绝 (~25%)
 
     def on_response(self, terminal_id: int, r1: bytes, c2: bytes):
-        """收到终端响应 R1 + 反挑战 C2"""
-        score = self.templates.match(terminal_id, r1)
-        if score < TAU_PASS:
-            return self.pack(MSG_REJECT, reason="HD too high")
-        elif score > TAU_REJECT:
-            return self.pack(MSG_REJECT, reason="HD too low (suspicious)")
+        hd = self.templates.hamming_distance(terminal_id, r1)
+        if hd <= self.TAU_PASS:
+            r2 = self.hsm.respond(c2)  # hsm.py 已定义
+            return self.pack(self.MSG_RESULT, result=PASS, r2=r2)
+        elif hd >= self.TAU_REJECT:
+            return self.pack(self.MSG_RESULT, result=REJECT)
+        else:
+            # 灰区: 加测 3 个挑战,合并评分
+            extra_challenges = self.pool.draw(terminal_id, count=3)
+            return self.pack(self.MSG_EXTRA_CHALLENGE,
+                           payload=extra_challenges)
 
-        # 灰区：加测
-        if score > TAU_GRAY_LO and score < TAU_GRAY_HI:
-            extra = self.pool.draw(terminal_id, count=3)
-            return self.pack(MSG_EXTRA_CHALLENGE, payload=extra)
-
-        # 通过：调 HSM 答反挑战 C2 → 生成 R2
-        r2 = self.hsm.respond(c2)
-        return self.pack(MSG_RESULT + MSG_R2, result=PASS, r2=r2)
+    def on_extra_response(self, terminal_id: int,
+                          r1_extra: bytes, c2: bytes):
+        """灰区加测后的合并评分（P1-6 修复）"""
+        hd_extra = self.templates.hamming_distance(terminal_id, r1_extra)
+        total_hd = self.pending_hd[terminal_id] + hd_extra
+        # 用更宽的阈值（更多比特 → 更好的统计分辨力）
+        if total_hd <= self.TAU_PASS * 2:  # 8 挑战 × 8 bit = 128 bit
+            r2 = self.hsm.respond(c2)
+            return self.pack(self.MSG_RESULT, result=PASS, r2=r2)
+        else:
+            return self.pack(self.MSG_RESULT, result=REJECT)
 ```
 
-#### 3.3 crp_pool.py 设计
+### 注册流程（P1-6 修复：补齐）
 
 ```python
-class CRPPool:
-    """每设备的挑战池管理"""
-
-    def __init__(self, device_id: int, size: int = 500):
-        self.used: Set[int] = set()      # 已用挑战索引
-        self.pool: List[bytes] = self._generate(size)
-
-    def draw(self, count: int = 5) -> List[bytes]:
-        """不重复抽取 count 个挑战"""
-        available = set(range(len(self.pool))) - self.used
-        if len(available) < count:
-            raise PoolExhausted(f"剩余 {len(available)}，需要 {count}")
-        chosen = random.sample(list(available), count)
-        self.used.update(chosen)
-        return [self.pool[i] for i in chosen]
-
-    @property
-    def remaining_pct(self) -> float:
-        return 1 - len(self.used) / len(self.pool)
+# src/python/server/enroll.py（新增文件）
+def enroll_device(terminal_id: int, serial_port: str, n_challenges: int = 100):
+    """注册新设备：采集 N 个 CRP，建立模板"""
+    templates = {}
+    for i in range(n_challenges):
+        seed = secrets.token_bytes(8)   # CSPRNG 生成挑战
+        r1 = send_and_receive(serial_port, seed)  # 通过 UART/电台
+        templates[seed] = r1             # 存储 CRP 对
+    # 计算每个 bit 的稳定性掩码（复用 esp32-puf 的 find_stable_bits 概念）
+    stable_mask = compute_stability(templates)
+    save_template(terminal_id, templates, stable_mask)
 ```
 
-### W4 · ML 攻击实验
+### hamming_analysis 适配层（P1-9 修复）
 
-#### 4.1 文件
-
-```
-src/python/evaluation/
-├── attack_ml.py       # LR/SVM 攻击 notebook
-├── gen_dataset.py     # 合成 CRP 数据生成（板到手前用）
-└── attack_report.py   # 攻击结果可视化
-```
-
-#### 4.2 实验设计
+原工具吃逐行 hex 比特流，我们的 VIO 输出是 32-bit 比值计数器。需要新增适配层：
 
 ```python
-# 攻击模型：逻辑回归
-from sklearn.linear_model import LogisticRegression
-
-# 数据：CRP 对 (challenge_bits, response_bit)
-# 基础结构：直接用 challenge → response 的线性映射训练
-# XOR 结构：4 路异或后的响应 → 线性模型无法拟合
-
-# 预期结果：
-#   基础结构 → 攻击准确率 >95%（被攻破）
-#   XOR(k=4) → 攻击准确率 ≈50%（等于随机猜）
+# src/python/evaluation/quantizer.py
+def ratio_to_bits(readings: list[int], n_bits: int = 64) -> list[str]:
+    """将 VIO 比值读数量化为 bit 流"""
+    # W1: 每个读数 → 1 bit（阈值判决：读数 > 理论中心值 → 1, 否则 → 0）
+    # W2+: 直接使用 64-bit 响应，无需量化
+    ...
 ```
 
 ---
 
-## 三、C 线 · 文档与证据（贯穿全程）
+## 三、修订后的风险表（P2-4 修复）
 
-### 每周交付
-
-| 周 | 交付物 | 路径 |
+| 触发 | 动作 | 影响 |
 |---|---|---|
-| W1 | ✅ AI 协作日志开档 | report/llm_log/w1_session.md |
-| W2 | W2 实验数据 + 教程更新 | data/w1_readings/, docs/tutorials/ |
-| W3 | 系统架构图 (SVG) | docs/architecture/ |
-| W4 | 攻击实验报告 + 温度实验数据 | report/figures/ |
-| W5 | 性能面板截图 + Skill 脚本 + 报告初稿 | skill/, report/ |
-| W6 | 终稿报告 + 复现包 + 视频 | report/report.md |
+| W2 解码器做不出来 | 退回固定配对（无挑战），纯频率认证 | 演示降级但可交付 |
+| W2 整体失败 | W1 双环比值 + 软件仿真挑战集 | 叙事改为"原理验证" |
+| 板 2 始终未到位 | 单板 + 多实例 + 软仿冒者 | 跨芯片互斥改预录视频 |
+| CRP 池耗尽 | 池余量 <20% 触发重注册流程 | 分钟级，对应维护窗口 |
+| dialect 生成失败 | 用 RAW bytes + 自研 CRC | 与 pymavlink 不互通，需双端适配 |
+| 板卡到货延迟 | 全部仿真先行，板到后只做验证 | W2/W3 仿真版本先交付 |
+| Vivado 许可到期 11-23 | 提前生成全部比特流存档 | 决赛前不再需要综合 |
+| 温度实验超安全窗 | XADC 70°C 硬停 → 降温后继续 | 实验中断，数据仍可用 |
 
 ---
 
-## 四、依赖关系图
+## 四、依赖图（P2-2 修复：补边）
 
 ```
-W1 ✅ ──► W2 RTL (ro_array + xor_merge)
-  │              │
-  │              ▼
-  │         W3 RTL (terminal_fsm + mavlink_frame)
-  │              │
-  └──► B线 W1-W2 (pymavlink 回环 + 统计工具)
-  │              │
-  │              ▼
-  │         B线 W3 (认证服务器)
-  │              │
-  │              ▼
-  │         B线 W4 (ML 攻击) ◄── A线 W4 (联调)
-  │              │
-  └──► C线 (持续) ──► W5 冻结 ──► W6 交付
+A线 W1 ✅ ──► A线 W2 RTL ──► [接口冻结评审] ──► A线 W3 协议
+                │                                    │
+                │  响应格式(64bit) ──────────────────►│
+                │                                    │
+B线 W1-W2 ──► B线 W3 服务器 ◄── 接口冻结 ──► B线 W4 ML攻击
+  (pymavlink     │    ↑                                  ↑
+   + 统计工具)    │    └── A线 W2/W3 响应格式 ────────────┘
+                │
+C线 (持续) ──────────────────────────────────► W5 冻结 ──► W6 交付
 ```
 
-关键路径：**A 线 W2 → W3**（RTL 是硬件基础，B/C 依赖它的接口定义）
+**接口冻结评审节点**（W2 周五）：A 线提交最终 R1 格式 + MAVLink 消息定义 → B 线按此实现，之后不允许单方面变更。
 
 ---
 
-## 五、板到手后的最小验证流程
-
-```powershell
-# 前提：ZC702 + 12V + USB JTAG 线
-# 1. 构建 W1 比特流
-D:\puf-drone-auth\build\ps1\run_build.ps1
-
-# 2. 烧板 + 自动采集 VIO 读数 (10 次)
-D:\puf-drone-auth\build\ps1\run_build.ps1 -Measure
-
-# 3. 分析读数（B 线工具）
-python src/python/evaluation/hamming_analysis.py -i data/w1_readings/w1_readings.csv
-
-# 4. 判定
-#    同板极差 < 100 → 链路稳定 ✓
-#    （板2到手后：跨板中心差 > 数千 → 指纹差异确认 ✓✓）
-```
-
----
-
-## 六、风险与降级决策表
-
-| 触发 | 动作 | 影响范围 |
-|---|---|---|
-| W2 G2 不达标（reliability <90%） | 调布局→加环数→放宽阈值 | A 线延迟 1 周 |
-| W3 无线联调失败 | 切有线 USB-UART | 演示叙事不变 |
-| W4 ML 攻击异常耗时 | 只保留"基础被攻破"结论 | 报告仍可写 |
-| W5 冻结日仍有 bug | 保底四件套优先 | 砍 AI 扩展/多实例 |
-| 电台供货延迟 | 有线兜底→ESP32 WiFi | 无线演示改叙事 |
-
----
-
-## 七、Skill 打包计划（W5，15 分项）
-
-| 工具 | 功能 | 复用来源 |
-|---|---|---|
-| puf_eval.py | 一键测 uniqueness + reliability + NIST | hamming_analysis.py 改造 |
-| mavlink_loopback.py | 电台回环测试（延迟/丢包/吞吐） | 自研 ~50 行 |
-| build_automation | 参数化 Vivado Tcl 构建脚本 | build_w1.tcl 泛化 |
-
----
-
-*本方案基于 2026-10-05 开源代码分析 + 已验证的 W1 工程产出。*
+*本方案 v3.0 修复了 auto-review Round 1 的全部 3 P0 + 9 P1 + 6 P2。*
