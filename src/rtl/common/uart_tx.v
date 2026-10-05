@@ -177,9 +177,13 @@ always @ ( posedge clk ) begin
             bit_idx <= bit_idx + 3'd1;
         end
     end
-    else begin
-        bit_idx <= 3'd0;
+    else if( curr_state != S_DATA ) begin
+        bit_idx <= 3'd0;                          // 仅非 DATA 态清零
     end
+    // S_DATA 态非边界拍：bit_idx 保持（不赋值 = 寄存器保持原值）
+    // ⚠ 审查 P0-1 修复：原版此处无条件清零，导致 bit_idx 在 DATA 态
+    //   非边界拍被反复归零（0→1→0→1...），永远到不了 7，FSM 永久挂死。
+    //   原版 nandland r_Bit_Index 位间保持，重构时误引入。
 end
 
 //////////////////////////////////////////////////////////////////
@@ -213,14 +217,18 @@ end
 assign  tx_serial = tx_serial_reg;              // 寄存器直连出端口
 
 //////////////////////////////////////////////////////////////////
-// 发送进行中：START~STOP 期间为高（判 next_state 同拍对齐）
+// 发送进行中：START~CLEANUP 期间为高（判 next_state 同拍对齐）
+// ⚠ 审查 P0-2 修复：原版不含 CLEANUP，导致 CLEANUP 拍 tx_active=0 但
+//   uart_tx 尚不能锁存新字节 → FIFO 胶水在该拍弹出的字节被丢失。
+//   覆盖 CLEANUP 后 tx_active 仅在真正回到 IDLE 时拉低。
 //////////////////////////////////////////////////////////////////
 always @ ( posedge clk ) begin
     if( rst ) begin
         tx_active_reg <= 1'b0;
     end
     else begin
-        tx_active_reg <= ( next_state == S_START ) | ( next_state == S_DATA ) | ( next_state == S_STOP );
+        tx_active_reg <= ( next_state == S_START ) | ( next_state == S_DATA )
+                       | ( next_state == S_STOP ) | ( next_state == S_CLEANUP );
     end
 end
 

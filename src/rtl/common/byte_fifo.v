@@ -9,6 +9,10 @@
 //   assign tx_valid = fifo_pop;
 //   assign tx_byte  = fifo_rd_data;                     // 组合读，当拍有效
 //   // fifo 端：rd_en = fifo_pop; wr_en = frame_valid; wr_data = frame_byte;
+//   ⚠ 前提：uart_tx 的 tx_active 必须覆盖 START~CLEANUP（P0-2 修复后）。
+//   若 tx_active 仅覆盖 START~STOP，需改用三项式：
+//     fifo_pop = ~empty & ~tx_active & ~tx_active_d;    // tx_active_d 打一拍
+//   ⚠ rd_en 必须由 ~empty 门控——空 FIFO 的 rd_en 被忽略（FWFT 写赢语义）
 //
 // 特性：
 //   - 组合读（rd_data 当拍有效，适配 uart_tx 同拍锁存）

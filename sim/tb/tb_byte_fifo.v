@@ -82,10 +82,9 @@ module tb_byte_fifo;
         rd_byte(8'h33);
         rd_byte(8'h44);
         if (!empty) begin errors=errors+1; $display("[T1 FAIL] not empty after drain"); end
-        $display("[T1 PASS] basic FIFO order (errors so far: %0d)", errors);
+        if (errors == 0) $display("[T1 PASS] basic FIFO order");
 
         // ---------------- T2: 写满 + 溢出保护 ----------------
-        errors = 0;
         for (i = 0; i < 64; i = i + 1) wr_byte(8'hA0 + i[7:0]);
         if (!full) begin errors=errors+1; $display("[T2 FAIL] not full after 64 writes"); end
         if (count !== 7'd64) begin errors=errors+1; $display("[T2 FAIL] count=%0d expect 64", count); end
@@ -96,7 +95,7 @@ module tb_byte_fifo;
         @(negedge clk);
         if (rd_data !== 8'hA0) begin errors=errors+1; $display("[T2 FAIL] first=%02h expect A0", rd_data); end
         rd_byte(8'hA0);
-        $display("[T2 PASS] full at 64, overflow rejected");
+        if (errors == 0) $display("[T2 PASS] full at 64, overflow rejected");
 
         // ---------------- T3: 读空保护 ----------------
         // 排空剩余
@@ -108,10 +107,9 @@ module tb_byte_fifo;
         @(negedge clk);
         rd_en = 1'b0;
         if (count !== 7'd0) begin errors=errors+1; $display("[T3 FAIL] underflow: count=%0d", count); end
-        $display("[T3 PASS] empty protected, no underflow");
+        if (errors == 0) $display("[T3 PASS] empty protected, no underflow");
 
         // ---------------- T4: 同拍读写 ----------------
-        errors = 0;
         @(negedge clk);
         wr_data <= 8'h77; wr_en <= 1'b1; rd_en <= 1'b1;  // 同拍读写空 FIFO
         @(negedge clk);
@@ -120,10 +118,9 @@ module tb_byte_fifo;
         if (count !== 7'd1) begin errors=errors+1; $display("[T4 FAIL] count=%0d expect 1", count); end
         @(negedge clk);
         if (rd_data !== 8'h77) begin errors=errors+1; $display("[T4 FAIL] data=%02h expect 77", rd_data); end
-        $display("[T4 PASS] simultaneous read+write on empty");
+        if (errors == 0) $display("[T4 PASS] simultaneous read+write on empty");
 
         // ---------------- T5: 环形回绕 ----------------
-        errors = 0;
         rd_byte(8'h77);   // 排空
         // 写 64 → 读 64 → 写 64 → 读 64（两次回绕）
         for (i = 0; i < 64; i = i + 1) wr_byte(8'h50 + i[7:0]);
@@ -131,10 +128,9 @@ module tb_byte_fifo;
         for (i = 0; i < 64; i = i + 1) wr_byte(8'h60 + i[7:0]);
         for (i = 0; i < 64; i = i + 1) rd_byte(8'h60 + i[7:0]);
         if (!empty) begin errors=errors+1; $display("[T5 FAIL] not empty after wrap"); end
-        $display("[T5 PASS] double wraparound");
+        if (errors == 0) $display("[T5 PASS] double wraparound");
 
         // ---------------- T6: 复位清空 ----------------
-        errors = 0;
         for (i = 0; i < 10; i = i + 1) wr_byte(8'hE0 + i[7:0]);
         rst = 1'b1;
         repeat (2) @(negedge clk);
@@ -142,7 +138,43 @@ module tb_byte_fifo;
         repeat (1) @(negedge clk);
         if (!empty) begin errors=errors+1; $display("[T6 FAIL] not empty after reset"); end
         if (count !== 7'd0) begin errors=errors+1; $display("[T6 FAIL] count=%0d after reset", count); end
-        $display("[T6 PASS] reset clears FIFO");
+        if (errors == 0) $display("[T6 PASS] reset clears FIFO");
+
+
+        // ---------------- T7: 流水线模式（同拍读写、间距恒定）----------------
+        // 预填 8 字节，然后同拍读写 20 字节（间距从 8 收敛到 8）
+        for (i = 0; i < 8; i = i + 1) wr_byte(8'h30 + i[7:0]);
+        if (count !== 7'd8) begin errors=errors+1; $display("[T7 FAIL] prefill count=%0d", count); end
+        // 同拍读写 20 拍
+        for (i = 8; i < 28; i = i + 1) begin
+            @(negedge clk);
+            wr_data <= 8'h30 + i[7:0]; wr_en <= 1'b1;
+            // 同拍检查 rd_data 是当前头
+            if (rd_data !== 8'h30 + (i[7:0] - 8'd8)) begin
+                errors = errors + 1;
+                $display("[T7 FAIL] pipe[%0d] rd=%02h expect %02h", i, rd_data, 8'h30 + i[7:0] - 8'd8);
+            end
+            rd_en <= 1'b1;
+            @(negedge clk);
+            wr_en <= 1'b0; rd_en <= 1'b0;
+        end
+        if (count !== 7'd8) begin errors=errors+1; $display("[T7 FAIL] post-pipe count=%0d expect 8", count); end
+        if (errors == 0) $display("[T7 PASS] pipeline mode (8-byte gap, 20 simultaneous ops)");
+
+        // ---------------- T8: 满边界同拍读写（写拒、读收）----------------
+        // 排空后填满 64，然后同拍 wr_en + rd_en
+        for (i = 0; i < 8; i = i + 1) rd_byte(8'h30 + 8'd28 - 8'd8 + i[7:0]); // 排空 T7 剩余
+        for (i = 0; i < 64; i = i + 1) wr_byte(8'hB0 + i[7:0]);
+        if (!full) begin errors=errors+1; $display("[T8 FAIL] not full"); end
+        @(negedge clk);
+        wr_data <= 8'hFF; wr_en <= 1'b1; rd_en <= 1'b1;  // 满边界碰撞
+        @(negedge clk);
+        wr_en <= 1'b0; rd_en <= 1'b0;
+        // 写被拒（FF 不入），读被受（count 64→63，头仍 B0）
+        if (count !== 7'd63) begin errors=errors+1; $display("[T8 FAIL] count=%0d expect 63", count); end
+        @(negedge clk);
+        if (rd_data !== 8'hB1) begin errors=errors+1; $display("[T8 FAIL] head=%02h expect B1", rd_data); end
+        if (errors == 0) $display("[T8 PASS] full-boundary collision (write rejected, read accepted)");
 
         // ---------------- 总结 ----------------
         repeat (3) @(negedge clk);
