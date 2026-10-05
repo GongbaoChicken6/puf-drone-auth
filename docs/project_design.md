@@ -312,6 +312,15 @@ class HFIDAProtocol:
     TAU_PASS   = 6    # HD ≤ 6 → 通过 (64-bit 响应, ~9.4%)
     TAU_REJECT = 16   # HD ≥ 16 → 拒绝 (~25%)
 
+    # 挑战数量：4 个（非 5 个）——P1-R5 修复
+    # 原因：5×8B=40B 超过 MAVLink 自限 32B 载荷（帧 52B>44B 上限）
+    # 4×8B=32B 恰好合规，帧 = 10+32+2 = 44B（自洽）
+    N_CHALLENGES = 4
+
+    def __init__(self):
+        self.pools: dict[int, CRPPool] = {}   # P1-R6: 每设备一个池
+        self.lock = threading.Lock()          # P1-R7: 线程安全
+
     def on_response(self, terminal_id: int, r1: bytes, c2: bytes):
         hd = self.templates.hamming_distance(terminal_id, r1)
         if hd <= self.TAU_PASS:
@@ -321,9 +330,9 @@ class HFIDAProtocol:
             return self.pack(self.MSG_RESULT, result=REJECT)
         else:
             # 灰区: 加测 3 个挑战,合并评分
-            extra_challenges = self.pool.draw(terminal_id, count=3)
+            extra = self.pools[terminal_id].draw(count=3)  # P1-R6: 签名统一
             return self.pack(self.MSG_EXTRA_CHALLENGE,
-                           payload=extra_challenges)
+                           payload=extra)
 
     def on_extra_response(self, terminal_id: int,
                           r1_extra: bytes, c2: bytes):
@@ -366,6 +375,31 @@ def ratio_to_bits(readings: list[int], n_bits: int = 64) -> list[str]:
     # W2+: 直接使用 64-bit 响应，无需量化
     ...
 ```
+
+### W4 ML 攻击实验设计（P1-R8 修复：叙事与设计结构对齐）
+
+**关键认知**：我们的设计是 **RO 配对比较 PUF**（非 arbiter PUF），设备秘密本质是 16 个环频的总排序（有效熵 ≈ log2(16!) ≈ 44 bit）。有效 CRP 空间 = C(16,2)=120 种配对比较，而非 2^64。
+
+**两组实验**：
+
+**实验 A：合成 Arbiter PUF 基线（文献复现，证明方法论）**
+- 生成合成 arbiter PUF 数据（加性延迟模型，64 级）
+- LR 攻击：64-bit 挑战 → 1-bit 响应（线性模型）
+- 预期：>95% 准确率（Rührmair et al. 2010 共识）
+- 结论表述："文献基线在我们的评估框架中复现成功"
+
+**实验 B：自家 RO 结构的排序重构攻击（诚实评估）**
+- 攻击者积累 CRP（每条 = 挑战种子 + 64-bit 响应）
+- 目标：恢复 16 个环的频率排序（≈44 bit 秘密）
+- 方法：从响应反推每对比胜关系 → 拓扑排序
+- 预期：~120 条带噪 CRP 即可高概率重构
+- 结论表述："CRP 空间坍缩至 ~2×10^6 种配对构型，排序重构攻击在 ~120 次观测内可恢复完整排序——这是我们设计的已知边界，在报告中如实讨论"
+
+**安全声明口径**：
+- ✅ 可声明："抗逻辑回归建模攻击"（对 XOR 合并后的响应）
+- ❌ 不可声明："抗机器学习攻击"（排序重构对 RO 结构有效）
+- ✅ 可声明："已量化安全边界：有效熵 ≈44 bit，排序重构需 ~120 CRP"
+- ✅ 可声明（未来工作）："增加环数至 64+ 可将有效熵提升至 ~296 bit"
 
 ---
 
