@@ -143,6 +143,16 @@ default → 0x00（未知消息，帧应被丢弃）
 4. **start 纪律**：仅在 busy=0（或复位后）断言，单拍；busy 期间的 start 被静默忽略。
 5. **frame_err**：单拍脉冲，上游必须粘滞捕获（tb_mavlink_frame.v 的 err_seen 已示范）。
 6. **无线链路容错**（W4 联调验收项）：terminal_fsm 帧解析器必须容忍电台噪声产生的垃圾字节——超时（§5 的 2s）+ 回 STX 搜索 + CRC 失败计数；uart_rx 无 framing-error 输出，字节流不保证干净。
+7. **RX payload read discipline** (review B-F4): frame_parser's frame_ok is a single-cycle
+   pulse - terminal_fsm MUST latch it sticky. After latching, read payload bytes via
+   payload_rd_addr (0-31, combinational). Byte order = frame order (byte 0 at address 0).
+   Seed assembly: byte[i] maps to seed[i*8 +:8] (little-endian, same as w2_top.v).
+   Read window = frame_ok latch until next frame's first payload byte overwrites
+   (>=3.8ms @115200, ample margin). Aborted frames also invalidate the buffer.
+8. **w2_top integration gating** (review B-F3): w2_top.v S_IDLE triggers seed reception on
+   ANY rx_valid - W3 integration MUST NOT connect frame_parser and w2_top's seed path to
+   the same uart_rx in parallel. terminal_fsm must fully replace w2_top's receive path
+   (or gate w2_top so it does not receive in W3 mode).
 
 ### 6.2 板级前置（W3 顶层 w3_top.v 验收项）
 

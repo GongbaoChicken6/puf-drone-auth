@@ -17,7 +17,10 @@
 
 module frame_parser # (
     parameter MAX_PAYLOAD   = 32   ,  // 载荷上限（契约 §1）
-    parameter PARSER_TIMEOUT = 4096   // 非搜索态无字节超时（拍）
+    parameter PARSER_TIMEOUT = 65536   // 非搜索态无字节超时（拍）
+    // ⚠ 审查 B-1b 修复：必须 > 一个 UART 字节的时钟周期数
+    //   115200 baud @100MHz = 8680 拍/字节 → 默认 65536（7.5× 余量）
+    //   若时钟/波特率变化，按 FREQ_HZ/BAUD/10×10 推导（契约 §6.2）
 ) (
     input  wire        clk       ,   // 系统时钟
     input  wire        rst       ,   // 高有效同步复位
@@ -62,7 +65,7 @@ module frame_parser # (
     reg [1:0]  crc_cnt = 2'd0;           // 收到几个 CRC 字节
     reg [7:0]  rx_crc_lo = 8'h00;        // 收到的 CRC 低字节
     reg [7:0]  rx_crc_hi = 8'h00;        // 收到的 CRC 高字节
-    reg [12:0] to_cnt   = 13'd0;         // 无字节超时计数
+    reg [16:0] to_cnt   = 17'd0;         // 无字节超时计数（17-bit 装得下 65536）
 
     //------------------------------------------------------------------------
     // 载荷缓冲（32 字节寄存器阵列）
@@ -113,15 +116,7 @@ module frame_parser # (
 
     assign busy = (state != S_SEARCH);
 
-    //------------------------------------------------------------------------
-    // 帧头字节暂存（逐字节收，不并行输出）
-    //   hdr[0]=LEN  hdr[1]=IFLAG  hdr[2]=CFLAG  hdr[3]=SEQ
-    //   hdr[4]=SYSID  hdr[5]=COMPID  hdr[6..8]=MSGID 小端
-    //------------------------------------------------------------------------
-    reg [7:0] hdr_buf [0:8];
-
-    // 提取 msgid（三个字节收齐后拼接）
-    wire hdr_msgid_ready = (hdr_cnt == 4'd8);   // 已收完 MSGID MSB
+    // 帧头字段直接从 rx_byte 提取到 len_r/msgid_r（不暂存整个帧头）
 
     //========================================================================
     // 主状态机
@@ -131,14 +126,14 @@ module frame_parser # (
             state      <= S_SEARCH;
             hdr_cnt    <= 4'd0;
             pay_cnt    <= 6'd0;
-            len_r      <= 6'd0;
+            len_r      <= 8'd0;
             msgid_r    <= 24'h0;
             crc_cnt    <= 2'd0;
             rx_crc_lo  <= 8'h00;
             rx_crc_hi  <= 8'h00;
-            to_cnt     <= 13'd0;
+            to_cnt     <= 17'd0;
             msg_id     <= 24'h0;
-            pay_len    <= 6'd0;
+            pay_len    <= 8'd0;
             frame_ok   <= 1'b0;
             frame_err  <= 1'b0;
             crc_init   <= 1'b0;
@@ -154,13 +149,13 @@ module frame_parser # (
             // 超时计数：非搜索态且无字节 → 递增；有字节或搜索态 → 清零
             if (state != S_SEARCH && !rx_valid) begin
                 to_cnt <= to_cnt + 13'd1;
-                if (to_cnt >= PARSER_TIMEOUT - 13'd1) begin
+                if (to_cnt >= PARSER_TIMEOUT[16:0] - 17'd1) begin
                     frame_err <= 1'b1;             // 超时：帧不完整
                     state     <= S_SEARCH;
-                    to_cnt    <= 13'd0;
+                    to_cnt    <= 17'd0;
                 end
             end else begin
-                to_cnt <= 13'd0;
+                to_cnt <= 17'd0;
             end
 
             case (state)
@@ -173,6 +168,7 @@ module frame_parser # (
                         hdr_cnt  <= 4'd0;
                         pay_cnt  <= 6'd0;
                         crc_cnt  <= 2'd0;
+                        to_cnt   <= 17'd0;
                         state    <= S_HEADER;
                     end
                 end
@@ -182,7 +178,6 @@ module frame_parser # (
                 //------------------------------------------------
                 S_HEADER: begin
                     if (rx_valid) begin
-                        hdr_buf[hdr_cnt] <= rx_byte;
                         crc_din <= rx_byte;         // 帧[1..9] 全进 CRC
                         crc_dv  <= 1'b1;
 
@@ -198,7 +193,7 @@ module frame_parser # (
                             hdr_cnt <= 4'd0;
                             // LEN 合法性：用 len_r（hdr_cnt==0 时锁存，此刻已有效 7 拍）
                             // 本协议所有消息载荷 5~32B，LEN==0 或 >32 均非法
-                            if (len_r == 8'd0 || len_r > 8'd32) begin
+                            if (len_r == 8'd0 || len_r > MAX_PAYLOAD) begin
                                 frame_err <= 1'b1;
                                 state     <= S_SEARCH;
                             end else begin
