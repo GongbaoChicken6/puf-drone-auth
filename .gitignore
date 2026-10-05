@@ -1,29 +1,38 @@
-# Vivado generated files
+# ==========================================
+# PUF Drone Auth .gitignore
+# Principle: exclude tool-generated temp files, KEEP build scripts & reports
+# ==========================================
+
+# Vivado generated (Journals, logs, temp)
 *.jou
 *.log
 *.str
 *.bak
 *.wdb
 *.wcfg
-*.hw
-*.ip_user_files/
-*.sim/
-*.cache/
-*.hw/
+*.cpg
+
+# Vivado project internals (regenerated each build)
+.ip_user_files/
 *.runs/
+*.cache/
+*.sim/
 *.srcs/
 *.xpr
-*.cache
-*.gps
 *.hw
-*.ip_user_files
-*.runs
-*.sim
-*.cpg
-*.ltx
+*.gps
+
+# Vivado design checkpoints & debug probes
 *.dcp
+*.ltx
+
+# Bitstreams: too large for git, but allow in data/bitstreams/
 *.bit
+!data/bitstreams/*.bit
+
+# Vivado XSA export (W2+ if needed)
 *.xsa
+!data/*.xsa
 
 # Python
 __pycache__/
@@ -32,7 +41,10 @@ __pycache__/
 .venv/
 *.egg-info/
 dist/
-build/
+
+# NOTE: bare "build/" pattern REMOVED — it would exclude our build/tcl/, build/ps1/, build/reports/
+# Python build output is covered by "dist/" above; if using setuptools add:
+# src/python/**/build/
 
 # IDE
 .idea/
@@ -46,17 +58,15 @@ Thumbs.db
 .DS_Store
 desktop.ini
 
-# Simulation
-*.wcfg
-*.wdb
+# Simulation (xsim artifacts)
 xsim.dir/
 xsim/*.log
 glbl.v
 
-# Data (large files - keep CSV but exclude raw)
+# Data: exclude large raw datasets
 data/crp_datasets/*.csv.gz
 data/templates/*.pkl
 
-# Reports (generated)
-build/reports/*.txt
-build/reports/*.rpt
+# Build reports: KEEP these (competition evidence)
+# build/reports/*.txt   # ← UNCOMMENTED: competition requires these
+# build/reports/*.rpt   # ← UNCOMMENTED: competition requires these
