@@ -117,15 +117,15 @@ module terminal_fsm # (
     // 主状态机
     //========================================================================
     integer k;
+    // synth translate_off
     reg [3:0] state_prev = S_IDLE;              // 调试用：前态跟踪
     always @(posedge clk) begin
         if (state != state_prev) begin
-        // synth translate_off
             $display("[FSM] %0d -> %0d @%0t", state_prev, state, $time);
-        // synth translate_on
             state_prev <= state;
         end
     end
+    // synth translate_on
 
     always @(posedge clk) begin
         if (rst) begin
@@ -231,9 +231,10 @@ module terminal_fsm # (
 
                 //====================================================
                 S_WAIT_CHALL: begin
-                    if (rx_ok_latch && fp_msg_id == 24'h0091) begin
-                        rx_ok_latch <= 1'b0;         // 消费掉
-                        fp_rd_addr  <= 5'd0;         // 从地址 0 开始读
+                    if (rx_ok_latch && fp_msg_id == 24'h0091 && fp_pay_len == 8'd32) begin
+                        // rx_ok_latch 不在此清零——锁存块的"非等待态清零"已覆盖
+                        // （消除多驱动：A-P0-1 修复）
+                        fp_rd_addr  <= 5'd0;
                         state       <= S_PROC_SEEDS;
                     end else if (timeout_cnt >= TIMEOUT_CYCLES) begin
                         state    <= S_BLOCKED;
@@ -258,15 +259,13 @@ module terminal_fsm # (
 
                 //====================================================
                 S_WAIT_RESULT: begin
-                    if (rx_ok_latch && fp_msg_id == 24'h0093) begin
+                    if (rx_ok_latch && fp_msg_id == 24'h0093 && fp_pay_len == 8'd10) begin
                         // RESULT 帧 → 转验证态（不在本拍读数据！
                         // fp_rd_addr 同拍 NBA，读到的会是旧地址）
-                        rx_ok_latch <= 1'b0;
                         fp_rd_addr  <= 5'd0;
                         state       <= S_VERIFY_R2;
-                    end else if (rx_ok_latch && fp_msg_id == 24'h0095) begin
+                    end else if (rx_ok_latch && fp_msg_id == 24'h0095 && fp_pay_len == 8'd24) begin
                         // EXTRA_CHALLENGE：灰区加测
-                        rx_ok_latch <= 1'b0;
                         fp_rd_addr  <= 5'd0;
                         state       <= S_PROC_EXTRA;
                     end else if (timeout_cnt >= TIMEOUT_CYCLES) begin
@@ -302,7 +301,7 @@ module terminal_fsm # (
                         end
                     end else if (fp_rd_addr >= 5'd2 && fp_rd_addr < 5'd10) begin
                         // 读 r2 字节 [2..9]
-                        if (fp_rd_data !== r2_expected[fp_rd_addr[3:0] - 5'd2]) begin
+                        if (fp_rd_data != r2_expected[fp_rd_addr[3:0] - 5'd2]) begin
                             state    <= S_BLOCKED;  // R2 不匹配
                             result_r <= 2'd3;
                         end
@@ -313,7 +312,7 @@ module terminal_fsm # (
                         tx_buf[1] <= 8'h00;
                         tx_buf[2] <= 8'h00;
                         tx_buf[3] <= 8'h00;
-                        tx_buf[4] <= 8'h01;         // status = OK
+                        tx_buf[4] <= 8'h00;         // status = OK (protocol.py CONFIRM_OK=0)
                         tx_len    <= 6'd5;
                         state     <= S_TX_CONFIRM;
                         result_r  <= 2'd1;         // PASS
