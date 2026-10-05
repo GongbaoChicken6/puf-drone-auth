@@ -1,0 +1,451 @@
+"""PC authentication server entry point (REPL) for the PUF drone system.
+
+Runs the B-line server either against a fully simulated in-process drone
+terminal (loopback, default -- no hardware needed) or against a real
+serial link (pyserial, for the W3 hardware integration).
+
+Usage::
+
+    python -m src.python.server.main --loopback
+    python src/python/server/main.py --loopback
+    python -m src.python.server.main --port COM3 --baud 115200
+
+REPL commands::
+
+    auth <terminal_id> [n]     run one full authentication round
+    spoof <terminal_id>        authenticate using an impostor device
+    enroll <terminal_id> [n]   enroll/refresh a device template (n CRPs)
+    status                     show sessions, templates and CRP pools
+    quit                       exit the server
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import hmac
+import secrets
+import sys
+from pathlib import Path
+from typing import Any, Callable, Sequence
+
+# ---------------------------------------------------------------------
+# Import bootstrap: works both as a module and as a plain script.
+# ---------------------------------------------------------------------
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    from src.python.server.crp_pool import (  # noqa: E402
+        PoolExhaustedError,
+        format_pool_summary,
+    )
+    from src.python.server.hsm import SimulatedHSM, hsm_status  # noqa: E402
+    from src.python.server.protocol import (  # noqa: E402
+        CONFIRM_OK,
+        HD_NONE,
+        RESULT_ERROR,
+        RESULT_PASS,
+        RESULT_POOL_EMPTY,
+        RESULT_REJECT,
+        ProtocolError,
+        HFIDAProtocol,
+    )
+    from src.python.server.template_db import TemplateDB  # noqa: E402
+else:
+    from .crp_pool import PoolExhaustedError, format_pool_summary
+    from .hsm import SimulatedHSM, hsm_status
+    from .protocol import (
+        CONFIRM_OK,
+        HD_NONE,
+        RESULT_ERROR,
+        RESULT_PASS,
+        RESULT_POOL_EMPTY,
+        RESULT_REJECT,
+        ProtocolError,
+        HFIDAProtocol,
+    )
+    from .template_db import TemplateDB
+
+#: Default per-bit flip probability of the simulated genuine terminal.
+#: 2% gives an expected Hamming distance of ~1.3 bit per 64-bit response,
+#: comfortably inside the PASS region.
+NORMAL_FLIP_PROB = 0.02
+
+_RESULT_NAMES = {
+    RESULT_PASS: "PASS",
+    RESULT_REJECT: "REJECT",
+    RESULT_ERROR: "ERROR (not enrolled / protocol misuse)",
+    RESULT_POOL_EMPTY: "REJECT (CRP pool exhausted: re-enroll the device)",
+}
+
+
+# ---------------------------------------------------------------------
+# Simulated drone terminal (loopback transport)
+# ---------------------------------------------------------------------
+class SimulatedTerminal:
+    """Software model of one drone terminal's RO-pairing PUF.
+
+    The device secret is a random 32-byte key; the response to a
+    challenge seed is a keyed HMAC-SHA256 digest truncated to 64 bit,
+    then perturbed with per-bit flips to model measurement noise.
+    """
+
+    def __init__(self, terminal_id: int, flip_prob: float = NORMAL_FLIP_PROB) -> None:
+        self.terminal_id = terminal_id
+        self.secret = secrets.token_bytes(32)
+        self.flip_prob = flip_prob
+        self._rng = secrets.SystemRandom()
+
+    def ideal_response(self, seed: bytes) -> bytes:
+        """Noiseless response (deterministic for the device secret)."""
+        digest = hmac.new(self.secret, b"resp" + bytes(seed), hashlib.sha256).digest()
+        return digest[:8]
+
+    def respond(self, seeds: Sequence[bytes], flip_prob: float | None = None) -> list[bytes]:
+        """Respond to challenges with realistic bit-flip noise applied."""
+        prob = self.flip_prob if flip_prob is None else flip_prob
+        out: list[bytes] = []
+        for seed in seeds:
+            value = int.from_bytes(self.ideal_response(seed), "big")
+            if prob > 0.0:
+                for i in range(64):
+                    if self._rng.random() < prob:
+                        value ^= 1 << i
+            out.append(value.to_bytes(8, "big"))
+        return out
+
+    def counter_challenge(self) -> bytes:
+        """Generate the terminal's counter-challenge C2 (8 bytes)."""
+        return self._rng.randbytes(8)
+
+
+class LoopbackTransport:
+    """In-process transport holding one SimulatedTerminal per device id."""
+
+    def __init__(self) -> None:
+        self._terminals: dict[int, SimulatedTerminal] = {}
+        self._rng = secrets.SystemRandom()
+
+    def terminal(self, terminal_id: int) -> SimulatedTerminal:
+        """Get (or lazily create) the terminal simulating this device id."""
+        tid = int(terminal_id)
+        if tid not in self._terminals:
+            self._terminals[tid] = SimulatedTerminal(tid)
+        return self._terminals[tid]
+
+    def counter_challenge(self, terminal_id: int) -> bytes:
+        """C2 generated by the (simulated) terminal."""
+        return self.terminal(terminal_id).counter_challenge()
+
+    def respond(
+        self,
+        terminal_id: int,
+        seeds: Sequence[bytes],
+        frame: bytes | None = None,
+        impostor: bool = False,
+        flip_prob: float | None = None,
+    ) -> list[bytes]:
+        """Terminal answers the challenges; impostor=True answers with a
+        different physical device (mutual-exclusion demo for W5)."""
+        if impostor:
+            impostor_device = SimulatedTerminal(-1 - int(terminal_id))
+            return impostor_device.respond(seeds, flip_prob)
+        return self.terminal(terminal_id).respond(seeds, flip_prob)
+
+
+class SerialTransport:
+    """Serial transport to a real terminal (pyserial, W3 integration).
+
+    Writes the packed CHALLENGE frame produced by the protocol engine and
+    reads back one RESPONSE_R1 frame (12 header/checksum bytes plus 8
+    bytes per challenge).  Kept intentionally thin: the wire format is
+    owned by HFIDAProtocol.pack/parse.
+    """
+
+    def __init__(self, port: str, baud: int = 115200, timeout: float = 3.0) -> None:
+        try:
+            import serial  # pyserial, optional dependency
+        except ImportError as exc:
+            raise RuntimeError(
+                "pyserial is required for serial mode: pip install pyserial"
+            ) from exc
+        self.serial = serial.Serial(port, baud, timeout=timeout)
+        self.port = port
+
+    def counter_challenge(self, terminal_id: int) -> bytes:
+        """The real terminal sends C2 inside MSG_ACCESS_REQUEST; the REPL
+        path generates it here until the full receive loop lands (W3)."""
+        return secrets.token_bytes(8)
+
+    def respond(
+        self,
+        terminal_id: int,
+        seeds: Sequence[bytes],
+        frame: bytes | None = None,
+        impostor: bool = False,
+        flip_prob: float | None = None,
+    ) -> list[bytes]:
+        """Send the challenge frame and read the response frame back."""
+        if frame is None:
+            raise ValueError("serial transport needs the packed challenge frame")
+        self.serial.reset_input_buffer()
+        self.serial.write(bytes(frame))
+        self.serial.flush()
+        reply_len = 12 + 8 * len(seeds)
+        reply = self.serial.read(reply_len)
+        if len(reply) != reply_len:
+            raise TimeoutError(
+                f"terminal timeout on {self.port}: got {len(reply)}/{reply_len} bytes"
+            )
+        _msg_id, fields = HFIDAProtocol.parse(reply)
+        return fields["r1s"]
+
+    def close(self) -> None:
+        """Close the serial port."""
+        self.serial.close()
+
+
+# ---------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------
+def majority_bytes(responses: Sequence[bytes]) -> bytes:
+    """Bit-wise majority vote across repeated 8-byte responses (ties -> 0)."""
+    n = len(responses)
+    if n == 0:
+        raise ValueError("no responses to vote on")
+    values = [int.from_bytes(r, "big") for r in responses]
+    out = 0
+    for i in range(64):
+        if sum((v >> i) & 1 for v in values) * 2 > n:
+            out |= 1 << i
+    return out.to_bytes(8, "big")
+
+
+def _print_verdict(fields: dict[str, Any], protocol: HFIDAProtocol, tid: int) -> None:
+    """Pretty-print a MSG_RESULT field dict."""
+    result = fields["result"]
+    name = _RESULT_NAMES.get(result, f"RESULT_{result}")
+    hd = fields.get("hd", HD_NONE)
+    hd_text = "n/a" if hd == HD_NONE else str(hd)
+    print(f"  verdict : {name}")
+    print(f"  total HD: {hd_text}")
+    if result == RESULT_PASS:
+        print(f"  R2 (HSM): {fields['r2'].hex()}")
+    pool = protocol.pools.get(tid)
+    print(f"  pool    : {pool.remaining}/{pool.pool_size} remaining "
+          f"({pool.remaining_pct}%)")
+
+
+# ---------------------------------------------------------------------
+# REPL commands
+# ---------------------------------------------------------------------
+def cmd_enroll(
+    protocol: HFIDAProtocol,
+    transport: LoopbackTransport | SerialTransport,
+    args: Sequence[str],
+    measurements: int,
+) -> None:
+    """REPL 'enroll' command: enroll (or refresh) a device template."""
+    if not args:
+        print("usage: enroll <terminal_id> [n_challenges]")
+        return
+    tid = int(args[0])
+    n = int(args[1]) if len(args) > 1 else 100
+    m = max(1, measurements)
+    try:
+        seeds = protocol.pools.get(tid).reserve(n)
+    except PoolExhaustedError as exc:
+        print(f"[ERROR] {exc}")
+        print("        run 'status' and consider pool maintenance (reset).")
+        return
+    data: dict[str, list[bytes]] = {seed.hex(): [] for seed in seeds}
+    for round_index in range(m):
+        for seed, resp in zip(seeds, transport.respond(tid, seeds)):
+            data[seed.hex()].append(resp)
+    pairs = [(bytes.fromhex(hx), majority_bytes(rs)) for hx, rs in data.items()]
+    summary = protocol.templates.enroll(tid, pairs, measurements=data)
+    print(f"[ENROLL] terminal {tid}: {summary['n_pairs']} CRPs stored "
+          f"(+{summary['added']}), stable bits {summary['stable_bits']}/64 "
+          f"({summary['stability_pct']}%) over {m} measurement(s)/challenge")
+    pool = protocol.pools.get(tid)
+    print(f"[POOL]   {pool.remaining}/{pool.pool_size} challenges remaining "
+          f"({pool.remaining_pct}%)")
+
+
+def cmd_auth(
+    protocol: HFIDAProtocol,
+    transport: LoopbackTransport | SerialTransport,
+    args: Sequence[str],
+    impostor: bool = False,
+) -> None:
+    """REPL 'auth'/'spoof' command: run one full authentication round."""
+    if not args:
+        print("usage: auth <terminal_id>")
+        return
+    tid = int(args[0])
+    label = "SPOOF" if impostor else "AUTH"
+    c2 = transport.counter_challenge(tid)
+    frame = protocol.on_access_request(tid, c2=c2)
+    msg_id, fields = protocol.parse(frame)
+    if msg_id == HFIDAProtocol.MSG_RESULT:
+        print(f"[{label}] terminal {tid}: refused before challenge: "
+              f"{_RESULT_NAMES.get(fields['result'], fields['result'])}")
+        return
+    seeds = fields["seeds"]
+    print(f"[{label}] terminal {tid}: {len(seeds)} challenges issued "
+          f"(frame {len(frame)} B)")
+    r1s = transport.respond(tid, seeds, frame=frame, impostor=impostor)
+    frame2 = protocol.on_response(tid, r1s)
+    msg2, f2 = protocol.parse(frame2)
+    if msg2 == HFIDAProtocol.MSG_EXTRA_CHALLENGE:
+        print(f"[GRAY]   aggregate score in gray zone; drawing "
+              f"{len(f2['seeds'])} extra challenges")
+        r1x = transport.respond(tid, f2["seeds"], frame=frame2, impostor=impostor)
+        frame3 = protocol.on_extra_response(tid, r1x)
+        msg3, f3 = protocol.parse(frame3)
+        _print_verdict(f3, protocol, tid)
+        return
+    _print_verdict(f2, protocol, tid)
+
+
+def cmd_status(protocol: HFIDAProtocol) -> None:
+    """REPL 'status' command: dump sessions, templates and pools."""
+    status = protocol.status()
+    print("== Sessions ==")
+    if status["sessions"]:
+        for s in status["sessions"]:
+            print(f"  terminal {s['terminal_id']}: state={s['state']} "
+                  f"challenges={s['challenges_issued']} "
+                  f"scored={s['responses_scored']} hd_sum={s['hd_sum']} "
+                  f"decision={s['last_decision']}")
+    else:
+        print("  (none)")
+    print("== Templates ==")
+    for t in protocol.templates.status():
+        stable = t["stable_bits"]
+        stable_text = f"{stable}/64" if stable is not None else "n/a"
+        print(f"  terminal {t['terminal_id']}: {t['n_pairs']} CRPs, "
+              f"stable {stable_text}")
+    print("== CRP pools ==")
+    pools = status["pools"]
+    print(format_pool_summary(pools) if pools else "  (none)")
+    print("== HSM ==")
+    print(f"  {hsm_status(protocol.hsm)}")
+
+
+HELP_TEXT = """commands:
+  auth <terminal_id>          authenticate a terminal (full round)
+  spoof <terminal_id>         authenticate with an impostor device (demo)
+  enroll <terminal_id> [n]    enroll device template (default n=100 CRPs)
+  status                      sessions / templates / CRP pools
+  quit                        exit"""
+
+
+def repl(
+    protocol: HFIDAProtocol,
+    transport: LoopbackTransport | SerialTransport,
+    measurements: int,
+    input_fn: Callable[[str], str] = input,
+) -> int:
+    """Run the read-eval-print loop; returns the process exit code."""
+    print("PUF drone authentication server")
+    print(HELP_TEXT)
+    while True:
+        try:
+            line = input_fn("puf-server> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if not line:
+            continue
+        parts = line.split()
+        cmd, args = parts[0].lower(), parts[1:]
+        try:
+            if cmd in ("quit", "exit", "q"):
+                return 0
+            elif cmd == "auth":
+                cmd_auth(protocol, transport, args, impostor=False)
+            elif cmd == "spoof":
+                cmd_auth(protocol, transport, args, impostor=True)
+            elif cmd == "enroll":
+                cmd_enroll(protocol, transport, args, measurements)
+            elif cmd == "status":
+                cmd_status(protocol)
+            elif cmd in ("help", "?"):
+                print(HELP_TEXT)
+            else:
+                print(f"unknown command: {cmd}")
+                print(HELP_TEXT)
+        except (ProtocolError, PoolExhaustedError) as exc:
+            print(f"[PROTOCOL ERROR] {exc}")
+        except (ValueError, KeyError) as exc:
+            print(f"[ERROR] {exc}")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """CLI argument parser for the server entry point."""
+    parser = argparse.ArgumentParser(
+        prog="puf-server",
+        description="PC authentication server for the PUF drone system",
+    )
+    transport = parser.add_mutually_exclusive_group()
+    transport.add_argument(
+        "--port", type=str, default=None,
+        help="serial port of the terminal radio (e.g. COM3); enables serial mode",
+    )
+    transport.add_argument(
+        "--loopback", action="store_true",
+        help="use the in-process simulated terminal (default when --port is absent)",
+    )
+    parser.add_argument("--baud", type=int, default=115200, help="serial baudrate")
+    parser.add_argument(
+        "--templates", type=str, default="data/templates/templates.json",
+        help="template database JSON path",
+    )
+    parser.add_argument(
+        "--pool-dir", type=str, default="data/crp_datasets/pools",
+        help="directory for per-device CRP pool state files",
+    )
+    parser.add_argument(
+        "--pool-size", type=int, default=500,
+        help="challenges ever available per device (default 500)",
+    )
+    parser.add_argument(
+        "--measurements", type=int, default=3,
+        help="measurements per challenge during enrollment (default 3)",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Entry point: build the protocol stack and start the REPL."""
+    args = build_parser().parse_args(argv)
+    templates = TemplateDB(args.templates)
+    hsm = SimulatedHSM()
+    pools_dir = Path(args.pool_dir)
+    if __package__ in (None, ""):
+        from src.python.server.crp_pool import CRPPoolRegistry
+    else:
+        from .crp_pool import CRPPoolRegistry
+    pools = CRPPoolRegistry(pools_dir, pool_size=args.pool_size)
+    protocol = HFIDAProtocol(templates=templates, hsm=hsm, pools=pools)
+    if args.port:
+        try:
+            transport: LoopbackTransport | SerialTransport = SerialTransport(
+                args.port, baud=args.baud
+            )
+        except RuntimeError as exc:
+            print(f"[ERROR] {exc}")
+            return 2
+        print(f"[INFO] serial mode on {args.port} @ {args.baud} baud")
+    else:
+        transport = LoopbackTransport()
+        print("[INFO] loopback mode (simulated terminals; no hardware)")
+    try:
+        return repl(protocol, transport, args.measurements)
+    finally:
+        if isinstance(transport, SerialTransport):
+            transport.close()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
