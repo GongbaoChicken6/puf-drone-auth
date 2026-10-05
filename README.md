@@ -43,7 +43,7 @@ puf-drone-auth/
 │   │   ├── server/         #   Authentication server
 │   │   ├── evaluation/     #   ROC/EER/NIST/ML-attack
 │   │   └── tools/          #   Debug utilities
-│   └── constraints/        # XDC per board
+│   └── constraints/        # Board XDC (W1 waiver in rtl/w1_ratio/)
 ├── sim/                    # Testbenches & simulation
 ├── build/                  # Vivado Tcl build scripts
 ├── board/                  # Board setup & wiring
