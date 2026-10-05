@@ -70,3 +70,5 @@ data/templates/*.pkl
 # Build reports: KEEP these (competition evidence)
 # build/reports/*.txt   # <- UNCOMMENTED: competition requires these
 # build/reports/*.rpt   # <- UNCOMMENTED: competition requires these
+# Vivado journal files
+*.pb
