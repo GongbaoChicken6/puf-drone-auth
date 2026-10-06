@@ -102,11 +102,12 @@ module tb_speck;
         // key_in = {l1, l0, k0} = 0x00010203_08090a0b_10111213
         // plaintext_in = {y, x} = 0x65616e73_20466174
         // expected = {y_ct, x_ct} = 0xe32233fa_dac3b619
+        // NSA official KAT: key=0001020308090a0b10111213 pt=65616e7320466174 ct=6c947541ec52799f
         run_speck(
-            96'h00010203_08090a0b_10111213,
-            64'h65616e73_20466174,
-            64'he32233fa_dac3b619,
-            "T2_KAT"
+            96'h13121110_0b0a0908_03020100,
+            64'h736e6165_74614620,
+            64'h4175946c_9f7952ec,
+            "T2_NSA_KAT"
         );
         if (errors == 0) $display("  [T2 PASS] KAT 匹配 Python 输出");
 

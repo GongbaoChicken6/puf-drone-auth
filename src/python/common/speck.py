@@ -55,12 +55,14 @@ class Speck6496:
     def encrypt(self, plaintext: bytes) -> bytes:
         if len(plaintext) != 8:
             raise ValueError(f"plaintext must be 8 bytes, got {len(plaintext)}")
-        x = struct.unpack("<I", plaintext[0:4])[0]
-        y = struct.unpack("<I", plaintext[4:8])[0]
+        # NSA: bytes[0:4] → y, bytes[4:8] → x
+        y = struct.unpack("<I", plaintext[0:4])[0]
+        x = struct.unpack("<I", plaintext[4:8])[0]
         for i in range(_ROUNDS):
             x = ((_ror(x, 8) + y) & _MASK) ^ self._rk[i]
             y = _rol(y, 3) ^ x
-        return struct.pack("<II", x, y)
+        # NSA: 先序列化 y 再 x
+        return struct.pack("<II", y, x)
 
 
 # ============================================================
@@ -81,9 +83,9 @@ def speck_encrypt_reference(key: bytes, plaintext: bytes) -> bytes:
         l[i + 2] = ((_ror(l[i], 8) + k[i]) & _MASK) ^ i
         k[i + 1] = _rol(k[i], 3) ^ l[i + 2]
 
-    # Encryption (C style: while loop)
-    x = struct.unpack("<I", plaintext[0:4])[0]
-    y = struct.unpack("<I", plaintext[4:8])[0]
+    # NSA 约定：bytes[0:4] → y, bytes[4:8] → x
+    y = struct.unpack("<I", plaintext[0:4])[0]
+    x = struct.unpack("<I", plaintext[4:8])[0]
     i = 0
     while i < 26:
         x = _ror(x, 8)
@@ -93,7 +95,8 @@ def speck_encrypt_reference(key: bytes, plaintext: bytes) -> bytes:
         y = y ^ x
         i = i + 1
 
-    return struct.pack("<II", x, y)
+    # NSA 约定：先序列化 y 再 x
+    return struct.pack("<II", y, x)
 
 
 # ============================================================
@@ -174,9 +177,31 @@ def _self_test() -> bool:
     return all_pass
 
 
+def _nsa_kat_test() -> bool:
+    """官方 NSA KAT 验证（Implementation Guide 1.1 Table 6）"""
+    # 官方向量：key=0001020308090a0b10111213, pt=65616e7320466174, ct=6c947541ec52799f
+    key = bytes.fromhex("0001020308090a0b10111213")
+    pt = bytes.fromhex("65616e7320466174")
+    expected = bytes.fromhex("6c947541ec52799f")
+
+    ct1 = Speck6496(key).encrypt(pt)
+    ct2 = speck_encrypt_reference(key, pt)
+    ok1 = ct1 == expected
+    ok2 = ct2 == expected
+    print(f"  NSA KAT class:  {'PASS' if ok1 else 'FAIL'} ct={ct1.hex()} exp={expected.hex()}")
+    print(f"  NSA KAT ref:    {'PASS' if ok2 else 'FAIL'} ct={ct2.hex()}")
+    return ok1 and ok2
+
+
 if __name__ == "__main__":
     print("Speck64/96 self-test:")
     print("=" * 50)
+    # 先跑官方 KAT（最高优先级）
+    if not _nsa_kat_test():
+        print("=" * 50)
+        print("NSA KAT FAILED — algorithm or byte order incorrect!")
+        raise SystemExit(1)
+    print()
     if _self_test():
         print("=" * 50)
         print("ALL TESTS PASS")
