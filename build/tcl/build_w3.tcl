@@ -21,6 +21,9 @@ add_files [list \
 # XDC constraints (uncomment when pin assignments are confirmed)
 # add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top.xdc
 
+# 开发模式：允许无引脚约束生成比特流（板级引脚确认后删除此行）
+set_property SEVERITY {Warning} [get_drc_checks UCIO-1]
+
 set_property top w3_top [current_fileset]
 synth_design -top w3_top -part $PART
 opt_design
