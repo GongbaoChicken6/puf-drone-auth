@@ -72,3 +72,5 @@ data/templates/*.pkl
 # build/reports/*.rpt   # <- UNCOMMENTED: competition requires these
 # Vivado journal files
 *.pb
+# Vivado temp
+.Xil/
