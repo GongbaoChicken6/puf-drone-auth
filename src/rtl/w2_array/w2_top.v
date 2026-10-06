@@ -370,6 +370,7 @@ ro_array # ( .N_RINGS    ( 16            ),
     .clk         ( clk           ),   // 系统时钟
     .rst         ( rst           ),   // 高有效同步复位
     .measure_en  ( measure_en    ),   // 测量窗使能
+    .ring_en     ( 1'b1          ),   // 环振使能：W2 保持常开（W3 由 w3_top 接功耗管理）
     .busy        ( ro_busy       ),   // output，测量进行中（观察用）
     .done        ( ro_done       ),   // output，一窗完成脉冲
     .ring_freq   ( ring_freq     )    // output，16 环频率锁存
