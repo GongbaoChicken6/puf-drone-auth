@@ -234,6 +234,34 @@ module tb_level3_protocol;
         end else
             $display("[L3 PASS] Full protocol: real FSM + real TX + real RX, dynamic R2 verified");
 
+        // ============ T2: rx_inhibit active-path test ============
+        $display("[..T2] rx_inhibit test");
+        repeat (5) @(negedge clk);
+        auth_start <= 1'b1;
+        @(negedge clk);
+        auth_start <= 1'b0;
+        wait (mf_done === 1'b1); @(negedge clk);  // ACCESS sent
+        for (i = 0; i < 44; i = i + 1) frame_bytes[i] = chall_gold[i];
+        feed_frame_bytes(44);
+        // During S_PROC_SEEDS: rx_inhibit should be HIGH
+        repeat (3) @(negedge clk);
+        if (fp_rx_inhibit !== 1'b1) begin
+            errors = errors + 1;
+            $display("[T2 FAIL] rx_inhibit not high during PROC_SEEDS");
+        end
+        // Feed noise frame during inhibit - should be ignored
+        @(negedge clk); fp_rx_byte <= 8'hFD; fp_rx_valid <= 1'b1;
+        @(negedge clk); fp_rx_valid <= 1'b0;
+        repeat (10) @(negedge clk);
+        // Wait for R1 done
+        wait (mf_done === 1'b1); @(negedge clk);
+        // In S_WAIT_RESULT: rx_inhibit should be LOW
+        if (fp_rx_inhibit !== 1'b0) begin
+            errors = errors + 1;
+            $display("[T2 FAIL] rx_inhibit stuck high in WAIT_RESULT");
+        end
+        if (errors == 0) $display("[T2 PASS] rx_inhibit works");
+        // ============ Summary ============
         repeat (5) @(negedge clk);
         if (errors == 0) $display("TB_LEVEL3_PROTOCOL_PASS");
         else             $display("TB_LEVEL3_PROTOCOL_FAIL errors=%0d", errors);
