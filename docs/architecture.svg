@@ -1,0 +1,277 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900" font-family="Segoe UI,system-ui,sans-serif">
+<defs>
+  <style>
+    .box-done{fill:#0d2818;stroke:#00d68f;stroke-width:2;rx:8}
+    .box-partial{fill:#0c2028;stroke:#22d3ee;stroke-width:2;rx:8}
+    .box-wait{fill:#131a2a;stroke:#2a3a5c;stroke-width:1.5;rx:8;stroke-dasharray:6,3}
+    .box-bline{fill:#1a1a2e;stroke:#a78bfa;stroke-width:2;rx:8}
+    .title{fill:#dfe7f3;font-size:14px;font-weight:600;text-anchor:middle}
+    .sub{fill:#7b8ba8;font-size:10px;text-anchor:middle}
+    .status{font-size:9px;font-weight:700;text-anchor:middle}
+    .ok{fill:#00d68f}.wip{fill:#22d3ee}.pend{fill:#4a5a78}
+    .arrow{stroke:#3b4f7e;stroke-width:2;fill:none;marker-end:url(#ah)}
+    .arrow-done{stroke:#00d68f;stroke-width:2;fill:none;marker-end:url(#ahg)}
+    .arrow-dash{stroke:#2a3a5c;stroke-width:1.5;fill:none;stroke-dasharray:5,4;marker-end:url(#ah)}
+    .label{fill:#4a5a78;font-size:9px;text-anchor:middle}
+    .group{fill:none;stroke:#1e2840;stroke-width:1;rx:10}
+    .gtitle{fill:#4a5a78;font-size:11px;font-weight:600}
+    .legend{fill:#7b8ba8;font-size:10px}
+  </style>
+  <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="6" orient="auto">
+    <polygon points="0 0,10 5,0 10" fill="#3b4f7e"/>
+  </marker>
+  <marker id="ahg" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="6" orient="auto">
+    <polygon points="0 0,10 5,0 10" fill="#00d68f"/>
+  </marker>
+</defs>
+<rect width="1400" height="900" fill="#0a0e1a"/>
+
+<!-- Title -->
+<text x="700" y="28" text-anchor="middle" fill="#dfe7f3" font-size="18" font-weight="700">PUF 无人机认证系统 · 全项目架构逻辑图</text>
+<text x="700" y="46" text-anchor="middle" fill="#4a5a78" font-size="11">🟩已完成  🟦部分完成  ⬜未开始  🟪B线Python  ═══数据流  ┈┈┈依赖/待实现</text>
+
+<!-- ==================== A线：FPGA RTL ==================== -->
+<rect x="30" y="60" width="660" height="440" class="group" rx="10"/>
+<text x="60" y="82" class="gtitle">A 线 · FPGA RTL（PL 侧）</text>
+
+<!-- W1 Group -->
+<rect x="50" y="95" width="200" height="130" class="group" rx="8"/>
+<text x="150" y="113" class="gtitle" fill="#00d68f">W1 信号验证 ✅</text>
+<rect x="65" y="122" width="170" height="28" class="box-done" rx="6"/>
+<text x="150" y="140" class="title">ro_ring.v 环振</text>
+<text x="230" y="140" class="status ok">✅</text>
+<rect x="65" y="156" width="170" height="28" class="box-done" rx="6"/>
+<text x="150" y="174" class="title">ro_div.v 分频器</text>
+<text x="230" y="174" class="status ok">✅</text>
+<rect x="65" y="190" width="170" height="28" class="box-done" rx="6"/>
+<text x="150" y="208" class="title">ro_ratio_top.v 顶层</text>
+<text x="230" y="208" class="status ok">✅</text>
+
+<!-- W2 Group -->
+<rect x="50" y="240" width="200" height="130" class="group" rx="8"/>
+<text x="150" y="258" class="gtitle" fill="#00d68f">W2 阵列 + 解码 ✅</text>
+<rect x="65" y="267" width="170" height="28" class="box-done" rx="6"/>
+<text x="150" y="285" class="title">ro_array.v 16环</text>
+<text x="230" y="285" class="status ok">✅</text>
+<rect x="65" y="301" width="170" height="28" class="box-done" rx="6"/>
+<text x="150" y="319" class="title">challenge_decode.v</text>
+<text x="230" y="319" class="status ok">✅</text>
+<rect x="65" y="335" width="170" height="28" class="box-done" rx="6"/>
+<text x="150" y="353" class="title">w2_top.v W2顶层</text>
+<text x="230" y="353" class="status ok">✅</text>
+
+<!-- W3 Common -->
+<rect x="270" y="95" width="200" height="275" class="group" rx="8"/>
+<text x="370" y="113" class="gtitle" fill="#00d68f">W3 通信栈 Common ✅</text>
+<rect x="285" y="122" width="170" height="28" class="box-done" rx="6"/>
+<text x="370" y="140" class="title">crc16_mcrf4xx.v</text>
+<text x="450" y="140" class="status ok">✅</text>
+<rect x="285" y="156" width="170" height="28" class="box-done" rx="6"/>
+<text x="370" y="174" class="title">mavlink_frame.v TX</text>
+<text x="450" y="174" class="status ok">✅</text>
+<rect x="285" y="190" width="170" height="28" class="box-done" rx="6"/>
+<text x="370" y="208" class="title">frame_parser.v RX</text>
+<text x="450" y="208" class="status ok">✅</text>
+<rect x="285" y="224" width="170" height="28" class="box-done" rx="6"/>
+<text x="370" y="242" class="title">byte_fifo.v FIFO</text>
+<text x="450" y="242" class="status ok">✅</text>
+<rect x="285" y="258" width="170" height="28" class="box-done" rx="6"/>
+<text x="370" y="276" class="title">uart_tx.v 发送</text>
+<text x="450" y="276" class="status ok">✅</text>
+<rect x="285" y="292" width="170" height="28" class="box-done" rx="6"/>
+<text x="370" y="310" class="title">uart_rx.v 接收</text>
+<text x="450" y="310" class="status ok">✅</text>
+
+<!-- W3 Protocol -->
+<rect x="490" y="95" width="180" height="275" class="group" rx="8"/>
+<text x="580" y="113" class="gtitle" fill="#00d68f">W3 协议层 ✅</text>
+<rect x="505" y="122" width="150" height="40" class="box-done" rx="6"/>
+<text x="580" y="140" class="title">terminal_fsm.v</text>
+<text x="580" y="154" class="sub">12态协议FSM</text>
+<text x="640" y="140" class="status ok">✅</text>
+<rect x="505" y="170" width="150" height="40" class="box-done" rx="6"/>
+<text x="580" y="188" class="title">w3_top.v 顶层</text>
+<text x="580" y="202" class="sub">14模块集成</text>
+<text x="640" y="188" class="status ok">✅</text>
+<rect x="505" y="220" width="150" height="28" class="box-done" rx="6"/>
+<text x="580" y="238" class="title">w3_top.bit</text>
+<text x="640" y="238" class="status ok">✅</text>
+<rect x="505" y="258" width="150" height="40" class="box-partial" rx="6"/>
+<text x="580" y="276" class="title">PUF 真实集成</text>
+<text x="580" y="290" class="sub">桩→ro_array 替换</text>
+<text x="640" y="276" class="status wip">⬜</text>
+
+<!-- Connections within A-line -->
+<path d="M150 218 L150 240" class="arrow-done"/>
+<text x="160" y="232" class="label">频率数据</text>
+<path d="M250 305 L270 305" class="arrow-done"/>
+<text x="260" y="298" class="label">环频</text>
+<path d="M470 210 L490 210" class="arrow-done"/>
+<text x="480" y="203" class="label">帧数据</path>
+
+<!-- ==================== B线：PC Python ==================== -->
+<rect x="720" y="60" width="380" height="440" class="group" rx="10"/>
+<text x="750" y="82" class="gtitle">B 线 · PC Python（PS 侧）</text>
+
+<!-- Server -->
+<rect x="740" y="95" width="160" height="240" class="group" rx="8"/>
+<text x="820" y="113" class="gtitle" fill="#a78bfa">认证服务器 ✅</text>
+<rect x="755" y="122" width="130" height="24" class="box-bline" rx="5"/>
+<text x="820" y="138" class="title">protocol.py</text>
+<rect x="755" y="152" width="130" height="24" class="box-bline" rx="5"/>
+<text x="820" y="168" class="title">crp_pool.py</text>
+<rect x="755" y="182" width="130" height="24" class="box-bline" rx="5"/>
+<text x="820" y="198" class="title">template_db.py</text>
+<rect x="755" y="212" width="130" height="24" class="box-bline" rx="5"/>
+<text x="820" y="228" class="title">threshold.py</text>
+<rect x="755" y="242" width="130" height="24" class="box-bline" rx="5"/>
+<text x="820" y="258" class="title">hsm.py</text>
+<rect x="755" y="272" width="130" height="24" class="box-bline" rx="5"/>
+<text x="820" y="288" class="title">main.py</text>
+<rect x="755" y="302" width="130" height="24" class="box-wait" rx="5"/>
+<text x="820" y="318" class="title">串口收包循环</text>
+<text x="880" y="318" class="status pend">⬜</text>
+
+<!-- Evaluation -->
+<rect x="920" y="95" width="160" height="180" class="group" rx="8"/>
+<text x="1000" y="113" class="gtitle" fill="#a78bfa">评估工具 ✅</text>
+<rect x="935" y="122" width="130" height="24" class="box-bline" rx="5"/>
+<text x="1000" y="138" class="title">hamming_analysis</text>
+<rect x="935" y="152" width="130" height="24" class="box-bline" rx="5"/>
+<text x="1000" y="168" class="title">compare_devices</text>
+<rect x="935" y="182" width="130" height="24" class="box-bline" rx="5"/>
+<text x="1000" y="198" class="title">quantizer</text>
+
+<!-- ML Attack -->
+<rect x="920" y="290" width="160" height="100" class="group" rx="8"/>
+<text x="1000" y="308" class="gtitle" fill="#4a5a78">ML 攻击实验 ⬜</text>
+<rect x="935" y="318" width="130" height="24" class="box-wait" rx="5"/>
+<text x="1000" y="334" class="title">arbiter 基线</text>
+<rect x="935" y="348" width="130" height="24" class="box-wait" rx="5"/>
+<text x="1000" y="364" class="title">RO 排序重构</text>
+
+<!-- A↔B Connection -->
+<path d="M670 200 L720 200" class="arrow-dash" stroke-width="2.5"/>
+<text x="695" y="192" class="label" fill="#22d3ee">433MHz</text>
+<text x="695" y="214" class="label">电台</text>
+<path d="M720 250 L670 250" class="arrow-dash" stroke-width="2.5"/>
+
+<!-- ==================== 硬件层 ==================== -->
+<rect x="30" y="520" width="660" height="120" class="group" rx="10"/>
+<text x="60" y="542" class="gtitle">硬件层 · ZC702 板 + 电台</text>
+
+<rect x="50" y="555" width="120" height="50" class="box-wait" rx="6"/>
+<text x="110" y="575" class="title">ZC702 板</text>
+<text x="110" y="590" class="sub">XC7Z020-1CLG484</text>
+
+<rect x="190" y="555" width="120" height="50" class="box-wait" rx="6"/>
+<text x="250" y="575" class="title">XDC 引脚</text>
+<text x="250" y="590" class="sub">模板就绪·待填</text>
+
+<rect x="330" y="555" width="120" height="50" class="box-wait" rx="6"/>
+<text x="390" y="575" class="title">433MHz 电台</text>
+<text x="390" y="590" class="sub">需采购/连接</text>
+
+<rect x="470" y="555" width="100" height="50" class="box-wait" rx="6"/>
+<text x="520" y="575" class="title">第2块板</text>
+<text x="520" y="590" class="sub">跨芯片演示</text>
+
+<rect x="590" y="555" width="80" height="50" class="box-partial" rx="6"/>
+<text x="630" y="575" class="title">比特流</text>
+<text x="630" y="590" class="sub">已验证✅</text>
+
+<!-- ==================== 测试层 ==================== -->
+<rect x="720" y="520" width="380" height="120" class="group" rx="10"/>
+<text x="750" y="542" class="gtitle">测试与质量保障 · 10 套 TB · 47+ 用例 · 100% PASS</text>
+
+<rect x="740" y="555" width="100" height="24" class="box-done" rx="5"/>
+<text x="790" y="571" class="title" font-size="10">Level 1 单元×7</text>
+<rect x="850" y="555" width="100" height="24" class="box-done" rx="5"/>
+<text x="900" y="571" class="title" font-size="10">Level 2 TX链</text>
+<rect x="960" y="555" width="100" height="24" class="box-done" rx="5"/>
+<text x="1010" y="571" class="title" font-size="10">Level 3 全链</text>
+<rect x="740" y="587" width="100" height="24" class="box-done" rx="5"/>
+<text x="790" y="603" class="title" font-size="10">顶层回环</text>
+<rect x="850" y="587" width="100" height="24" class="box-done" rx="5"/>
+<text x="900" y="603" class="title" font-size="10">CI 回归</text>
+<rect x="960" y="587" width="100" height="24" class="box-done" rx="5"/>
+<text x="1010" y="603" class="title" font-size="10">契约同步</text>
+
+<!-- ==================== C线：文档 ==================== -->
+<rect x="1130" y="60" width="240" height="580" class="group" rx="10"/>
+<text x="1160" y="82" class="gtitle">C 线 · 文档与交付</text>
+
+<rect x="1150" y="95" width="200" height="34" class="box-done" rx="6"/>
+<text x="1250" y="112" class="title">协议契约</text>
+<text x="1340" y="112" class="status ok">✅</text>
+
+<rect x="1150" y="139" width="200" height="34" class="box-done" rx="6"/>
+<text x="1250" y="156" class="title">设计方案 v3.0</text>
+<text x="1340" y="156" class="status ok">✅</text>
+
+<rect x="1150" y="183" width="200" height="34" class="box-done" rx="6"/>
+<text x="1250" y="200" class="title">开源分析报告</text>
+<text x="1340" y="200" class="status ok">✅</text>
+
+<rect x="1150" y="227" width="200" height="34" class="box-done" rx="6"/>
+<text x="1250" y="244" class="title">W1 保姆教程</text>
+<text x="1340" y="244" class="status ok">✅</text>
+
+<rect x="1150" y="271" width="200" height="34" class="box-done" rx="6"/>
+<text x="1250" y="288" class="title">AI 协作日志</text>
+<text x="1340" y="288" class="status ok">✅</text>
+
+<rect x="1150" y="315" width="200" height="34" class="box-done" rx="6"/>
+<text x="1250" y="332" class="title">CI 脚本 + 环境脚本</text>
+<text x="1340" y="332" class="status ok">✅</text>
+
+<rect x="1150" y="359" width="200" height="34" class="box-wait" rx="6"/>
+<text x="1250" y="376" class="title">竞赛报告初稿</text>
+<text x="1340" y="376" class="status pend">⬜ W5</text>
+
+<rect x="1150" y="403" width="200" height="34" class="box-wait" rx="6"/>
+<text x="1250" y="420" class="title">Skill 打包</text>
+<text x="1340" y="420" class="status pend">⬜ W5</text>
+
+<rect x="1150" y="447" width="200" height="34" class="box-wait" rx="6"/>
+<text x="1250" y="464" class="title">演示视频</text>
+<text x="1340" y="464" class="status pend">⬜ W6</text>
+
+<rect x="1150" y="491" width="200" height="34" class="box-wait" rx="6"/>
+<text x="1250" y="508" class="title">最终提交包</text>
+<text x="1340" y="508" class="status pend">⬜ 11-03</text>
+
+<!-- ==================== 六周时间线 ==================== -->
+<rect x="30" y="660" width="1340" height="120" class="group" rx="10"/>
+<text x="60" y="682" class="gtitle">六周排期进度</text>
+
+<rect x="50" y="695" width="200" height="34" class="box-done" rx="6"/>
+<text x="150" y="712" class="title">W1 信号 ✅</text>
+<rect x="260" y="695" width="200" height="34" class="box-done" rx="6"/>
+<text x="360" y="712" class="title">W2 阵列 ✅</text>
+<rect x="470" y="695" width="200" height="34" class="box-done" rx="6"/>
+<text x="570" y="712" class="title">W3 协议栈 ✅</text>
+<rect x="680" y="695" width="200" height="34" class="box-wait" rx="6"/>
+<text x="780" y="712" class="title">W4 实验 ⬜</text>
+<rect x="890" y="695" width="200" height="34" class="box-wait" rx="6"/>
+<text x="990" y="712" class="title">W5 冻结 ⬜</text>
+<rect x="1100" y="695" width="200" height="34" class="box-wait" rx="6"/>
+<text x="1200" y="712" class="title">W6 交付 ⬜</text>
+
+<!-- Progress bar -->
+<rect x="50" y="740" width="1240" height="10" fill="#131a2a" rx="5"/>
+<rect x="50" y="740" width="620" height="10" fill="#00d68f" rx="5"/>
+<text x="700" y="765" class="legend">W1+W2+W3 完成 ≈ 50%</text>
+
+<!-- ==================== Legend ==================== -->
+<rect x="30" y="800" width="1340" height="60" class="group" rx="8"/>
+<text x="50" y="822" class="legend">🟩 绿框 = 已完成并验证</text>
+<text x="300" y="822" class="legend">🟦 蓝框 = 部分完成</text>
+<text x="550" y="822" class="legend">⬜ 灰虚线框 = 未开始</text>
+<text x="800" y="822" class="legend">🟪 紫框 = B线 Python</text>
+<text x="1050" y="822" class="legend">═══ 实线 = 已实现数据流</text>
+<text x="50" y="842" class="legend">┈┈┈ 虚线 = 依赖/待实现</text>
+<text x="300" y="842" class="legend">✅ = 测试通过/验证完成</text>
+<text x="550" y="842" class="legend">⬜ = 待开发/待板子</text>
+<text x="800" y="842" class="legend">653 LUT (1.23%) · 47+ tests · 9 review rounds</text>
+</svg>
