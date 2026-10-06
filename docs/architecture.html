@@ -2,259 +2,418 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PUF 无人机认证系统 · 完整知识图谱</title>
 <style>
-:root{--bg:#0a0e1a;--bg2:#0e1420;--bg3:#131a2a;--border:#1e2840;--text:#dfe7f3;--muted:#7b8ba8;--dim:#4a5a78;
---puf:#00d68f;--comm:#22d3ee;--auth:#f59e0b;--board:#ef4444;--server:#a78bfa;--radio:#f472b6;--hw:#e2e8f0}
+:root{
+  --bg:#0a0e1a;--bg2:#0e1420;--bg3:#131a2a;--bg4:#1a2332;
+  --border:#1e2840;--border2:#2a3a5c;
+  --text:#dfe7f3;--muted:#7b8ba8;--dim:#4a5a78;
+  --puf:#00d68f;--puf-bg:rgba(0,214,143,.08);--puf-border:rgba(0,214,143,.3);
+  --comm:#22d3ee;--comm-bg:rgba(34,211,238,.08);--comm-border:rgba(34,211,238,.3);
+  --auth:#f59e0b;--auth-bg:rgba(245,158,11,.08);--auth-border:rgba(245,158,11,.3);
+  --board:#ef4444;--board-bg:rgba(239,68,68,.08);--board-border:rgba(239,68,68,.3);
+  --server:#a78bfa;--server-bg:rgba(167,139,250,.08);--server-border:rgba(167,139,250,.3);
+  --radio:#f472b6;--radio-bg:rgba(244,114,182,.08);--radio-border:rgba(244,114,182,.3);
+  --hw:#e2e8f0;--hw-bg:rgba(226,232,240,.06);--hw-border:rgba(226,232,240,.2);
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.6;padding:20px}
-.wrap{max-width:1400px;margin:0 auto}
-h1{text-align:center;font-size:22px;margin:20px 0 6px;background:linear-gradient(135deg,var(--puf),var(--comm),var(--auth));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.subtitle{text-align:center;color:var(--muted);font-size:13px;margin-bottom:30px}
-.domain{background:var(--bg2);border:2px solid;border-radius:14px;padding:18px;margin:16px 0;position:relative}
-.domain h2{font-size:16px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:8px}
-.domain .desc{font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.6;padding-left:34px}
-.domain .analogy{font-size:12px;color:var(--dim);font-style:italic;margin-bottom:10px;padding-left:34px;border-left:3px solid var(--border);padding:6px 10px}
-.nodes{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
-.node{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;position:relative}
-.node .nh{display:flex;align-items:center;gap:6px;margin-bottom:4px}
-.node .ni{font-size:18px}
-.node .nn{font-size:13px;font-weight:600;flex:1}
-.node .ns{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600}
-.ns.done{background:#052e1a;color:var(--puf)}.ns.part{background:#0c2028;color:var(--comm)}.ns.wait{background:var(--bg3);color:var(--dim)}
-.node .nd{font-size:11px;color:var(--muted);line-height:1.5;margin:4px 0}
-.node .nf{font-size:10px;color:var(--dim);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.6;padding:0}
+.wrap{max-width:1400px;margin:0 auto;padding:20px}
+
+/* Hero */
+.hero{text-align:center;padding:40px 20px 24px;border-bottom:1px solid var(--border)}
+.hero h1{font-size:clamp(20px,4vw,32px);font-weight:800;letter-spacing:-.5px;
+  background:linear-gradient(135deg,var(--puf),var(--comm),var(--auth),var(--server));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+.hero p{color:var(--muted);font-size:13px;max-width:600px;margin:0 auto}
+
+/* Stats bar */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:20px 0}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 8px;text-align:center}
+.stat .v{font-size:22px;font-weight:800}
+.stat .l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.v.g{color:var(--puf)}.v.c{color:var(--comm)}.v.a{color:var(--auth)}.v.b{color:var(--server)}
+
+/* Domain sections */
+.domain{border-radius:16px;padding:0;margin:20px 0;overflow:hidden;border:1px solid}
+.domain>.dhead{padding:16px 20px 12px;display:flex;align-items:flex-start;gap:12px}
+.domain>.dhead .dicon{font-size:28px;line-height:1;margin-top:2px}
+.domain>.dhead h2{font-size:17px;font-weight:700;margin-bottom:2px}
+.domain>.dhead .ddesc{font-size:12.5px;color:var(--muted);line-height:1.5}
+.domain>.danalogy{margin:0 20px 12px 52px;padding:10px 14px;background:var(--bg3);border-left:3px solid var(--border2);border-radius:0 8px 8px 0;font-size:12px;color:var(--dim);font-style:italic;line-height:1.6}
+.domain>.dbody{padding:4px 20px 16px}
+
+/* Module cards */
+.nodes{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.node{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;transition:transform .15s,box-shadow .15s;position:relative;overflow:hidden}
+.node:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.node::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.node.nc-done::before{background:var(--puf)}
+.node.nc-part::before{background:var(--comm)}
+.node.nc-wait::before{background:var(--border2)}
+.node .nh{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.node .ni{font-size:20px;line-height:1}
+.node .nn{font-size:13.5px;font-weight:700;flex:1}
+.node .ns{font-size:9px;padding:3px 8px;border-radius:6px;font-weight:700;letter-spacing:.3px}
+.ns.s-done{background:rgba(0,214,143,.15);color:var(--puf)}
+.ns.s-part{background:rgba(34,211,238,.15);color:var(--comm)}
+.ns.s-wait{background:var(--bg4);color:var(--dim)}
+.node .nd{font-size:11.5px;color:var(--muted);line-height:1.55}
+.node .nd b{color:var(--text)}
+.node .nf{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:10px;color:var(--dim);line-height:1.5}
 .node .nf b{color:var(--muted)}
-.d-puf{border-color:var(--puf)}.d-puf h2{color:var(--puf)}
-.d-comm{border-color:var(--comm)}.d-comm h2{color:var(--comm)}
-.d-auth{border-color:var(--auth)}.d-auth h2{color:var(--auth)}
-.d-board{border-color:var(--board)}.d-board h2{color:var(--board)}
-.d-server{border-color:var(--server)}.d-server h2{color:var(--server)}
-.d-radio{border-color:var(--radio)}.d-radio h2{color:var(--radio)}
-.d-hw{border-color:var(--hw)}.d-hw h2{color:var(--hw)}
-.flow{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px;margin:16px 0}
-.flow h3{font-size:14px;font-weight:600;margin-bottom:10px;color:var(--text)}
-.flow-step{display:flex;align-items:center;gap:8px;padding:8px 12px;margin:4px 0;background:var(--bg3);border-radius:8px;font-size:12px}
-.flow-step .fn{font-weight:600;min-width:140px}
-.flow-step .fd{color:var(--muted);flex:1}
-.flow-step .fs{font-size:10px;padding:2px 6px;border-radius:4px}
-.arrow-block{text-align:center;color:var(--dim);font-size:14px;margin:4px 0}
-.legend{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin:20px 0;padding:12px;background:var(--bg2);border-radius:10px}
-.legend span{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px}
-.legend .sw{width:14px;height:14px;border-radius:4px}
+
+/* Domain-specific colors */
+.dm-puf{border-color:var(--puf-border);background:var(--puf-bg)}
+.dm-puf .dhead h2{color:var(--puf)}
+.dm-comm{border-color:var(--comm-border);background:var(--comm-bg)}
+.dm-comm .dhead h2{color:var(--comm)}
+.dm-auth{border-color:var(--auth-border);background:var(--auth-bg)}
+.dm-auth .dhead h2{color:var(--auth)}
+.dm-board{border-color:var(--board-border);background:var(--board-bg)}
+.dm-board .dhead h2{color:var(--board)}
+.dm-server{border-color:var(--server-border);background:var(--server-bg)}
+.dm-server .dhead h2{color:var(--server)}
+.dm-radio{border-color:var(--radio-border);background:var(--radio-bg)}
+.dm-radio .dhead h2{color:var(--radio)}
+.dm-hw{border-color:var(--hw-border);background:var(--hw-bg)}
+.dm-hw .dhead h2{color:var(--hw)}
+
+/* Architecture diagram (HTML boxes) */
+.arch{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:20px;margin:20px 0}
+.arch h3{font-size:16px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.arch-container{display:flex;gap:16px;flex-wrap:wrap;align-items:stretch}
+.arch-col{flex:1;min-width:320px;display:flex;flex-direction:column;gap:8px}
+
+/* Physical boxes */
+.phys{border:2px solid;border-radius:14px;padding:14px;flex:1}
+.phys-title{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.phys-board{border-color:var(--board-border)}
+.phys-board .phys-title{color:var(--board)}
+.phys-pc{border-color:var(--server-border)}
+.phys-pc .phys-title{color:var(--server)}
+.phys-air{border-color:var(--radio-border);flex:0 0 auto;width:100%;min-height:60px;display:flex;align-items:center;justify-content:center;gap:16px}
+.phys-air .phys-title{color:var(--radio)}
+
+/* Flow boxes */
+.flowbox{background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:10px 14px;font-size:11.5px;display:flex;align-items:center;gap:10px;transition:border-color .2s}
+.flowbox:hover{border-color:var(--comm)}
+.flowbox .fi{font-size:16px;flex-shrink:0}
+.flowbox .ft{flex:1}
+.flowbox .ft b{display:block;font-size:12px;font-weight:600}
+.flowbox .ft span{font-size:10px;color:var(--muted)}
+.flowbox .fs{font-size:9px;padding:2px 7px;border-radius:5px;font-weight:600;flex-shrink:0}
+.fs.ok{background:rgba(0,214,143,.15);color:var(--puf)}
+.fs.wip{background:rgba(34,211,238,.15);color:var(--comm)}
+.fs.no{background:var(--bg4);color:var(--dim)}
+
+/* Arrows between boxes */
+.varrow{display:flex;flex-direction:column;align-items:center;padding:2px 0}
+.varrow .line{width:2px;height:14px;background:var(--border2)}
+.varrow .head{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--border2)}
+.varrow .vlabel{font-size:9px;color:var(--dim);margin:1px 0}
+
+.harrow{display:flex;align-items:center;gap:8px;padding:4px 0}
+.harrow .line{flex:1;height:2px;background:var(--border2)}
+.harrow .hlabel{font-size:9px;color:var(--dim);white-space:nowrap}
+
+/* Bidirectional connector */
+.bidir{display:flex;align-items:center;justify-content:center;padding:8px 0;gap:12px}
+.bidir .bline{flex:1;height:2px;background:linear-gradient(90deg,var(--comm),var(--radio));border-radius:1px}
+.bidir .blabel{font-size:10px;color:var(--radio);white-space:nowrap;font-weight:600}
+
+/* Progress bar */
+.progress{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px 20px;margin:20px 0}
+.progress h3{font-size:14px;font-weight:600;margin-bottom:10px}
+.pbar{display:flex;gap:4px;margin-bottom:8px}
+.pseg{height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600}
+.pseg.p-done{background:var(--puf);color:#0a0e1a}
+.pseg.p-wait{background:var(--bg3);color:var(--dim);border:1px dashed var(--border2)}
+.pinfo{font-size:11px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
+.pinfo b{color:var(--text)}
+
+/* Legend */
+.legend{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:20px 0;padding:14px;background:var(--bg2);border:1px solid var(--border);border-radius:12px}
+.legend span{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}
+.legend .sw{width:16px;height:16px;border-radius:5px;border:1px solid}
+
+footer{text-align:center;color:var(--dim);font-size:11px;margin-top:32px;padding-top:16px;border-top:1px solid var(--border)}
+
+/* Responsive */
+@media(max-width:768px){
+  .arch-container{flex-direction:column}
+  .phys-air{width:100%}
+  .nodes{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>🔒 PUF 无人机身份认证系统 · 完整知识图谱</h1>
-<p class="subtitle">每颗芯片都有独一无二的"指纹"——就像人的指纹无法伪造。这个系统用芯片指纹代替密码，让无人机安全地证明"我就是我"。</p>
 
-<!-- ======================= 大图景：认证流程 ======================= -->
-<div class="flow">
-<h3>🗺️ 全局视角：一次完整的身份认证是这样的</h3>
-<div style="font-size:12px;color:var(--muted);line-height:1.8;padding:0 10px;">
-<pre style="font-family:inherit;background:var(--bg3);border-radius:10px;padding:14px;font-size:11.5px;line-height:1.8;overflow-x:auto;">
-  无人机（FPGA 芯片）                              地面基站（电脑 Python）
-  ┌──────────────────┐                           ┌──────────────────┐
-  │                  │  ①"我是无人机42，我想入网，  │                  │
-  │  按下认证按钮     │     这是我给你的反挑战题目"  │  收到入网请求     │
-  │                  │ ──────── 电台 ────────►  │                  │
-  │                  │                           │  ②"好的，请回答   │
-  │  收到答题指令     │  ◄──────── 电台 ────────  │     这些题目"     │
-  │                  │     (随机题目×4)           │                  │
-  │  用芯片指纹答题   │                           │                  │
-  │  (测量环振频率)   │  ③"这是我的答案"            │  比对答案是否     │
-  │                  │ ──────── 电台 ────────►  │  与注册指纹匹配   │
-  │                  │                           │                  │
-  │                  │  ④"验证通过！这是我的        │  发送判定结果     │
-  │  验证基站身份     │     身份证明"               │  + 基站身份证明  │
-  │                  │ ◄──────── 电台 ────────  │                  │
-  │                  │                           │                  │
-  │  ⑤"确认，开始     │ ──────── 电台 ────────►  │  会话建立 ✓      │
-  │     安全通信"     │     (确认帧)               │                  │
-  └──────────────────┘                           └──────────────────┘
-</pre>
-</div>
+<!-- ======== Hero ======== -->
+<div class="hero">
+<h1>🔒 PUF 无人机身份认证系统</h1>
+<p>每颗芯片都有独一无二的"硬件指纹"——就像人的指纹无法伪造。这个系统用芯片指纹代替密码，让无人机安全地向地面基站证明"我就是我"。</p>
 </div>
 
-<!-- ======================= Domain 1: PUF 引擎 ======================= -->
-<div class="domain d-puf">
-<h2>🔬 功能域 1：芯片指纹引擎（PUF Engine）</h2>
-<p class="desc">这是整个系统的<b>核心创新</b>。利用芯片制造时的微小物理差异（任何两颗芯片都不可能完全相同），产生一个无法复制、无法软件仿造的唯一标识。就像双胞胎也有不同的指纹。</p>
-<p class="analogy">类比：芯片里放了 16 个微型音叉，每个音叉的振动频率由制造工艺的微观偏差决定。同一颗芯片上的 16 个频率永远不变，但不同芯片的频率组合必然不同——这就是"硬件指纹"。</p>
-<div class="nodes">
-<div class="node"><div class="nh"><span class="ni">🎵</span><span class="nn">环振器 ro_ring.v</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>一个由 5 个反相器首尾相连组成的振荡回路，以约 200MHz 的频率不停振荡。频率的具体值取决于这 5 个逻辑门的物理延迟，而延迟由制造工艺的随机偏差决定——每颗芯片都不一样。</div><div class="nf"><b>服务于：</b>被 ro_array.v 调用，是产生指纹的"原子单元"</div></div>
-<div class="node"><div class="nh"><span class="ni">⚙️</span><span class="nn">分频器 ro_div.v</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>把环振器的 200MHz 高频信号除以 32，降到约 6MHz。因为 200MHz 太快了，直接数数会数不过来。</div><div class="nf"><b>服务于：</b>被 ro_array.v 调用，让频率可测量</div></div>
-<div class="node"><div class="nh"><span class="ni">🎛️</span><span class="nn">环振阵列 ro_array.v</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>把 16 个环振器+分频器组成阵列，每个都能独立计数。16 个频率构成一个向量——这就是芯片的"指纹向量"。新增 ring_en 功耗管理：不用时停振省电。</div><div class="nf"><b>服务于：</b>被 w2_top.v 调用，为认证提供原始指纹数据</div></div>
-<div class="node"><div class="nh"><span class="ni">🎲</span><span class="nn">挑战解码器 challenge_decode.v</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>收到一个 8 字节的随机数（"挑战"），用 LFSR+Fisher-Yates 洗牌算法决定"比较哪 8 对环振器"。同一个挑战永远得到同一组配对，不同挑战得到不同配对。</div><div class="nf"><b>服务于：</b>让每次认证"考的题不一样"，防止偷看答案后冒充</div></div>
-</div>
-<p style="font-size:11px;color:var(--dim);padding:8px 34px;">⚠ 当前状态：代码完成且通过仿真验证，但 <b>尚未接入认证流程</b>（目前用种子直通做占位）。接入后，终端收到挑战→解码→选环→测频→比大小→产生响应。</p>
+<!-- ======== Stats ======== -->
+<div class="stats">
+<div class="stat"><div class="v g">14</div><div class="l">RTL 模块</div></div>
+<div class="stat"><div class="v c">10</div><div class="l">Python 文件</div></div>
+<div class="stat"><div class="v a">47+</div><div class="l">测试用例</div></div>
+<div class="stat"><div class="v g">100%</div><div class="l">通过率</div></div>
+<div class="stat"><div class="v b">653</div><div class="l">LUT (1.23%)</div></div>
+<div class="stat"><div class="v g">42</div><div class="l">Git 提交</div></div>
+<div class="stat"><div class="v a">9</div><div class="l">审查轮次</div></div>
+<div class="stat"><div class="v c">~6,550</div><div class="l">代码行</div></div>
 </div>
 
-<!-- ======================= Domain 2: 通信协议栈 ======================= -->
-<div class="domain d-comm">
-<h2>📡 功能域 2：通信协议栈（在 FPGA 芯片内部）</h2>
-<p class="desc">负责把认证数据<b>打包成标准格式</b>并通过串口发送出去，以及<b>解包</b>收到的数据。使用 MAVLink v2 协议——这是无人机行业的标准通信协议。</p>
-<p class="analogy">类比：就像寄信需要信封（帧头）、收件地址（目标ID）、信纸内容（载荷）、封口胶水（CRC校验）。这一套模块自动完成写信、封口、寄出、拆信的全过程。</p>
-<div class="nodes">
-<div class="node"><div class="nh"><span class="ni">✉️</span><span class="nn">帧打包器 mavlink_frame.v</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>把要发送的数据（如"这是我的回答R1"）包装成标准 MAVLink v2 格式：加上帧头（0xFD开头）、消息类型编号、长度、序号、校验码。输出一个字节一个字节的流。</div><div class="nf"><b>服务于：</b>被 terminal_fsm.v 指挥，产出发给 byte_fifo.v 的数据流</div></div>
-<div class="node"><div class="nh"><span class="ni">📂</span><span class="nn">帧拆包器 frame_parser.v</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>从收到的字节流中找到帧的开头（0xFD），提取消息类型和内容，验证校验码是否正确。如果数据被干扰损坏了，直接丢弃。还有 rx_inhibit 保护：正在读数据时暂停接收新帧，防止缓冲被覆盖。</div><div class="nf"><b>服务于：</b>把收到的消息传给 terminal_fsm.v 处理</div></div>
-<div class="node"><div class="nh"><span class="ni">🔐</span><span class="nn">校验码计算器 crc16_mcrf4xx.v</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>给每帧数据算一个 16 位校验码。发送端算好附在帧尾，接收端重算一遍比对——不一致说明数据在传输中被干扰/篡改。被帧打包器和帧拆包器各调用一次。</div><div class="nf"><b>服务于：</b>同时被 mavlink_frame.v 和 frame_parser.v 内部使用</div></div>
-<div class="node"><div class="nh"><span class="ni">📥</span><span class="nn">发送缓冲区 byte_fifo.v</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>帧打包器一秒钟能产出几千字节，但串口一秒只能发 11520 字节。这个 64 字节的缓冲区把快的数据暂存起来，让串口按自己的节奏慢慢发。</div><div class="nf"><b>服务于：</b>衔接 mavlink_frame.v（快）和 uart_tx.v（慢）之间的速度差</div></div>
-<div class="node"><div class="nh"><span class="ni">📤</span><span class="nn">串口发送器 uart_tx.v</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>把每个字节拆成 10 个位（起始位+8数据位+停止位），一位一位地在线上发。这就是串口通信（UART），和电脑的 COM 口一样。</div><div class="nf"><b>服务于：</b>连接 byte_fifo.v 到物理引脚 radio_txd（最终连到电台）</div></div>
-<div class="node"><div class="nh"><span class="ni">📡</span><span class="nn">串口接收器 uart_rx.v</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>监听物理引脚 radio_rxd 上的信号，检测起始位，采样 8 个数据位，重组为字节。是 uart_tx 的反向操作。</div><div class="nf"><b>服务于：</b>把物理信号变成字节流，交给 frame_parser.v 解析</div></div>
-</div>
+<!-- ======== System Architecture (HTML boxes) ======== -->
+<div class="arch">
+<h3>🏗️ 系统架构总览：数据从哪来到哪去</h3>
+<div class="arch-container">
+
+  <!-- Left column: FPGA Board -->
+  <div class="arch-col">
+    <div class="phys phys-board">
+      <div class="phys-title">💠 ZC702 开发板（FPGA 芯片内部）</div>
+      <div class="phys" style="border-color:var(--auth-border);padding:10px;margin-bottom:8px">
+        <div class="phys-title" style="color:var(--auth);font-size:11px">🧠 认证流程控制器</div>
+        <div class="flowbox"><span class="fi">🎯</span><div class="ft"><b>terminal_fsm.v — 认证大脑</b><span>12态状态机，指挥全流程，含防重放攻击</span></div><span class="fs ok">✅</span></div>
+      </div>
+      <div class="phys" style="border-color:var(--comm-border);padding:10px;margin-bottom:8px">
+        <div class="phys-title" style="color:var(--comm);font-size:11px">📡 通信协议栈</div>
+        <div class="flowbox"><span class="fi">✉️</span><div class="ft"><b>mavlink_frame.v — 帧打包</b><span>把数据装进标准 MAVLink 信封</span></div><span class="fs ok">✅</span></div>
+        <div class="varrow"><div class="line"></div><div class="head"></div></div>
+        <div class="flowbox"><span class="fi">📥</span><div class="ft"><b>byte_fifo.v — 速度缓冲</b><span>打包快、串口慢，中间排队</span></div><span class="fs ok">✅</span></div>
+        <div class="varrow"><div class="line"></div><div class="head"></div></div>
+        <div class="flowbox"><span class="fi">📤</span><div class="ft"><b>uart_tx.v — 串口发送</b><span>把字节变成一位一位的电信号</span></div><span class="fs ok">✅</span></div>
+        <div class="varrow"><div class="line"></div><div class="head"></div></div>
+        <div class="flowbox"><span class="fi">📡</span><div class="ft"><b>uart_rx.v — 串口接收</b><span>把电信号还原成字节</span></div><span class="fs ok">✅</span></div>
+        <div class="varrow"><div class="line"></div><div class="head"></div></div>
+        <div class="flowbox"><span class="fi">📂</span><div class="ft"><b>frame_parser.v — 帧拆包</b><span>打开信封取出内容，验校验码</span></div><span class="fs ok">✅</span></div>
+      </div>
+      <div class="phys" style="border-color:var(--puf-border);padding:10px">
+        <div class="phys-title" style="color:var(--puf);font-size:11px">🔬 芯片指纹引擎（待接入）</div>
+        <div class="flowbox"><span class="fi">🎲</span><div class="ft"><b>challenge_decode.v — 出题器</b><span>决定比较哪几对环振器</span></div><span class="fs ok">✅</span></div>
+        <div class="varrow"><div class="line"></div><div class="head"></div></div>
+        <div class="flowbox"><span class="fi">🎛️</span><div class="ft"><b>ro_array.v — 16环振阵列</b><span>16个音叉同时测频率</span></div><span class="fs ok">✅</span></div>
+        <div class="varrow"><div class="line"></div><div class="head"></div></div>
+        <div class="flowbox"><span class="fi">🎵</span><div class="ft"><b>ro_ring.v ×16 — 环振器</b><span>每个芯片振动频率不同=指纹</span></div><span class="fs ok">✅</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Middle: Radio Link -->
+  <div style="display:flex;flex-direction:column;justify-content:center;gap:8px;min-width:140px;align-items:center">
+    <div class="harrow"><div class="line" style="background:var(--comm)"></div></div>
+    <div style="text-align:center">
+      <div style="font-size:28px">📻</div>
+      <div style="font-size:10px;color:var(--radio);font-weight:600">433MHz 无线电台</div>
+      <div style="font-size:9px;color:var(--dim)">需采购一对</div>
+    </div>
+    <div class="harrow"><div class="line" style="background:var(--server)"></div></div>
+    <div class="harrow" style="transform:rotate(180deg)"><div class="line" style="background:var(--comm)"></div></div>
+    <div style="font-size:9px;color:var(--dim);text-align:center">↕ 双向通信</div>
+    <div class="harrow" style="transform:rotate(180deg)"><div class="line" style="background:var(--server)"></div></div>
+  </div>
+
+  <!-- Right column: PC Server -->
+  <div class="arch-col">
+    <div class="phys phys-pc">
+      <div class="phys-title">🖥️ PC 地面基站（Python 程序）</div>
+      <div class="flowbox"><span class="fi">⌨️</span><div class="ft"><b>main.py — 操作员入口</b><span>命令行：注册/认证/伪造/查看</span></div><span class="fs ok">✅</span></div>
+      <div class="varrow"><div class="line"></div><div class="head"></div></div>
+      <div class="flowbox"><span class="fi">📋</span><div class="ft"><b>protocol.py — 协议引擎</b><span>和 FPGA 端用同一套规则对话</span></div><span class="fs ok">✅</span></div>
+      <div class="varrow"><div class="line"></div><div class="head"></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div class="flowbox" style="padding:8px"><span class="fi">🗂️</span><div class="ft"><b style="font-size:11px">crp_pool.py</b><span>题库管理</span></div><span class="fs ok">✅</span></div>
+        <div class="flowbox" style="padding:8px"><span class="fi">💾</span><div class="ft"><b style="font-size:11px">template_db.py</b><span>指纹数据库</span></div><span class="fs ok">✅</span></div>
+        <div class="flowbox" style="padding:8px"><span class="fi">⚖️</span><div class="ft"><b style="font-size:11px">threshold.py</b><span>通过/拒绝判定</span></div><span class="fs ok">✅</span></div>
+        <div class="flowbox" style="padding:8px"><span class="fi">🔑</span><div class="ft"><b style="font-size:11px">hsm.py</b><span>基站身份证明</span></div><span class="fs ok">✅</span></div>
+      </div>
+      <div class="varrow"><div class="line"></div><div class="head"></div></div>
+      <div class="flowbox" style="border-style:dashed"><span class="fi">🔗</span><div class="ft"><b>串口通信循环</b><span>通过真实串口和 FPGA 对话</span></div><span class="fs no">⬜</span></div>
+    </div>
+  </div>
+
 </div>
 
-<!-- ======================= Domain 3: 认证流程控制 ======================= -->
-<div class="domain d-auth">
-<h2>🧠 功能域 3：认证流程控制器（在 FPGA 芯片内部）</h2>
-<p class="desc">整个系统的<b>"大脑"</b>。指挥所有其他模块协同工作，按照严格的安全协议完成双向身份认证。不仅验证"无人机是不是真的"，还验证"基站是不是真的"——双向防伪。</p>
-<p class="analogy">类比：就像机场安检的全流程——出示护照→回答安全问题→采集指纹→等待核查→核查通过后盖章放行。每一步都必须按顺序完成，任何一步失败就拒绝通行。</p>
-<div class="nodes">
-<div class="node"><div class="nh"><span class="ni">🎯</span><span class="nn">终端状态机 terminal_fsm.v</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>一个 12 状态的有限状态机，控制认证的完整流程。按顺序经历：空闲→发入网请求→等题目→用指纹答题→发答案→等判定→验基站身份→发确认→会话建立（或被阻断）。<br><br><b>安全特性：</b><br>• C2 反挑战计数器：每次认证用不同的反挑战值，录制的旧响应无法重放<br>• 动态 R2 验证：期望值随 C2 变化，伪造的基站无法通过<br>• 载荷长度校验：截断的伪造帧直接拒绝<br>• 超时保护：等不到回应自动阻断，不会永久卡住</div><div class="nf"><b>指挥：</b>mavlink_frame.v（发消息）、frame_parser.v（收消息）<br><b>未来接入：</b>challenge_decode.v + ro_array.v（真实指纹测量）</div></div>
-</div>
-</div>
-
-<!-- ======================= Domain 4: 板级集成 ======================= -->
-<div class="domain d-board">
-<h2>🏗️ 功能域 4：板级集成层（ZC702 开发板上的"总指挥"）</h2>
-<p class="desc">把 FPGA 芯片内部的所有模块<b>连接到物理世界</b>：按钮、LED灯、时钟晶振、串口引脚。这是代码和硬件之间的桥梁。</p>
-<div class="nodes">
-<div class="node"><div class="nh"><span class="ni">🏗️</span><span class="nn">顶层模块 w3_top.v</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>整个 FPGA 设计的最外层。把上面 3 个功能域的全部 14 个模块实例化并连接起来，再加上：<br>• <b>复位同步器</b>：上电时防止芯片进入随机状态<br>• <b>按钮消抖</b>：按一下认证按钮只触发一次（过滤电抖动）<br>• <b>LED 心跳</b>：每秒闪一次，证明时钟正常运行<br>• <b>时钟参数统一管理</b>：从一个频率参数推导出串口波特率、超时时间等所有时间相关参数</div><div class="nf"><b>产出：</b>w3_top.bit 比特流文件（4MB，已验证可生成）<br><b>烧入 FPGA 后</b>：芯片就变成了一个"无人机身份认证终端"</div></div>
-</div>
-</div>
-
-<!-- ======================= Domain 5: PC 基站 ======================= -->
-<div class="domain d-server">
-<h2>🖥️ 功能域 5：PC 地面基站服务器（在电脑上运行的 Python 程序）</h2>
-<p class="desc">在地面电脑上运行的<b>"身份验证中心"</b>。存有每架无人机注册时的指纹模板，认证时出题、收答案、比对指纹、做判定。同时也要向无人机证明自己是合法基站。</p>
-<p class="analogy">类比：就像出入境管理局——存有你的护照信息和生物特征，你过关时他们出题验证你，你也有权查他们的证件。</p>
-<div class="nodes">
-<div class="node"><div class="nh"><span class="ni">📋</span><span class="nn">协议引擎 protocol.py</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>实现了和 FPGA 终端完全对等的协议逻辑。定义了 6 种消息类型（入网请求、挑战、响应、判定、确认、加测），以及帧的打包/解析/CRC校验。两端用同一套规则"对话"。</div><div class="nf"><b>服务于：</b>是 PC 端的核心，其他 Python 模块都被它调用</div></div>
-<div class="node"><div class="nh"><span class="ni">🗂️</span><span class="nn">题库管理器 crp_pool.py</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>管理"挑战-响应对"（CRP）的题库。确保同一道题不会被出两次（防止攻击者积累题库答案），并跟踪剩余题量。题用完了会触发重新注册。</div><div class="nf"><b>服务于：</b>被 protocol.py 调用，提供安全的出题服务</div></div>
-<div class="node"><div class="nh"><span class="ni">💾</span><span class="nn">指纹数据库 template_db.py</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>存储每架无人机注册时采集的指纹模板（64位响应向量）。认证时把收到的答案和模板做"汉明距离"比对——距离越近越可能是真机。</div><div class="nf"><b>服务于：</b>被 protocol.py 调用，提供指纹比对功能</div></div>
-<div class="node"><div class="nh"><span class="ni">⚖️</span><span class="nn">判决器 threshold.py</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>根据汉明距离做三档判定：距离很小→通过；距离很大→拒绝；距离在中间→"灰区"，需要追加 3 道题再判。避免因为环境噪声误判。</div><div class="nf"><b>服务于：</b>被 protocol.py 调用，做最终的通过/拒绝决定</div></div>
-<div class="node"><div class="nh"><span class="ni">🔑</span><span class="nn">基站身份模块 hsm.py</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>"硬件安全模块"的模拟。当无人机反问"你怎么证明你是合法基站"时，这个模块生成证明（R2）。目前用 HMAC-SHA256 算法模拟。</div><div class="nf"><b>服务于：</b>被 protocol.py 调用，支撑双向认证的基站侧</div></div>
-<div class="node"><div class="nh"><span class="ni">⌨️</span><span class="nn">命令行入口 main.py</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>操作员的入口。支持命令：注册新设备、发起认证、伪造测试、查看状态。可以用 --loopback 模式在没有硬件的情况下测试全流程。</div><div class="nf"><b>服务于：</b>人机交互界面（操作员使用）</div></div>
-<div class="node"><div class="nh"><span class="ni">📊</span><span class="nn">评估工具 hamming_analysis.py 等</span><span class="ns done">✅ 完成</span></div><div class="nd"><b>是什么：</b>分析指纹质量：同一芯片多次测量的稳定性（可靠性）、不同芯片之间的差异度（唯一性）。生成图表供报告使用。</div><div class="nf"><b>服务于：</b>W4 实验周的数据分析和竞赛报告</div></div>
-<div class="node"><div class="nh"><span class="ni">🔗</span><span class="nn">串口通信循环</span><span class="ns wait">⬜ 未完成</span></div><div class="nd"><b>是什么：</b>让 PC 服务器通过真实串口（USB转串口线）和 FPGA 终端对话。目前只有协议逻辑测试，还没有实现"从串口读数据→解析→处理→回复"的循环。</div><div class="nf"><b>阻塞点：</b>没有这个，PC 和 FPGA 无法通过真实硬件通信</div></div>
-</div>
-</div>
-
-<!-- ======================= Domain 6: 无线电台 ======================= -->
-<div class="domain d-radio">
-<h2>📶 功能域 6：无线电台链路（物理硬件，需要购买）</h2>
-<p class="desc">无人机和地面基站之间的<b>"空中桥梁"</b>。使用 433MHz 频段（中国工信部允许的免许可频段），一对 SiK 兼容电台，一架一个、地面一个，通过串口分别连 FPGA 和 PC。</p>
-<div class="nodes">
-<div class="node"><div class="nh"><span class="ni">📻</span><span class="nn">机载电台</span><span class="ns wait">⬜ 需采购</span></div><div class="nd"><b>是什么：</b>一个火柴盒大小的 433MHz 无线模块，串口输入什么就无线转发什么。连接到 FPGA 的 radio_txd/radio_rxd 引脚。<br><b>参数：</b>空中速率 64kbps，开启纠错，网络 ID 匹配</div><div class="nf"><b>服务于：</b>把 FPGA 发出的串口数据无线上传</div></div>
-<div class="node"><div class="nh"><span class="ni">📻</span><span class="nn">地面电台</span><span class="ns wait">⬜ 需采购</span></div><div class="nd"><b>是什么：</b>和机载电台配对的另一个模块，通过 USB 转串口连接到 PC。收到无线信号后转成串口数据给 PC。</div><div class="nf"><b>服务于：</b>把空中的无线信号还原为串口数据给 PC</div></div>
+<!-- Bottom: Board Hardware -->
+<div style="margin-top:12px">
+  <div class="phys" style="border-color:var(--hw-border);padding:12px">
+    <div class="phys-title" style="color:var(--hw);font-size:12px">🔩 板级硬件 ZC702</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
+      <div class="flowbox"><span class="fi">💠</span><div class="ft"><b>ZC702 板</b><span>已有，FPGA 芯片 XC7Z020</span></div><span class="fs ok">✅</span></div>
+      <div class="flowbox"><span class="fi">📦</span><div class="ft"><b>w3_top.bit</b><span>比特流已验证可生成</span></div><span class="fs ok">✅</span></div>
+      <div class="flowbox"><span class="fi">📍</span><div class="ft"><b>XDC 引脚约束</b><span>需查 UG850 填入实际引脚号</span></div><span class="fs wip">待填</span></div>
+      <div class="flowbox"><span class="fi">🕐</span><div class="ft"><b>时钟适配</b><span>板上200MHz差分 vs 设计100MHz</span></div><span class="fs wip">待确认</span></div>
+    </div>
+  </div>
 </div>
 </div>
 
-<!-- ======================= Domain 7: 板级硬件 ======================= -->
-<div class="domain d-hw">
-<h2>🔩 功能域 7：板级硬件（ZC702 开发板）</h2>
-<p class="desc">所有 FPGA 逻辑运行的<b>物理平台</b>。ZC702 是 AMD/Xilinx 官方评估板，有一颗 Zynq-7020 芯片（FPGA+ARM），我们只用其中的 FPGA 部分。</p>
-<div class="nodes">
-<div class="node"><div class="nh"><span class="ni">💠</span><span class="nn">ZC702 开发板</span><span class="ns done">✅ 已有</span></div><div class="nd"><b>是什么：</b>AMD 官方 FPGA 评估板。芯片型号 XC7Z020（53,200 个 LUT）。我们的设计只用了 653 个 LUT（1.23%），非常节省。</div><div class="nf"><b>状态：</b>板子已有，比特流已验证可生成</div></div>
-<div class="node"><div class="nh"><span class="ni">📍</span><span class="nn">引脚约束文件 w3_top.xdc</span><span class="ns wait">⬜ 待填入</span></div><div class="nd"><b>是什么：</b>告诉 Vivado"FPGA 内部的 led_busy 信号连接到板上哪个物理引脚"。没有这个文件，比特流不知道把信号路由到哪里。模板已写好，但具体引脚号需要查 ZC702 的用户手册（UG850）后填入。<br><br><b>三个关键问题：</b><br>1. 板上时钟是 200MHz 差分（不是设计假设的 100MHz 单端）<br>2. CPU复位按钮在 PS 域（不在 PL/FPGA 域），需改用 GPIO 按钮<br>3. 板上只有 2 个拨码开关（设计需要 8 位终端ID）</div><div class="nf"><b>阻塞点：</b>填入正确引脚后才能生成可烧板的比特流</div></div>
+<!-- ======== Domain 1: PUF Engine ======== -->
+<div class="domain dm-puf">
+<div class="dhead">
+<span class="dicon">🔬</span>
+<div><h2>功能域 1：芯片指纹引擎（PUF Engine）</h2>
+<p class="ddesc">整个系统的<b>核心创新</b>。利用芯片制造时的微小物理差异（任何两颗芯片都不可能完全相同），产生无法复制、无法软件仿造的唯一标识。</p></div>
 </div>
+<p class="danalogy">💡 类比：芯片里放了 16 个微型音叉，每个音叉的振动频率由制造工艺的微观偏差决定。同一颗芯片上 16 个频率永远不变，但不同芯片的频率组合必然不同——这就是"硬件指纹"。</p>
+<div class="dbody"><div class="nodes">
+<div class="node nc-done"><div class="nh"><span class="ni">🎵</span><span class="nn">环振器</span><span class="ns s-done">✅ 完成</span></div><div class="nd"><b>是什么：</b>5 个反相器首尾相连组成的振荡回路，以约 200MHz 不停振荡。频率的具体值由这 5 个逻辑门的物理延迟决定——每颗芯片都不一样，这就是指纹的来源。</div><div class="nf"><b>服务于：</b>被环振阵列调用，是产生指纹的"原子单元"</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">⚙️</span><span class="nn">分频器</span><span class="ns s-done">✅ 完成</span></div><div class="nd"><b>是什么：</b>把环振器的 200MHz 高频信号除以 32，降到约 6MHz。200MHz 太快了，直接数数会数不过来，需要先"降速"。</div><div class="nf"><b>服务于：</b>被环振阵列调用，让频率可测量</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">🎛️</span><span class="nn">环振阵列</span><span class="ns s-done">✅ 完成</span></div><div class="nd"><b>是什么：</b>16 个环振器+分频器组成阵列，每个都能独立计数。16 个频率构成一个向量——这就是芯片的"指纹向量"。新增 ring_en 功耗管理：不用时停振省电。</div><div class="nf"><b>服务于：</b>为认证提供原始指纹数据</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">🎲</span><span class="nn">挑战解码器</span><span class="ns s-done">✅ 完成</span></div><div class="nd"><b>是什么：</b>收到一个 8 字节随机数（"挑战"），用 LFSR+Fisher-Yates 洗牌决定"比较哪 8 对环振器"。同一挑战永远得到同一组配对，不同挑战得到不同配对。</div><div class="nf"><b>服务于：</b>让每次认证"考不同的题"，防止偷看答案后冒充</div></div>
+</div></div>
+<p style="font-size:11px;color:var(--dim);padding:8px 20px 14px 52px">⚠ 代码完成且通过仿真（100次确定性验证），但<b>尚未接入认证流程</b>——目前用"种子直通"做占位。接入后：收到挑战→解码→选环→测频→比大小→产生响应。</p>
 </div>
 
-<!-- ======================= 完成度总览 ======================= -->
-<div class="flow">
+<!-- ======== Domain 2: Communication Stack ======== -->
+<div class="domain dm-comm">
+<div class="dhead">
+<span class="dicon">📡</span>
+<div><h2>功能域 2：通信协议栈（FPGA 芯片内部）</h2>
+<p class="ddesc">把认证数据<b>打包成标准 MAVLink v2 格式</b>并通过串口发送；以及<b>解包</b>收到的数据。这是无人机行业的标准通信协议。</p></div>
+</div>
+<p class="danalogy">💡 类比：寄信需要信封（帧头）、收件地址（目标ID）、信纸内容（载荷）、封口胶水（CRC校验码）。这套模块自动完成写信→封口→寄出→拆信的全过程。</p>
+<div class="dbody"><div class="nodes">
+<div class="node nc-done"><div class="nh"><span class="ni">✉️</span><span class="nn">帧打包器 mavlink_frame.v</span><span class="ns s-done">✅ 完成</span></div><div class="nd"><b>是什么：</b>把要发的数据（如"这是我的回答"）包装成标准格式：加帧头、消息编号、长度、序号、校验码。输出字节流。</div><div class="nf"><b>服务于：</b>被认证大脑指挥，产出数据流给缓冲区</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">📂</span><span class="nn">帧拆包器 frame_parser.v</span><span class="ns s-done">✅ 完成</span></div><div class="nd"><b>是什么：</b>从字节流中找帧头、提取消息类型和内容、验证校验码。数据被干扰损坏则丢弃。还有载荷保护：读数据时暂停接收新帧，防覆盖。</div><div class="nf"><b>服务于：</b>把收到的消息传给认证大脑处理</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">🔐</span><span class="nn">校验码计算器 crc16.v</span><span class="ns s-done">✅ 完成</span></div><div class="nd"><b>是什么：</b>给每帧算一个 16 位校验码。发送端附在帧尾，接收端重算比对——不一致说明传输中被干扰/篡改。</div><div class="nf"><b>服务于：</b>被帧打包器和帧拆包器各自内部使用</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">📥</span><span class="nn">发送缓冲区 byte_fifo.v</span><span class="ns s-done">✅ 完成</span></div><div class="nd"><b>是什么：</b>帧打包器每秒产出几千字节，串口每秒只能发 11520 字节。这个 64 字节缓冲区把快的数据暂存，让串口按自己节奏慢慢发。</div><div class="nf"><b>服务于：</b>衔接帧打包器（快）和串口发送器（慢）</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">📤</span><span class="nn">串口发送器 uart_tx.v</span><span class="ns s-done">✅ 完成</span></div><div class="nd"><b>是什么：</b>把每个字节拆成 10 个位（起始+8数据+停止），一位一位地在线上发。和电脑 COM 口一样。</div><div class="nf"><b>服务于：</b>连接缓冲区到物理引脚 radio_txd（最终连电台）</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">📻</span><span class="nn">串口接收器 uart_rx.v</span><span class="ns s-done">✅ 完成</span></div><div class="nd"><b>是什么：</b>监听物理引脚 radio_rxd 上的信号，检测起始位、采样 8 个数据位、重组为字节。是串口发送器的反向操作。</div><div class="nf"><b>服务于：</b>把物理信号变成字节流，交给帧拆包器</div></div>
+</div></div>
+</div>
+
+<!-- ======== Domain 3: Auth Controller ======== -->
+<div class="domain dm-auth">
+<div class="dhead">
+<span class="dicon">🧠</span>
+<div><h2>功能域 3：认证流程控制器（FPGA 芯片内部）</h2>
+<p class="ddesc">整个系统的<b>"大脑"</b>。指挥所有模块协同工作，按严格协议完成<b>双向身份认证</b>——不仅验证"无人机是真的"，还验证"基站是真的"。</p></div>
+</div>
+<p class="danalogy">💡 类比：机场安检全流程——出示护照→回答安全问题→采集指纹→等待核查→通过后盖章放行。每一步必须按顺序，任何一步失败就拒绝通行。</p>
+<div class="dbody"><div class="nodes">
+<div class="node nc-done"><div class="nh"><span class="ni">🎯</span><span class="nn">终端状态机 terminal_fsm.v</span><span class="ns s-done">✅ 完成</span></div><div class="nd">
+<b>是什么：</b>一个 12 状态的控制器，按顺序经历：
+<table style="width:100%;font-size:10px;border-collapse:collapse;margin:6px 0">
+<tr><td style="padding:2px 6px;border:1px solid var(--border);color:var(--puf)">① 空闲</td><td style="padding:2px 6px;border:1px solid var(--border)">等待按下认证按钮</td></tr>
+<tr><td style="padding:2px 6px;border:1px solid var(--border);color:var(--puf)">② 发请求</td><td style="padding:2px 6px;border:1px solid var(--border)">"我是无人机42，我想入网"</td></tr>
+<tr><td style="padding:2px 6px;border:1px solid var(--border);color:var(--puf)">③ 等题目</td><td style="padding:2px 6px;border:1px solid var(--border)">等基站发来 4 道随机题</td></tr>
+<tr><td style="padding:2px 6px;border:1px solid var(--border);color:var(--puf)">④ 答题</td><td style="padding:2px 6px;border:1px solid var(--border)">用芯片指纹（环振频率）回答</td></tr>
+<tr><td style="padding:2px 6px;border:1px solid var(--border);color:var(--puf)">⑤ 发答案</td><td style="padding:2px 6px;border:1px solid var(--border)">把 64 位响应发回基站</td></tr>
+<tr><td style="padding:2px 6px;border:1px solid var(--border);color:var(--puf)">⑥ 等判定</td><td style="padding:2px 6px;border:1px solid var(--border)">等基站说通过/拒绝/再考3题</td></tr>
+<tr><td style="padding:2px 6px;border:1px solid var(--border);color:var(--puf)">⑦ 验基站</td><td style="padding:2px 6px;border:1px solid var(--border)">基站也要证明自己是合法的</td></tr>
+<tr><td style="padding:2px 6px;border:1px solid var(--border);color:var(--puf)">⑧ 确认</td><td style="padding:2px 6px;border:1px solid var(--border)">"确认，开始安全通信"</td></tr>
+<tr><td style="padding:2px 6px;border:1px solid var(--border);color:var(--puf)">⑨ 会话</td><td style="padding:2px 6px;border:1px solid var(--border)">认证通过！LED 显示绿色</td></tr>
+</table>
+<b>安全特性：</b>每次用不同反挑战值（防重放）、动态基站验证（防伪基站）、截断帧拒绝（防伪造）、超时阻断（防卡死）。
+</div><div class="nf"><b>指挥：</b>帧打包器（发消息）、帧拆包器（收消息）<br><b>未来接入：</b>挑战解码器 + 环振阵列（真实指纹测量）</div></div>
+</div></div>
+</div>
+
+<!-- ======== Domain 4: Board Integration ======== -->
+<div class="domain dm-board">
+<div class="dhead">
+<span class="dicon">🏗️</span>
+<div><h2>功能域 4：板级集成层</h2>
+<p class="ddesc">把 FPGA 内所有模块<b>连接到物理世界</b>：按钮、LED 灯、时钟、串口引脚。是代码和硬件之间的桥梁。</p></div>
+</div>
+<div class="dbody"><div class="nodes">
+<div class="node nc-done"><div class="nh"><span class="ni">🏗️</span><span class="nn">顶层模块 w3_top.v</span><span class="ns s-done">✅ 完成</span></div><div class="nd"><b>是什么：</b>整个 FPGA 设计的最外层。把上面 3 个功能域的 14 个模块全部实例化并连接，再加上：<br>• <b>复位同步器</b>：上电时防随机状态<br>• <b>按钮消抖</b>：按一下只触发一次<br>• <b>LED 心跳</b>：每秒闪=时钟正常<br>• <b>时钟参数统一</b>：从一个频率推导所有时间参数</div><div class="nf"><b>产出：</b>w3_top.bit（4MB 比特流，已验证可生成）<br><b>烧入后：</b>芯片变成"无人机身份认证终端"</div></div>
+</div></div>
+</div>
+
+<!-- ======== Domain 5: PC Server ======== -->
+<div class="domain dm-server">
+<div class="dhead">
+<span class="dicon">🖥️</span>
+<div><h2>功能域 5：PC 地面基站服务器（Python）</h2>
+<p class="ddesc">地面电脑上的<b>"身份验证中心"</b>。存有每架无人机注册时的指纹模板，认证时出题、收答案、比对指纹、做判定。同时也要证明自己是合法基站。</p></div>
+</div>
+<p class="danalogy">💡 类比：出入境管理局——存有你的护照和生物特征，你过关时他们验证你，你也有权查他们的证件。</p>
+<div class="dbody"><div class="nodes">
+<div class="node nc-done"><div class="nh"><span class="ni">📋</span><span class="nn">协议引擎 protocol.py</span><span class="ns s-done">✅</span></div><div class="nd"><b>是什么：</b>和 FPGA 终端完全对等的协议逻辑。定义了 6 种消息和帧的打包/解析/CRC 校验。两端用同一套规则"对话"。</div><div class="nf"><b>服务于：</b>PC 端核心，其他 Python 模块都被它调用</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">🗂️</span><span class="nn">题库管理 crp_pool.py</span><span class="ns s-done">✅</span></div><div class="nd"><b>是什么：</b>管理"挑战-响应对"题库。确保同一道题不出两次（防止积累答案），跟踪剩余题量。</div><div class="nf"><b>服务于：</b>被协议引擎调用，提供安全出题</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">💾</span><span class="nn">指纹数据库 template_db.py</span><span class="ns s-done">✅</span></div><div class="nd"><b>是什么：</b>存储每架无人机注册时的指纹模板。认证时把收到答案和模板做"汉明距离"比对——距离越近越可能是真机。</div><div class="nf"><b>服务于：</b>被协议引擎调用，提供指纹比对</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">⚖️</span><span class="nn">判决器 threshold.py</span><span class="ns s-done">✅</span></div><div class="nd"><b>是什么：</b>三档判定：距离很小→通过；很大→拒绝；中间→"灰区"追加 3 道题再判。避免噪声误判。</div><div class="nf"><b>服务于：</b>被协议引擎调用，做最终判定</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">🔑</span><span class="nn">基站身份 hsm.py</span><span class="ns s-done">✅</span></div><div class="nd"><b>是什么：</b>当无人机反问"你怎么证明你是合法基站"时，生成证明（R2）。目前用 HMAC-SHA256 模拟。</div><div class="nf"><b>服务于：</b>支撑双向认证的基站侧</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">⌨️</span><span class="nn">命令行入口 main.py</span><span class="ns s-done">✅</span></div><div class="nd"><b>是什么：</b>操作员入口。支持：注册新设备、发起认证、伪造测试、查看状态。--loopback 模式可无硬件测试。</div><div class="nf"><b>服务于：</b>人机交互</div></div>
+<div class="node nc-done"><div class="nh"><span class="ni">📊</span><span class="nn">评估工具 hamming 等</span><span class="ns s-done">✅</span></div><div class="nd"><b>是什么：</b>分析指纹质量：同芯片多次测量的稳定性、不同芯片间的差异度。生成竞赛报告用的图表。</div><div class="nf"><b>服务于：</b>W4 实验周数据分析和报告</div></div>
+<div class="node nc-wait"><div class="nh"><span class="ni">🔗</span><span class="nn">串口通信循环</span><span class="ns s-wait">⬜ 未完成</span></div><div class="nd"><b>是什么：</b>让 PC 通过真实串口和 FPGA 对话。目前只有协议逻辑测试，还没有"从串口读→解析→处理→回复"的循环。</div><div class="nf"><b>阻塞点：</b>没有这个，PC 和 FPGA 无法通过真实硬件通信</div></div>
+</div></div>
+</div>
+
+<!-- ======== Domain 6: Radio ======== -->
+<div class="domain dm-radio">
+<div class="dhead">
+<span class="dicon">📶</span>
+<div><h2>功能域 6：无线电台链路（物理硬件）</h2>
+<p class="ddesc">无人机和地面基站之间的<b>"空中桥梁"</b>。一对 433MHz 无线模块（中国免许可频段），一端连 FPGA、一端连 PC。</p></div>
+</div>
+<div class="dbody"><div class="nodes">
+<div class="node nc-wait"><div class="nh"><span class="ni">📻</span><span class="nn">机载电台</span><span class="ns s-wait">⬜ 需采购</span></div><div class="nd"><b>是什么：</b>火柴盒大小的无线模块。串口收到什么就无线转发什么。连到 FPGA 的 radio_txd/radio_rxd 引脚。<br>参数：64kbps 空中速率、开启纠错、网络ID匹配</div><div class="nf"><b>服务于：</b>把 FPGA 的串口数据无线上传</div></div>
+<div class="node nc-wait"><div class="nh"><span class="ni">📻</span><span class="nn">地面电台</span><span class="ns s-wait">⬜ 需采购</span></div><div class="nd"><b>是什么：</b>和机载电台配对的另一个模块。通过 USB 转串口连接到 PC。收到无线信号后转成串口数据。</div><div class="nf"><b>服务于：</b>把空中信号还原为串口数据给 PC</div></div>
+</div></div>
+</div>
+
+<!-- ======== Domain 7: Board Hardware ======== -->
+<div class="domain dm-hw">
+<div class="dhead">
+<span class="dicon">🔩</span>
+<div><h2>功能域 7：板级硬件（ZC702 开发板）</h2>
+<p class="ddesc">所有 FPGA 逻辑运行的<b>物理平台</b>。ZC702 是 AMD 官方评估板，有 Zynq-7020 芯片（53,200 个 LUT），我们只用 653 个（1.23%）。</p></div>
+</div>
+<div class="dbody"><div class="nodes">
+<div class="node nc-done"><div class="nh"><span class="ni">💠</span><span class="nn">ZC702 开发板</span><span class="ns s-done">✅ 已有</span></div><div class="nd"><b>是什么：</b>AMD 官方 FPGA 评估板。芯片 XC7Z020。我们的设计只用了 1.23% 的资源——非常节省。</div><div class="nf"><b>状态：</b>板子已有，比特流已验证可生成</div></div>
+<div class="node nc-part"><div class="nh"><span class="ni">📍</span><span class="nn">引脚约束 w3_top.xdc</span><span class="ns s-part">⬜ 待填入</span></div><div class="nd"><b>是什么：</b>告诉 Vivado"FPGA 内部的 led_busy 信号连接到板上哪个物理引脚"。模板已写好，引脚号需查 ZC702 用户手册（UG850）。<br><b>三个关键问题：</b><br>① 板上时钟 200MHz 差分≠设计假设 100MHz 单端<br>② CPU复位在 PS 域不在 FPGA 域<br>③ 板上只有 2 个拨码开关（设计需 8 位ID）</div><div class="nf"><b>阻塞点：</b>填入正确引脚后才能生成可烧板比特流</div></div>
+</div></div>
+</div>
+
+<!-- ======== Progress ======== -->
+<div class="progress">
 <h3>📊 完成度总览</h3>
-<div class="flow-step"><span class="fn" style="color:var(--puf)">🔬 芯片指纹引擎</span><span class="fd">4 个模块全部编码完成并通过仿真。尚未接入认证流程（用占位符）。</span><span class="fs done">90%</span></div>
-<div class="arrow-block">↓</div>
-<div class="flow-step"><span class="fn" style="color:var(--comm)">📡 通信协议栈</span><span class="fd">6 个模块全部完成。帧打包/拆包/CRC/缓冲/串口收发全部测试通过。</span><span class="fs done">100%</span></div>
-<div class="arrow-block">↓</div>
-<div class="flow-step"><span class="fn" style="color:var(--auth)">🧠 认证流程控制</span><span class="fd">12 态状态机完成。含 C2 重放保护、动态 R2 验证、载荷校验、超时保护。PUF 接入待完成。</span><span class="fs done">95%</span></div>
-<div class="arrow-block">↓</div>
-<div class="flow-step"><span class="fn" style="color:var(--board)">🏗️ 板级集成</span><span class="fd">顶层模块完成，比特流已验证可生成。引脚约束待填入实际值。</span><span class="fs part">85%</span></div>
-<div class="arrow-block">↓</div>
-<div class="flow-step"><span class="fn" style="color:var(--server)">🖥️ PC 基站服务器</span><span class="fd">核心逻辑完成（协议/题库/指纹库/判决/HSM）。串口通信循环未实现。</span><span class="fs part">80%</span></div>
-<div class="arrow-block">↓</div>
-<div class="flow-step"><span class="fn" style="color:var(--radio)">📶 无线电台</span><span class="fd">电台模块需要采购。参数配置已写入文档。</span><span class="fs wait">0%</span></div>
-<div class="arrow-block">↓</div>
-<div class="flow-step"><span class="fn" style="color:var(--hw)">🔩 板级硬件</span><span class="fd">ZC702 板已有。引脚约束模板写好但需查手册填入。时钟适配需确认。</span><span class="fs part">50%</span></div>
+<div class="pbar">
+<div class="pseg p-done" style="flex:90">🔬 指纹引擎 90%</div>
+<div class="pseg p-done" style="flex:100">📡 通信栈 100%</div>
+<div class="pseg p-done" style="flex:95">🧠 认证控制 95%</div>
+<div class="pseg p-done" style="flex:85">🏗️ 板级集成 85%</div>
+<div class="pseg p-done" style="flex:80">🖥️ PC服务器 80%</div>
+<div class="pseg p-wait" style="flex:20">📶 电台 0%</div>
+<div class="pseg p-wait" style="flex:50">🔩 硬件 50%</div>
+</div>
+<div class="pinfo">
+<span>🔬 <b>90%</b> 代码完成，待接入认证</span>
+<span>📡 <b>100%</b> 全部通过</span>
+<span>🧠 <b>95%</b> PUF 接入待完成</span>
+<span>🏗️ <b>85%</b> 引脚待填</span>
+<span>🖥️ <b>80%</b> 串口循环未写</span>
+<span>📶 <b>0%</b> 需采购电台</span>
+<span>🔩 <b>50%</b> 引脚/时钟待确认</span>
+</div>
 </div>
 
-<!-- ======================= 依赖关系图 ======================= -->
-<div class="flow">
-<h3>🔗 谁依赖谁：模块依赖关系（简化版）</h3>
-<pre style="font-family:inherit;background:var(--bg3);border-radius:10px;padding:14px;font-size:11px;line-height:1.8;overflow-x:auto;color:var(--muted)">
-                    ┌──────────────────────────────────────────────────────┐
-                    │            ZC702 开发板（物理平台）                    │
-                    │  ┌────────────────────────────────────────────────┐  │
-                    │  │          w3_top.v（板级总集成）                  │  │
-                    │  │                                                │  │
-                    │  │  ┌─────────────────────────────────────────┐  │  │
-                    │  │  │    terminal_fsm.v（认证大脑）            │  │  │
-                    │  │  │                                         │  │  │
-                    │  │  │  "发消息" ──► mavlink_frame.v            │  │  │
-                    │  │  │                  │（帧打包）              │  │  │
-                    │  │  │                  ▼                       │  │  │
-                    │  │  │              byte_fifo.v                 │  │  │
-                    │  │  │                  │（速度缓冲）            │  │  │
-                    │  │  │                  ▼                       │  │  │
-                    │  │  │              uart_tx.v ──► radio_txd 引脚│  │  │
-                    │  │  │                                         │  │  │
-                    │  │  │  "收消息" ◄── frame_parser.v              │  │  │
-                    │  │  │                  ▲（帧拆包）              │  │  │
-                    │  │  │                  │                       │  │  │
-                    │  │  │              uart_rx.v ◄── radio_rxd 引脚│  │  │
-                    │  │  │                                         │  │  │
-                    │  │  │  mavlink_frame.v ──┐                     │  │  │
-                    │  │  │  frame_parser.v  ──┤ 都使用               │  │  │
-                    │  │  │                    ▼                     │  │  │
-                    │  │  │            crc16_mcrf4xx.v               │  │  │
-                    │  │  │            （校验码计算器）               │  │  │
-                    │  │  │                                         │  │  │
-                    │  │  │  [未来接入] challenge_decode.v            │  │  │
-                    │  │  │       └──► ro_array.v（16环振阵列）      │  │  │
-                    │  │  │              ├──► ro_ring.v ×16          │  │  │
-                    │  │  │              └──► ro_div.v ×16           │  │  │
-                    │  │  └─────────────────────────────────────────┘  │  │
-                    │  └────────────────────────────────────────────────┘  │
-                    └──────────────────────────────────────────────────────┘
-                                │ 串口线（radio_txd/rxd）
-                                ▼
-                    ┌──────────────────┐         ┌──────────────────┐
-                    │  433MHz 电台 ×2   │ ──────► │  （空中无线链路）  │
-                    │  （需要购买）      │         │                  │
-                    └──────────────────┘         └──────────────────┘
-                                                       │
-                                                       ▼
-                    ┌──────────────────────────────────────────────────┐
-                    │           PC 地面基站（Python 程序）               │
-                    │                                                  │
-                    │  main.py（操作员入口）                            │
-                    │    └──► protocol.py（协议引擎）                   │
-                    │          ├──► crp_pool.py（题库管理）             │
-                    │          ├──► template_db.py（指纹数据库）        │
-                    │          ├──► threshold.py（通过/拒绝判决）      │
-                    │          └──► hsm.py（基站身份证明）              │
-                    │                                                  │
-                    │  [未完成] 串口通信循环（与 FPGA 真正对话）         │
-                    └──────────────────────────────────────────────────┘
-</pre>
-</div>
-
-<!-- ======================= 图例 ======================= -->
+<!-- ======== Legend ======== -->
 <div class="legend">
-<span><span class="sw" style="background:var(--puf)"></span>芯片指纹引擎</span>
-<span><span class="sw" style="background:var(--comm)"></span>通信协议栈</span>
-<span><span class="sw" style="background:var(--auth)"></span>认证流程控制</span>
-<span><span class="sw" style="background:var(--board)"></span>板级集成</span>
-<span><span class="sw" style="background:var(--server)"></span>PC 基站服务器</span>
-<span><span class="sw" style="background:var(--radio)"></span>无线电台</span>
-<span><span class="sw" style="background:var(--hw)"></span>板级硬件</span>
+<span><span class="sw" style="background:var(--puf-bg);border-color:var(--puf)"></span>芯片指纹</span>
+<span><span class="sw" style="background:var(--comm-bg);border-color:var(--comm)"></span>通信协议</span>
+<span><span class="sw" style="background:var(--auth-bg);border-color:var(--auth)"></span>认证控制</span>
+<span><span class="sw" style="background:var(--board-bg);border-color:var(--board)"></span>板级集成</span>
+<span><span class="sw" style="background:var(--server-bg);border-color:var(--server)"></span>PC服务器</span>
+<span><span class="sw" style="background:var(--radio-bg);border-color:var(--radio)"></span>无线电台</span>
+<span><span class="sw" style="background:var(--hw-bg);border-color:var(--hw)"></span>板级硬件</span>
+<span style="margin-left:12px">✅ 完成</span>
+<span>🔄 部分</span>
+<span>⬜ 未开始</span>
 </div>
 
-<footer style="text-align:center;color:var(--dim);font-size:11px;margin-top:30px;padding-top:15px;border-top:1px solid var(--border)">
-基于实际代码逐文件验证 · 14 个 RTL 模块 + 10 个 Python 文件 · 47+ 测试用例 100% 通过<br>
-41 commits · 99 files · 653 LUT (Z7020 的 1.23%) · 比特流生成已验证
+<footer>
+基于实际代码逐文件验证 · 14 RTL + 10 Python · 47+ 测试 100% 通过 · 42 commits · 653 LUT (1.23%)<br>
+比特流已验证 · 9 轮 auto-review · 140+ 发现全修复
 </footer>
 </div>
 </body>
