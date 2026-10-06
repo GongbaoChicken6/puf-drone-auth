@@ -83,8 +83,8 @@ module terminal_fsm # (
     // PUF 响应缓冲（4 种子 → 4×8B 响应 = 32B，W3 桩 = 种子直通）
     reg [7:0]  resp_buf [0:31];
 
-    // C2 反挑战计数器 + 动态 R2（防重放，审查盲区 #2 修复）
-    // C2 每次 auth_start 递增 → R2 = ~C2 也变 → 旧 R2 无法重放
+    // C2 反挑战计数器 + Speck R2（防重放）
+    // C2 每次 auth_start 递增 → R2 = Speck(K,C2) 也变 → 旧 R2 无法重放
     reg [7:0]  c2_counter [0:7];
     reg [7:0]  r2_expected [0:7];
 
@@ -148,7 +148,7 @@ module terminal_fsm # (
     initial begin
         for (j = 0; j < 8; j = j + 1) begin
             c2_counter[j]  = 8'hA0 + j[7:0];
-            r2_expected[j] = ~(8'hA0 + j[7:0]);
+            // r2_expected 不初始化——首次使用前必经 S_CALC_R2 写入
         end
     end
 
