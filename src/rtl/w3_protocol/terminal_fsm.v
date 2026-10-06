@@ -62,7 +62,8 @@ module terminal_fsm # (
                      S_SESSION     = 4'd8 ,   // 认证通过
                      S_PROC_EXTRA  = 4'd9 ,   // 灰区：读 3 种子
                      S_TX_R1_EXTRA = 4'd10,   // 发 RESPONSE_R1（3×8B=24B）
-                     S_BLOCKED     = 4'd11;   // 认证失败阻断
+                     S_BLOCKED     = 4'd11,   // 认证失败阻断
+                     S_CALC_R2     = 4'd12;   // 启动 Speck 计算 R2（共享起始状态）
 
     reg [3:0] state = S_IDLE;
 
@@ -86,6 +87,63 @@ module terminal_fsm # (
     // C2 每次 auth_start 递增 → R2 = ~C2 也变 → 旧 R2 无法重放
     reg [7:0]  c2_counter [0:7];
     reg [7:0]  r2_expected [0:7];
+
+    // Speck64/96 密码核（R2 = Speck_encrypt(device_key, C2)）
+    parameter [95:0] DEVICE_KEY = 96'h13121110_0b0a0908_03020100;  // W3 测试值，W4 从 PUF 提取
+
+    wire [95:0] sp_key;
+    wire [63:0] sp_plaintext;
+    wire [63:0] sp_ciphertext;
+    wire        sp_start;     // 门控后输出到 Speck
+    wire        sp_done;
+    wire        sp_busy;
+
+    reg  [7:0]  calc_wd_cnt = 8'd0;             // S_CALC_R2 看门狗计数器
+    reg         sp_start_w  = 1'b0;              // Speck 启动脉冲（内部）
+    localparam  CALC_WD_MAX = 8'd255;            // 256 周期看门狗
+
+    assign sp_key = DEVICE_KEY;
+
+    // C2 字节重排：c2_counter[0..7] → sp_plaintext（NSA 小端约定）
+    // C2[0]=y LSB → pt[39:32], C2[1] → pt[47:40], C2[2] → pt[55:48], C2[3]=y MSB → pt[63:56]
+    // C2[4]=x LSB → pt[7:0],   C2[5] → pt[15:8],  C2[6] → pt[23:16], C2[7]=x MSB → pt[31:24]
+    assign sp_plaintext[39:32] = c2_counter[0];  // 已递增（Speck采样时计数器已更新）
+    assign sp_plaintext[47:40] = c2_counter[1];
+    assign sp_plaintext[55:48] = c2_counter[2];
+    assign sp_plaintext[63:56] = c2_counter[3];
+    assign sp_plaintext[7:0]   = c2_counter[4];
+    assign sp_plaintext[15:8]  = c2_counter[5];
+    assign sp_plaintext[23:16] = c2_counter[6];
+    assign sp_plaintext[31:24] = c2_counter[7];
+
+    // Speck 密文 → R2 字节（NSA 小端拆包）
+    // r2[0]=y LSB → ct[39:32], r2[1] → ct[47:40], r2[2] → ct[55:48], r2[3]=y MSB → ct[63:56]
+    // r2[4]=x LSB → ct[7:0],   r2[5] → ct[15:8],  r2[6] → ct[23:16], r2[7]=x MSB → ct[31:24]
+    // 注意：这些 wire 用于 S_CALC_R2 中锁存 r2_expected
+    wire [7:0] r2_byte_0 = sp_ciphertext[39:32];
+    wire [7:0] r2_byte_1 = sp_ciphertext[47:40];
+    wire [7:0] r2_byte_2 = sp_ciphertext[55:48];
+    wire [7:0] r2_byte_3 = sp_ciphertext[63:56];
+    wire [7:0] r2_byte_4 = sp_ciphertext[7:0];
+    wire [7:0] r2_byte_5 = sp_ciphertext[15:8];
+    wire [7:0] r2_byte_6 = sp_ciphertext[23:16];
+    wire [7:0] r2_byte_7 = sp_ciphertext[31:24];
+
+    assign sp_start = sp_start_w & ~sp_busy;  // B 代理建议：忙时不启动
+
+    //--------------------------------------------------------------------
+    // Speck64/96 密码核实例
+    //--------------------------------------------------------------------
+    speck64_96 u_speck (
+        .clk            (clk           ),
+        .rst            (rst           ),
+        .start          (sp_start      ),
+        .key_in         (sp_key        ),
+        .plaintext_in   (sp_plaintext  ),
+        .ciphertext_out (sp_ciphertext ),
+        .done           (sp_done       ),
+        .busy           (sp_busy       )
+    );
     integer    j;
     initial begin
         for (j = 0; j < 8; j = j + 1) begin
@@ -97,7 +155,7 @@ module terminal_fsm # (
     assign auth_busy  = (state != S_IDLE) && (state != S_SESSION);
     // 载荷保护：S_PROC_SEEDS/S_PROC_EXTRA/S_VERIFY_R2 期间读 fp 载荷缓冲，
     // 阻止 frame_parser 接收新帧覆盖缓冲（并发竞态修复）
-    assign fp_rx_inhibit = (state == S_PROC_SEEDS) || (state == S_PROC_EXTRA)
+    assign fp_rx_inhibit = (state == S_CALC_R2) || (state == S_PROC_SEEDS) || (state == S_PROC_EXTRA)
                         || (state == S_VERIFY_R2);
     assign auth_result = result_r;
     assign mf_sysid  = 8'h01;
@@ -169,22 +227,7 @@ module terminal_fsm # (
                     // 只在新一轮认证启动时才清
                     if (auth_start) begin
                         result_r <= 2'd0;
-                        // 预填 ACCESS_REQUEST 载荷：tid(4)+nonce(4)+C2(8)=16B
-                        tx_buf[0]  <= terminal_id;
-                        tx_buf[1]  <= 8'h00;
-                        tx_buf[2]  <= 8'h00;
-                        tx_buf[3]  <= 8'h00;
-                        tx_buf[4]  <= 8'hDE;         // nonce（演示用固定值）
-                        tx_buf[5]  <= 8'hAD;
-                        tx_buf[6]  <= 8'hBE;
-                        tx_buf[7]  <= 8'hEF;
-                        for (k = 0; k < 8; k = k + 1) begin
-                            c2_counter[k]  <= c2_counter[k] + 8'd1;
-                            r2_expected[k] <= ~(c2_counter[k] + 8'd1);
-                            tx_buf[8+k]    <= c2_counter[k] + 8'd1;
-                        end
-                        tx_len <= 6'd16;
-                        state  <= S_TX_ACCESS;
+                        state    <= S_CALC_R2;
                     end
                 end
 
@@ -338,6 +381,15 @@ module terminal_fsm # (
                     // 否则 auth_start 脉冲被本态消费后 IDLE 看不到）
                     if (auth_start) begin
                         result_r <= 2'd0;
+                        state    <= S_CALC_R2;
+                    end
+                end
+
+                //====================================================
+                S_CALC_R2: begin
+                    // 共享认证起始状态：C2++ → 预填载荷 → 启动 Speck → 等 done
+                    if (calc_wd_cnt == 8'd0) begin
+                        // 第一拍：递增 C2 + 预填载荷 + 启动 Speck
                         tx_buf[0]  <= terminal_id;
                         tx_buf[1]  <= 8'h00;
                         tx_buf[2]  <= 8'h00;
@@ -347,12 +399,35 @@ module terminal_fsm # (
                         tx_buf[6]  <= 8'hBE;
                         tx_buf[7]  <= 8'hEF;
                         for (k = 0; k < 8; k = k + 1) begin
-                            c2_counter[k]  <= c2_counter[k] + 8'd1;
-                            r2_expected[k] <= ~(c2_counter[k] + 8'd1);
-                            tx_buf[8+k]    <= c2_counter[k] + 8'd1;
+                            c2_counter[k] <= c2_counter[k] + 8'd1;
+                            tx_buf[8+k]   <= c2_counter[k] + 8'd1;
                         end
-                        tx_len <= 6'd16;
-                        state  <= S_TX_ACCESS;
+                        tx_len     <= 6'd16;
+                        sp_start_w <= 1'b1;
+                        calc_wd_cnt <= 8'd1;
+                    end else begin
+                        sp_start_w <= 1'b0;
+
+                        if (sp_done) begin
+                            // Speck 完成：锁存 R2 并进入 TX_ACCESS
+                            r2_expected[0] <= r2_byte_0;
+                            r2_expected[1] <= r2_byte_1;
+                            r2_expected[2] <= r2_byte_2;
+                            r2_expected[3] <= r2_byte_3;
+                            r2_expected[4] <= r2_byte_4;
+                            r2_expected[5] <= r2_byte_5;
+                            r2_expected[6] <= r2_byte_6;
+                            r2_expected[7] <= r2_byte_7;
+                            calc_wd_cnt <= 8'd0;
+                            state <= S_TX_ACCESS;
+                        end else if (calc_wd_cnt >= CALC_WD_MAX) begin
+                            // 看门狗超时 → 阻断
+                            calc_wd_cnt <= 8'd0;
+                            result_r    <= 2'd3;
+                            state       <= S_BLOCKED;
+                        end else begin
+                            calc_wd_cnt <= calc_wd_cnt + 8'd1;
+                        end
                     end
                 end
 

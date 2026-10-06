@@ -130,9 +130,12 @@ module tb_terminal_fsm;
         // 等等，RESULT 载荷布局是 result(1B)+hd(1B)+r2(8B) = 地址 [0]=result, [1]=hd, [2..9]=r2
         fp_payload_buf[0] = 8'h00;
         fp_payload_buf[1] = 8'h05;
-        for (i = 0; i < 8; i = i + 1) begin
-            fp_payload_buf[2 + i] = ~(8'hA1 + i);  // r2 = ~C2
-        end
+        // R2 = Speck(DEVICE_KEY, C2=A1..A8) = 7b 45 b0 54 5e 59 aa 94（Python 预计算）
+        fp_payload_buf[2]  = 8'h7b; fp_payload_buf[3]  = 8'h45;
+        fp_payload_buf[4]  = 8'h54; fp_payload_buf[5]  = 8'b0; // 注意：0x54 不是 b0
+        fp_payload_buf[4]  = 8'hb0; fp_payload_buf[5]  = 8'h54;
+        fp_payload_buf[6]  = 8'h5e; fp_payload_buf[7]  = 8'h59;
+        fp_payload_buf[8]  = 8'haa; fp_payload_buf[9]  = 8'h94;
 
         repeat (3) @(negedge clk);
         rst = 1'b0;
@@ -171,9 +174,14 @@ module tb_terminal_fsm;
         // TB 发 RESULT（PASS + R2）——先重填载荷（CHALLENGE 种子已覆盖！）
         fp_payload_buf[0] = 8'h00;                   // result = PASS
         fp_payload_buf[1] = 8'h05;                   // hd = 5
-        // R2 = ~C2（C2 修复后第一次 C2 = A1..A8，R2 = ~A1..~A8 = 5E..57）
-        for (i = 0; i < 8; i = i + 1)
-            fp_payload_buf[2 + i] = ~(8'hA1 + i);
+        // R2 = Speck(DEVICE_KEY=13121110_0b0a0908_03020100, C2=A1..A8) — Python 预计算
+        // key_bytes = 00 01 02 03 08 09 0a 0b 10 11 12 13 (NSA KAT key)
+        // c2_bytes  = a1 a2 a3 a4 a5 a6 a7 a8 (first auth)
+        // ct_bytes  = 7b 45 b0 54 5e 59 aa 94
+        fp_payload_buf[2]  = 8'h7b; fp_payload_buf[3]  = 8'h45;
+        fp_payload_buf[4]  = 8'hb0; fp_payload_buf[5]  = 8'h54;
+        fp_payload_buf[6]  = 8'h5e; fp_payload_buf[7]  = 8'h59;
+        fp_payload_buf[8]  = 8'haa; fp_payload_buf[9]  = 8'h94;
         feed_frame(24'h0093, 8'd10);
 
         // DUT 验 R2 后应发 CONFIRM

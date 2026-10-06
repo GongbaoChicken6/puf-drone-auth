@@ -146,7 +146,7 @@ module tb_level3_protocol;
     //------------------------------------------------------------------------
     // CHALLENGE (44B) - 由 Python 生成
     reg [7:0] chall_gold [0:43];
-    // RESULT (22B) - R2 = ~C2 (C2=A1..A8, R2=5E..57)
+    // RESULT (22B) - R2 = Speck(K,C2) Python precomputed
     reg [7:0] result_gold [0:21];
 
     initial begin
@@ -164,15 +164,16 @@ module tb_level3_protocol;
         for (i=0;i<7;i=i+1) chall_gold[35+i]=8'h03;
         chall_gold[42]=8'h62; chall_gold[43]=8'h80;
 
-        // RESULT: FD 0A 00 00 50 01 02 93 00 00 00 05 5E 5D 5C 5B 5A 59 58 57 CF B4
+        // RESULT: FD 0A 00 00 50 01 02 93 00 00 00 05 7b 45 b0 54 5e 59 aa 94 f5 35
         result_gold[0]=8'hFD;  result_gold[1]=8'h0A;  result_gold[2]=8'h00;  result_gold[3]=8'h00;
         result_gold[4]=8'h50;  result_gold[5]=8'h01;  result_gold[6]=8'h02;  result_gold[7]=8'h93;
         result_gold[8]=8'h00;  result_gold[9]=8'h00;
         result_gold[10]=8'h00; // result = PASS
         result_gold[11]=8'h05; // hd = 5
-        result_gold[12]=8'h5E; result_gold[13]=8'h5D; result_gold[14]=8'h5C; result_gold[15]=8'h5B;
-        result_gold[16]=8'h5A; result_gold[17]=8'h59; result_gold[18]=8'h58; result_gold[19]=8'h57;
-        result_gold[20]=8'hCF; result_gold[21]=8'hB4; // CRC
+        // R2 = Speck(key=0001020308090a0b10111213, C2=a1..a8) = 7b 45 b0 54 5e 59 aa 94
+        result_gold[12]=8'h7b; result_gold[13]=8'h45; result_gold[14]=8'hb0; result_gold[15]=8'h54;
+        result_gold[16]=8'h5e; result_gold[17]=8'h59; result_gold[18]=8'haa; result_gold[19]=8'h94;
+        result_gold[20]=8'hff; result_gold[21]=8'h1d; // CRC (9-byte header verified)
     end
 
     //------------------------------------------------------------------------
