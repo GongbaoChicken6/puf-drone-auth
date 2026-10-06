@@ -8,9 +8,9 @@ speck.py -- Speck64/96 轻量级分组密码（Python 参考实现）
     轮数   T = 26
 
 字节序：小端（little-endian）
-    key[0..3]   → K[0]（k0）    plaintext[0..3] → x
-    key[4..7]   → K[1]（l0）    plaintext[4..7] → y
-    key[8..11]  → K[2]（l1）    ciphertext 同 plaintext 布局
+    key[0..3]   → K[0]（k0）    plaintext[0..3] → y（NSA约定：先y后x）
+    key[4..7]   → K[1]（l0）    plaintext[4..7] → x
+    key[8..11]  → K[2]（l1）    ciphertext 同 plaintext 布局（先y_ct后x_ct）
 """
 
 import struct

@@ -20,12 +20,13 @@ $rtl = @(
 # ALL TB files
 $tbs = @(
     "sim\tb\tb_speck.v",
+    "sim\tb\tb_gap_regression.v",
     "sim\tb\tb_challenge_decode.v",
     "sim\tb\tb_crc16.v", "sim\tb\tb_mavlink_frame.v", "sim\tb\tb_frame_parser.v",
     "sim\tb\tb_byte_fifo.v", "sim\tb\tb_uart_tx.v", "sim\tb\tb_terminal_fsm.v",
     "sim\tb\tb_tx_chain.v", "sim\tb\tb_level3_protocol.v"
 )
-$tbNames = @("tb_speck",
+$tbNames = @("tb_speck", "tb_gap_regression",
              "tb_challenge_decode","tb_crc16","tb_mavlink_frame","tb_frame_parser",
              "tb_byte_fifo","tb_uart_tx","tb_terminal_fsm","tb_tx_chain","tb_level3_protocol")
 
