@@ -437,3 +437,30 @@ C线 (持续) ──────────────────────
 ---
 
 *本方案 v3.0 修复了 auto-review Round 1 的全部 3 P0 + 9 P1 + 6 P2。*
+
+
+---
+
+## W3 Implementation Status (2026-10-05)
+
+Differences between v3.0 design and actual implementation (code is source of truth):
+
+| Item | v3.0 Design | Actual | Reason |
+|---|---|---|---|
+| C2 generation | Fixed value | Incrementing counter | Anti-replay (blindspot #2) |
+| R2 expected | Fixed C0..C7 | Dynamic ~C2 | Bound to C2, anti-replay |
+| CONFIRM status | 0x01 | 0x00 | protocol.py CONFIRM_OK=0 |
+| frame_parser | No payload protection | rx_inhibit input | Concurrent buffer overwrite prevention (#1) |
+| ro_array ring_en | Always-on 1b1 | ring_en input port | Power management (#6) |
+| fp_pay_len | Not checked | Strict validation | Anti-truncation fake PASS |
+| PUF response | Real computation | Seed passthrough stub | W3 protocol closure first |
+
+### New test levels
+- Level 2: tb_tx_chain.v (real mavlink_frame + byte_fifo + uart_tx)
+- Level 3: tb_level3_protocol.v (real terminal_fsm + mavlink_frame + frame_parser)
+- Total: 8 TB suites, 45 test cases, 100% pass
+
+### Synthesis data
+- terminal_fsm OOC: 253 LUT / 592 FF (0.48% of Z7020)
+- Full stack estimate: ~780 LUT
+

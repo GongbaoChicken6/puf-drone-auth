@@ -28,6 +28,7 @@ module ro_array # (
 
     // 测量窗控制（来自上层同域寄存器）
     input                         measure_en  ,   // 测量窗使能：1=窗内计数，拉低结束一窗
+    input                         ring_en     ,   // 环振使能（功耗管理）：1=振荡，0=停振
     output                        busy        ,   // 测量进行中（含 done 脉冲拍）
 
     // 测量结果
@@ -104,7 +105,7 @@ generate
         reg  [CNT_W-1:0]         freq_latch = {CNT_W{1'b0}};     // 窗末锁存读数（出模块，必复位）
 
         ro_ring u_ro_ring (
-            .en     ( 1'b1      ),   // 常开：阵列版由测量窗门控计数，不改环振使能
+            .en     ( ring_en   ),   // 功耗管理：认证期间开振，空闲停振（盲区 #6 修复）
             .ro     ( ro        )    // output，接本环分频链
         );
 
