@@ -14,16 +14,19 @@ $rtl = @(
     "src\rtl\common\crc16_mcrf4xx.v", "src\rtl\common\mavlink_frame.v",
     "src\rtl\common\frame_parser.v",  "src\rtl\common\byte_fifo.v",
     "src\rtl\common\uart_tx.v",       "src\rtl\common\uart_rx.v",
+    "src\rtl\common\speck64_96.v",
     "src\rtl\w3_protocol\terminal_fsm.v"
 )
 # ALL TB files
 $tbs = @(
+    "sim\tb\tb_speck.v",
     "sim\tb\tb_challenge_decode.v",
     "sim\tb\tb_crc16.v", "sim\tb\tb_mavlink_frame.v", "sim\tb\tb_frame_parser.v",
     "sim\tb\tb_byte_fifo.v", "sim\tb\tb_uart_tx.v", "sim\tb\tb_terminal_fsm.v",
     "sim\tb\tb_tx_chain.v", "sim\tb\tb_level3_protocol.v"
 )
-$tbNames = @("tb_challenge_decode","tb_crc16","tb_mavlink_frame","tb_frame_parser",
+$tbNames = @("tb_speck",
+             "tb_challenge_decode","tb_crc16","tb_mavlink_frame","tb_frame_parser",
              "tb_byte_fifo","tb_uart_tx","tb_terminal_fsm","tb_tx_chain","tb_level3_protocol")
 
 Write-Host "=== CI: Compile ==="
