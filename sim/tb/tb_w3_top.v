@@ -77,10 +77,11 @@ module tb_w3_top;
         end else
             $display("  [T1] radio_txd active: %0d falling edges (UART data sent)", tx_bits);
 
-        if (led_result == 2'd3) begin
-            $display("  [T1] led_result=3 (BLOCKED) — expected: terminal received own frame, timeout");
-        end else if (led_result == 2'd0) begin
-            $display("  [T1] led_result=0 (still busy) — may need more time");
+        if (led_result == 2'd3 && led_busy == 1'b0) begin
+            $display("  [T1] led_result=3 (BLOCKED), busy=0 — correct timeout behavior");
+        end else begin
+            errors = errors + 1;
+            $display("[T1 FAIL] led_result=%0d busy=%b expect result=3 busy=0", led_result, led_busy);
         end
 
         if (errors == 0) $display("[T1 PASS] Full chain: btn→debounce→FSM→frame→FIFO→UART→loopback→parser");

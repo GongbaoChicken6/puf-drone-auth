@@ -16,7 +16,7 @@
 //============================================================================
 
 module terminal_fsm # (
-    parameter TIMEOUT_CYCLES = 26'd50_000_000     // 0.5s @ 100MHz（2s 太长仿真不了）
+    parameter TIMEOUT_CYCLES = 32'd50_000_000     // 0.5s @ 100MHz（板上用 200M=2s）
 ) (
     input  wire        clk       ,
     input  wire        rst       ,
@@ -70,7 +70,7 @@ module terminal_fsm # (
     // 内部寄存器
     //========================================================================
     reg [7:0]  seq_cnt      = 8'h00;            // SEQ 自增计数器
-    reg [26:0] timeout_cnt  = 27'd0;            // 超时计数
+    reg [31:0] timeout_cnt  = 32'd0;            // 超时计数（32-bit：板上 200M 需要 28-bit）
     reg        rx_ok_latch  = 1'b0;             // frame_ok 粘滞
     reg [1:0]  result_r     = 2'd0;             // auth_result 寄存
 
@@ -140,7 +140,7 @@ module terminal_fsm # (
     always @(posedge clk) begin
         if (rst) begin
             state       <= S_IDLE;
-            timeout_cnt <= 27'd0;
+            timeout_cnt <= 32'd0;
             result_r    <= 2'd0;
             mf_start    <= 1'b0;
             mf_msg_id   <= 24'h0;
@@ -157,9 +157,9 @@ module terminal_fsm # (
 
             // 超时计数（所有非 IDLE/SESSION/TX 态共享）
             if (state == S_WAIT_CHALL || state == S_WAIT_RESULT) begin
-                timeout_cnt <= timeout_cnt + 27'd1;
+                timeout_cnt <= timeout_cnt + 32'd1;
             end else begin
-                timeout_cnt <= 27'd0;
+                timeout_cnt <= 32'd0;
             end
 
             case (state)

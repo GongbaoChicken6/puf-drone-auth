@@ -71,7 +71,7 @@ module frame_parser # (
     reg [1:0]  crc_cnt = 2'd0;           // 收到几个 CRC 字节
     reg [7:0]  rx_crc_lo = 8'h00;        // 收到的 CRC 低字节
     reg [7:0]  rx_crc_hi = 8'h00;        // 收到的 CRC 高字节
-    reg [16:0] to_cnt   = 17'd0;         // 无字节超时计数（17-bit 装得下 65536）
+    reg [23:0] to_cnt   = 24'd0;         // 无字节超时计数（17-bit 装得下 65536）
 
     //------------------------------------------------------------------------
     // 载荷缓冲（32 字节寄存器阵列）
@@ -155,13 +155,13 @@ module frame_parser # (
             // 超时计数：非搜索态且无字节 → 递增；有字节或搜索态 → 清零
             if (state != S_SEARCH && !rx_valid) begin
                 to_cnt <= to_cnt + 13'd1;
-                if (to_cnt >= PARSER_TIMEOUT[16:0] - 17'd1) begin
+                if (to_cnt >= PARSER_TIMEOUT[23:0] - 24'd1) begin
                     frame_err <= 1'b1;             // 超时：帧不完整
                     state     <= S_SEARCH;
                     to_cnt    <= 17'd0;
                 end
             end else begin
-                to_cnt <= 17'd0;
+                to_cnt <= 24'd0;
             end
 
             case (state)
