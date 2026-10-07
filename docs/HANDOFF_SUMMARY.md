@@ -91,6 +91,17 @@ Git：51 commits · 111 files · tag w3-complete
 | P1-3 | hsm.py 仍用 HMAC | P1 | ✅ 阶段 4 已修（SpeckHSM 为默认后端，黄金向量与 RTL 一致） |
 | P1-4 | PUF 占位（种子直通） | P1 | W4 修复 |
 | P2-1 | 跳过 S_CALC_R2 的故障注入→安全绕过 | P2 | W4 加固 |
+| P1-5 | **终端侧 RESULT 帧跨断电重放**（2026-10-08 威胁建模实证）：RTL 验证无新鲜度源——C2 上电确定性复位 A0+j → 每次上电首次 (C2,R2) 恒为 a1..a8/7b45b0545e59aa94；nonce 恒 0xDEADBEEF；SEQ 不校验。被动窃听者录帧 + 终端换电池重启后注入即冒充基站（实测通过 RTL 忠实模型复现）；**W4 换真 PUF 密钥后依然成立**（重放帧无需密钥）。服务器侧重放窗只防上行方向，与此路径无关 | P1 | W4 修复（三选一：C2 种子非易失保存/上电随机化；nonce 随机化并在 RESULT 回显校验；RESULT 绑定会话随机数）。证据：build/reviews/a1p4/security_threat.json |
+
+### 安全复审新增 W4 待办（2026-10-08 威胁建模，P3 级）
+
+- **预认证池耗尽 DoS**：伪造随机 C2 的 ACCESS_REQUEST 即可过重放窗消耗 CRP 池（实测 26 请求耗尽 100 种子池；R2 不泄露——PUF 轮仍门控，纯可用性）。W4：per-tid 限速 / 暂存-释放式 draw / 池补充 SOP
+- **W4 密钥熵不足**：16 环 ~44 bit 根熵 + 链路明文 (C2,R2) 对 = 离线穷举 oracle（GPU 小时级恢复 K 后永久冒充基站）。W4：K = PUF_out XOR station_random 或 HKDF 混合基站侧高熵秘密；或提升根熵 ≥80 bit
+- **明文对称密钥保管**：device_keys.json 明文持有全部密钥；Windows/NTFS 下 os.chmod 0600 仅只读位、无 ACL 保护（main.py docstring "owner-only" 表述在部署平台失实）；对称密钥=能读任一侧即可冒充另一侧。阶段 6 文档诚实化（可选 DPAPI）
+- **c2reset/setkey 无确认无审计**：每次真终端换电池必然触发 c2reset 清空整个重放窗（与 P1-5 同源，W4 修复后例行性消失）；运维命令应加确认提示与追加式操作日志
+- **setkey 明文输入通道**（安全编码扫描）：密钥以 REPL 参数明文输入，留存于终端回显/录屏/脚本日志。W4 接真实密钥前改 getpass 隐藏回显或从 0600 文件/环境变量导入
+- **DeviceKeyStore 跨进程 last-writer-wins**（安全编码扫描，实验实证）：两服务器实例共享同一密钥文件时，陈旧实例的 save 会静默抹除另一实例的新密钥（单实例 REPL 假设下可接受）。W4：文件锁或 mtime 失配检测
+- **SimulatedHSM.save_secret 遗留 API**（安全编码扫描）：明文 write_text、无 0600/原子写，低于 DeviceKeyStore 新基线；全仓无调用方。W4 前删除或对齐基线
 
 ### 覆盖类（Agent B 发现——已修复）
 - ✅ 伪造 R2 测试 → tb_gap_regression GF
@@ -158,7 +169,6 @@ Git：51 commits · 111 files · tag w3-complete
    - scripts/test_r2_nonlinearity.py 线性金丝雀（R2 不可被线性拟合）
 2. 执行 A1 阶段 6：文档 + 提交
    - protocol_contract.md：R2 算法定义 + 字节序约定 + 新黄金帧 + RESULT 码 4 已登记
-   - project_design.md：安全分析更新 + 熵值诚实声明（防重放窗口 128 权衡见 protocol.py 注释与 CONSENSUS.md deferred 裁决）
-   - check_contract_sync.py 重跑
-3. 执行 A1 阶段 6：文档更新 + 提交
-4. A1 完成后：选择下一任务（B5 PUF 接入 / B6 ML 攻击 / D14 Skill / D13 报告）
+   - project_design.md：安全分析更新 + 熵值诚实声明（防重放窗口 128 权衡见 protocol.py 注释与 CONSENSUS.md deferred 裁决；含 W4 安全待办：P1-5 终端跨断电重放 / 44-bit 熵离线穷举 / 密钥保管 Windows 权限失实）
+   - tools/check_contract_sync.py 重跑（注意：位于 tools/ 而非 scripts/）
+3. A1 完成后：选择下一任务（B5 PUF 接入 / B6 ML 攻击 / D14 Skill / D13 报告）

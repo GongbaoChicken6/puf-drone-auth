@@ -1,0 +1,104 @@
+{
+  "round": "security-recheck",
+  "reviewer": "a1p4-tests-r2 (recheck)",
+  "sources": [
+    "security-recheck"
+  ],
+  "test_run_evidence": {
+    "cmd": "python tests\\test_a1_phase4.py",
+    "result": "Ran 44 tests in 0.256s / OK / EXIT=0 (output captured to file for hard evidence)",
+    "expected": "44/44"
+  },
+  "git_safety_audit": {
+    "workspace_files": "6 modified (docs/HANDOFF_SUMMARY.md, docs/architecture.html, docs/project_design.md, docs/protocol_contract.md, sim/tb/tb_speck.v, sim/tb/tb_level3_protocol.v) + 3 untracked review JSONs -- exactly the 6 fix items, no unexpected file",
+    "tb_diff_line_by_line": "tb_speck.v: 8 comment lines replaced (old wrong derivation block -> NSA frozen derivation), run_speck drivers at L107-110 and all assertions untouched; tb_level3_protocol.v: exactly 1 comment line (L167) changed, result_gold[0..21] array values untouched",
+    "baseline_note": "Previous round's src/scripts/tests changes are now commit 2a75293 ('A1 Phase 4 (PC integration)...', tests/test_a1_phase4.py 778 lines = 44 cases); current working-tree diff is exactly this security-fix round"
+  },
+  "independent_recompute": {
+    "nsa_kat_chain": "Speck6496(key=0001020308090a0b10111213).encrypt(65616e7320466174) = 6c947541ec52799f; LE word split: k0=0x03020100 l0=0x0b0a0908 l1=0x13121110, y=0x736e6165 x=0x74614620, y_ct=0x4175946c x_ct=0x9f7952ec -- every claim value in the new T2 comment reproduced exactly; RTL wiring confirmed at speck64_96.v:89-93 (k0=key_in[31:0], l0=key_in[63:32], l1=key_in[95:64], x=plaintext_in[31:0], y=plaintext_in[63:32]) and :121 (ct_r<={y_new,x_new})",
+    "result_frame_crc": "crc16_mcrf4xx(hdr[1:10] + payload(00 05 7b45b0545e59aa94) + CRC_EXTRA 0x5D) = 0x1dff -> wire bytes ff 1d, matches comment AND result_gold[20]/[21] AND HANDOFF L79",
+    "t5a_independence": "T5a/T6/T7 expected 64'he32233fa_dac3b619 is a LEGAL separate vector, not a leftover of the wrong derivation: frozen-convention equivalent (key=131211100b0a090803020100, pt=736e616574614620) -> ct=fa3322e319b6c3da -> wire={y_ct,x_ct}=e32233fa_dac3b619, exact match; T2 fix does not conflict with T5/T6/T7",
+    "r2_golden": "Speck6496(W3_KEY).encrypt(a1a2a3a4a5a6a7a8) = 7b45b0545e59aa94 reproduced"
+  },
+  "verdicts": [
+    {
+      "id": 1,
+      "item": "tb_speck.v T2 comment block -> NSA frozen derivation",
+      "verdict": "VERIFIED",
+      "evidence": "git diff shows only the 8-line comment block replaced; new comment values (k0/l0/l1=03020100/0b0a0908/13121110, y/x=736e6165/74614620, y_ct/x_ct=4175946c/9f7952ec, key_in/plaintext_in/expected concatenations) independently recomputed via src/python/common/speck.py (ground truth, LE split, y-then-x serialization) -- all exact; comment matches the untouched run_speck drivers at L107-110; RTL word mapping at speck64_96.v:89-93/121 matches the frozen convention. Bonus cross-check: T5a/T6/T7's e32233fa_dac3b619 proven a valid independent vector, so the T2 rewrite introduced no inconsistency."
+    },
+    {
+      "id": 2,
+      "item": "tb_level3_protocol.v RESULT golden-frame comment CRC 'f5 35' -> 'ff 1d'",
+      "verdict": "VERIFIED",
+      "evidence": "Comment L167 now reads '... aa 94 ff 1d'; array values result_gold[20]=8'hff, result_gold[21]=8'h1d (untouched, were already correct); independent recompute of the full frame CRC (header FD 0A 00 00 50 01 02 93 00 00 + payload 00 05 7b45b0545e59aa94 + CRC_EXTRA 0x5D) = 0x1dff -> wire ff 1d. Three-way agreement: comment == array == recomputation. Diff touches exactly 1 comment line."
+    },
+    {
+      "id": 3,
+      "item": "protocol_contract.md section-5 step (6) + section-7 SEQ row",
+      "verdict": "VERIFIED",
+      "evidence": "Step (6) bracket note now states recompute-with-own-DEVICE_KEY byte-exact comparison (explicitly '非 HD 比对') plus freshness limitation and P1-5 pointer -- matches terminal_fsm.v reality: S_VERIFY_R2 (L348-360) compares fp_rd_data != r2_expected[i] byte-exact, r2_expected latched from the Speck core output in S_CALC_R2 (L413-420). ASCII diagram frame lines untouched, only the bracketed note block changed. Section-7 SEQ row (L170) now appends the security consequence (RESULT has no freshness source; cross-power-cycle replay path; HANDOFF P1-5; W4 fix options) -- consistent with threat evidence and receiver behavior."
+    },
+    {
+      "id": 4,
+      "item": "HANDOFF_SUMMARY.md: P1-5 row + 4xP3 W4 section + dedup + check_contract_sync path",
+      "verdict": "VERIFIED",
+      "evidence": "P1-5 table row matches security_threat.json's P2 evidence point for point (deterministic power-on C2 reset A0+j -> first-auth (C2,R2) always a1..a8/7b45b0545e59aa94; nonce constant -- confirmed in RTL at terminal_fsm.v:397-400 tx_buf[4..7]=DE AD BE EF; SEQ unchecked; server window uplink-only; replay survives the W4 key swap; three fix options). The new W4 section lists exactly the 4 threat-model P3s. Duplicated stage-6 entry removed, numbering 1/2/3 continuous. check_contract_sync annotated tools/ and the file verifiably exists at tools\\check_contract_sync.py."
+    },
+    {
+      "id": 5,
+      "item": "architecture.html: three stale statements",
+      "verdict": "VERIFIED",
+      "evidence": "The three named statements fixed in diff: L261 '含C2防重放' qualified '（服务器侧有效；终端侧跨断电重放待W4修复，见HANDOFF P1-5）'; L261 ~C2/HMAC claim replaced by 'R2期望值已统一为Speck64/96重算（A1阶段3），与PC端SpeckHSM黄金向量逐位一致'; L264 dnote ② replaced by 'R2已统一（A1完成）...黄金向量7b45b0545e59aa94双侧一致；残余为终端侧跨断电重放（W4）'. All new statements match code reality (Speck recompute verified against RTL and golden vector reproduced this round).",
+      "residual": "Three SAME-KIND stale statements remain elsewhere in the file -> new finding N1."
+    },
+    {
+      "id": 6,
+      "item": "project_design.md W3 diff table C2/R2-expected rows",
+      "verdict": "VERIFIED",
+      "evidence": "Both rows updated: 'C2 generation' now scoped to one power session with P1-5 pointer; 'R2 expected' now 'Speck64/96(K,C2) recompute (A1)' with golden 7b45b0545e59aa94. Matches terminal_fsm.v post-A1 behavior (counter 8'hA0+j reset at L150, bytewise increment at L402-403, on-chip Speck recompute at L105-146/413-420). Diff touches exactly these 2 lines."
+    }
+  ],
+  "new_findings": [
+    {
+      "id": "N1",
+      "severity": "P3",
+      "file": "docs/architecture.html",
+      "line": 288,
+      "category": "stale-doc/same-kind-residue",
+      "description": "The fix corrected the three named stale statements but three same-kind stale statements remain in the same file: (a) L154 '12态协议控制器 · 含防重放' unqualified (same class the L261 fix addressed); (b) L288 dnote still claims '另外R2生成算法（HMAC）与FPGA端（~C2）不一致，需统一' -- factually wrong post-A1 and in direct contradiction with the just-fixed dnote ② at L264-265 of the same file; (c) L322 todo-item 6 '统一 R2 验证算法' tagged 高优 -- work already completed in A1, a false open high-priority todo. Pure documentation; readers of L288/L322 would still conclude R2 unification is outstanding.",
+      "sources": [
+        "docs/architecture.html:154",
+        "docs/architecture.html:288",
+        "docs/architecture.html:322"
+      ]
+    },
+    {
+      "id": "N2",
+      "severity": "P3",
+      "file": "sim/tb/tb_speck.v",
+      "line": 116,
+      "category": "comment-accuracy/pre-existing",
+      "description": "Pre-existing (NOT introduced by this round; the claimed T2-only scope was honored in the diff): the T3 comments quote Python ciphertexts as 'ct=84958ba87e36180a' (zero vector) and 'ct=7bfa447e12ddc0b5' (all-FF), but speck.py serializes y-then-x and actually outputs 7e36180a84958ba8 and 12ddc0b57bfa447e -- the comment strings are the x||y transposition of the real outputs. The subsequent word labels and the run_speck expected wires (0a18367e_a88b9584 / b5c0dd12_7e44fa7b) are nevertheless CORRECT (verified this round), so TB assertion strength is unaffected; only the quoted strings would mislead someone regenerating vectors from speck.py.",
+      "sources": [
+        "sim/tb/tb_speck.v:116",
+        "sim/tb/tb_speck.v:121",
+        "src/python/common/speck.py:64-65"
+      ]
+    },
+    {
+      "id": "N3",
+      "severity": "P3-observation",
+      "file": "docs/HANDOFF_SUMMARY.md",
+      "line": 99,
+      "category": "registration-gap-observation",
+      "description": "Lead's handoff states the security_scanner 3xP3 items (setkey plaintext input / cross-process last-writer-wins / SimulatedHSM.save_secret legacy API) are registered W4/stage-6 todos, but no registration could be found: grep across docs/ for last-writer/save_secret returns nothing beyond functional descriptions and the threat-model P3 section; the items exist only in build/reviews/a1p4/security_scanner.json itself. The threat-model 1xP2+4xP3 ARE properly registered (P1-5 row + W4 section, verdict 4). Recommend adding the three scanner P3s to the HANDOFF list before the stage-6 commit so they do not depend on the review JSON surviving in build/.",
+      "sources": [
+        "build/reviews/a1p4/security_scanner.json",
+        "docs/HANDOFF_SUMMARY.md:99-103"
+      ]
+    }
+  ],
+  "unowned_items_confirmed_not_rereported": "threat P2 (terminal-side cross-power-cycle RESULT replay) correctly deferred to W4 via P1-5 registration (RTL fix would require rerunning 11 TBs and W4 rewrites the key source) -- consistent with the P1-1/P1-4 pattern; not rereported per instructions.",
+  "bottom_line": "6/6 fix items VERIFIED on fresh evidence (independent KAT/CRC/vector recompute + line-by-line diff audit + 44/44 test run); 3 new minor findings: N1 P3 (architecture.html 3 same-kind stale residues incl. one direct self-contradiction with the just-fixed L264), N2 P3 (tb_speck T3 comment ct-string byte-block order vs speck.py, pre-existing, values correct), N3 P3-observation (scanner 3xP3 registration not found in docs)."
+}

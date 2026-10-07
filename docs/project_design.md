@@ -447,8 +447,8 @@ Differences between v3.0 design and actual implementation (code is source of tru
 
 | Item | v3.0 Design | Actual | Reason |
 |---|---|---|---|
-| C2 generation | Fixed value | Incrementing counter | Anti-replay (blindspot #2) |
-| R2 expected | Fixed C0..C7 | Dynamic ~C2 | Bound to C2, anti-replay |
+| C2 generation | Fixed value | Incrementing counter | Anti-replay (blindspot #2); counter resets deterministically at power-on, so freshness holds within one power session only (cross-power-cycle replay = W4, HANDOFF P1-5) |
+| R2 expected | Fixed C0..C7 | Speck64/96(K,C2) recompute (A1) | Unify with PC SpeckHSM (golden 7b45b0545e59aa94); anti-replay within a power session (cross-cycle = W4, HANDOFF P1-5) |
 | CONFIRM status | 0x01 | 0x00 | protocol.py CONFIRM_OK=0 |
 | frame_parser | No payload protection | rx_inhibit input | Concurrent buffer overwrite prevention (#1) |
 | ro_array ring_en | Always-on 1b1 | ring_en input port | Power management (#6) |

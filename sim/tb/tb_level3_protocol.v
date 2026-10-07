@@ -164,7 +164,7 @@ module tb_level3_protocol;
         for (i=0;i<7;i=i+1) chall_gold[35+i]=8'h03;
         chall_gold[42]=8'h62; chall_gold[43]=8'h80;
 
-        // RESULT: FD 0A 00 00 50 01 02 93 00 00 00 05 7b 45 b0 54 5e 59 aa 94 f5 35
+        // RESULT: FD 0A 00 00 50 01 02 93 00 00 00 05 7b 45 b0 54 5e 59 aa 94 ff 1d
         result_gold[0]=8'hFD;  result_gold[1]=8'h0A;  result_gold[2]=8'h00;  result_gold[3]=8'h00;
         result_gold[4]=8'h50;  result_gold[5]=8'h01;  result_gold[6]=8'h02;  result_gold[7]=8'h93;
         result_gold[8]=8'h00;  result_gold[9]=8'h00;

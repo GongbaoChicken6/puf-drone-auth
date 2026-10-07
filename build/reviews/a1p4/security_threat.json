@@ -1,0 +1,62 @@
+[
+  {
+    "severity": "P2",
+    "file": "src/rtl/w3_protocol/terminal_fsm.v",
+    "line": 358,
+    "category": "protocol-design/terminal-replay (unowned)",
+    "description": "终端侧 RESULT 帧重放（跨断电）：终端对基站的认证无任何新鲜度来源，断电后可被重放帧骗过。S_VERIFY_R2 仅校验 result 码 + 8 字节 R2 与本地期望一致，不校验 SEQ/nonce/任何挑战源（契约 §6.2 明示'接收方不校验 SEQ 连续性'，protocol_contract.md:168）；R2 期望 = Speck(K, 每次上电确定性复位到 A0+j 的计数器)，因此每次上电后首次认证的 (C2, R2) 恒为 (a1..a8, 7b45b0545e59aa94)——与历史会话逐字节相同。攻击链（被动窃听者即可，无需密钥）：①录得任意一次真机首次认证的 RESULT 帧（该帧 R2 值甚至已公开于仓库文档/TB）；②等/诱使终端断电重启（无人机换电池即例行触发）；③终端发起认证后在 0.5-2s（TIMEOUT_CYCLES，terminal_fsm.v:19）等待窗内注入录制的 RESULT 帧 → 全部校验通过 → result_r=1、进入 S_SESSION、终端认定'基站已认证'。已用 RTL 忠实模型实测：重启后期望值 7b45b0545e59aa94，重放 boot1 帧判 PASS；对照实验证明同会话内（计数器已推进）重放确实失败——防护仅存在于单次上电会话内。nonce 字段还是常量 0xDEADBEEF（terminal_fsm.v:397-400），不提供新鲜度。现有缓解：无（服务器侧 128 重放窗只保护上行方向，与本路径无关）。残余风险：真实可利用（W4 换真 PUF 密钥后依然成立——重放帧无需伪造密钥）；当前演示被 W3 公开密钥（P1-1，W4 已计划）掩盖。归属：无人认领——不在 CONSENSUS deferred 12 组内（deferred#1 是服务器窗口大小、deferred#4 是服务器串口占位），HANDOFF P1-2 只修了服务器侧，docs/plans/A1_r2_unification_plan.md:22 'Replay old R2: C2 changed→mismatches' 的论证隐含假设不断电，docs/architecture.html:261 '含C2防重放' 与 docs/project_design.md:450-451 'Anti-replay' 表述跨断电不成立。W4 修复建议：C2 种子非易失保存或上电随机化（PUF 派生）、nonce 改随机并在 RESULT 载荷回显校验，三者任一即可关闭本路径。",
+    "evidence": "S_VERIFY_R2: begin\n  if (fp_rd_addr == 5'd0) begin\n    if (fp_rd_data == 8'h00) begin fp_rd_addr <= 5'd2; ...  // 只查 result 码\n  end else if (fp_rd_addr >= 5'd2 && fp_rd_addr < 5'd10) begin\n    if (fp_rd_data != r2_expected[fp_rd_addr[3:0] - 5'd2]) begin  // 只比对 R2 字节，无 SEQ/nonce/新鲜度\n// initial begin for (j=0;j<8;j=j+1) c2_counter[j] = 8'hA0 + j[7:0]; end  // 每次上电确定性复位\n// 攻击实测（%TEMP% RTL 忠实模型）：\n// [boot1] first-auth R2: 7b45b0545e59aa94\n// [boot2] rebooted terminal expects 7b45b0545e59aa94; replayed boot1 RESULT -> PASS -> S_TX_CONFIRM -> S_SESSION, auth_result=1\n// [ctrl ] same-session 5th auth expects c83d334d3dd302bc; replayed boot1 RESULT -> BLOCK: R2 mismatch",
+    "function_context": "terminal_fsm.v S_VERIFY_R2 / S_CALC_R2 / initial 块（与 protocol.py 服务器侧窗口互补方向）",
+    "sources": [
+      "security_threat"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/crp_pool.py",
+    "line": 206,
+    "category": "availability/pre-auth-DoS",
+    "description": "认证前池耗尽 DoS：重放窗对此完全无防御。on_access_request 在模板存在后仅检查 C2 是否重用（protocol.py:439），攻击者每次注入随机新 C2 的伪造 ACCESS_REQUEST 即可过窗并触发 pools.get(tid).draw(4)——draw 将种子永久计入 _used 并落盘（crp_pool.py:206-207），全文件无任何回收/超时归还路径。实测：注入 26 个随机 C2 请求即耗尽 100 种子池，随后真终端收到 RESULT_POOL_EMPTY（码 3）；默认 500 容量满注册池也只需 125 次注入。R2 不泄露（PUF 轮仍拦截：_finish_pass 仅在 decide_scaled==PASS 后可达，protocol.py:487-488/532-533——CONSENSUS deferred#1 的裁决因此继续成立），影响为纯可用性：真终端被拒至运维手动重注册。与 deferred#1 的关系（新证据角度）：deferred#1 接受的是'aged-replay 残余=池消耗 DoS'，但实际根本无需重放——窗口对 DoS 路径零贡献，若团队认为窗口收窄了链路 DoS 面，此认知需修正。归属：协议固有（预认证 DoS），演示可接受，W4 建议认领：per-tid 限速、失败会话的暂存-释放式 draw、或池补充 SOP。",
+    "evidence": "picked = self._rng.sample(sorted(eligible), count)\nself._used.update(picked)\nself._persist_locked()\nreturn [bytes.fromhex(key) for key in picked]\n// 实测（%TEMP% 注入实验）：\n// [DoS ] fresh-C2 injected requests to exhaust pool: 26, remaining: 0\n// [DoS ] genuine terminal afterwards -> result=3 (3=POOL_EMPTY), remaining=0",
+    "function_context": "CRPPool.draw（由 HFIDAProtocol.on_access_request:445 无条件消耗）",
+    "sources": [
+      "security_threat"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/HANDOFF_SUMMARY.md",
+    "line": 73,
+    "category": "cryptographic-risk/offline-key-recovery (W4)",
+    "description": "W4 计划的 PUF 密钥熵不足以抵抗离线暴力破解：计划声明'16 环信息论上限 ~44 bit 根熵'。链路上 RESULT 帧明文携带 R2=Speck(K,C2)，且 C2 为终端计数器（窃听者可同步知道）——单个被录 (C2,R2) 对即构成离线验证 oracle，44-bit 候选空间 ≈ 1.76e13 次 Speck 加密：单核 C 实现 ~10^8/s 约 2 天，单块现代 GPU（~10^10-10^11/s）小时级即可穷尽恢复 K，此后永久伪造 R2 冒充基站（比 P2 终端重放更强：不受断电条件限制）。阶段 4 代码本身无缺陷：R2 签发已被 PUF 轮正确门控（protocol.py:487-488/532-533 仅 PASS 才调 _finish_pass），全轮 Speck64/96 无实用密码分析（计划自述最好攻击 19/26 轮），96-bit 均匀密钥安全。问题只在 W4 密钥源熵。现有缓解：仅'熵值诚实声明'文档计划（HANDOFF:161），无缓解责任人。归属：W4 必须认领——建议注册期密钥多样化 K = PUF_out XOR station_random（或 HKDF 混入基站侧高熵秘密），使线上的 (C2,R2) 对无法用于低熵空间穷举；或增加 RO 数量提升根熵至 >=80 bit。",
+    "evidence": "W4 计划：从 PUF 稳定位运行时提取（16 环信息论上限 ~44 bit 根熵）\n// phase-4 门控证据（缓解正确）：\nif decision == DECISION_PASS:\n    return self._finish_pass(session)   # R2 仅在 PUF 评分 PASS 后签发",
+    "function_context": "W4 密钥提取规划 ↔ protocol._finish_pass R2 签发门控",
+    "sources": [
+      "security_threat"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 340,
+    "category": "secrets-custody/symmetric-key-at-rest",
+    "description": "对称密钥保管威胁（演示可接受，需文档诚实化）：device_keys.json 以明文 JSON 持有全部终端 Speck 密钥（key_hex），持有文件者可为任意 C2 计算 R2 → 永久冒充基站对该终端（终端用同一对称密钥验 R2，terminal_fsm.v:105 sp_key=DEVICE_KEY；反向亦然——能从终端 RTL/固件提取密钥者同样能冒充基站，对称设计的固有双向风险）。现有缓解：.gitignore 排除 data/device_keys/（已验证生效）；os.open(...,0o600)+os.chmod 尝试。但实际部署 OS 是 Windows/NTFS：os.chmod 0o600 仅映射只读属性，不产生任何 ACL 限制，docstring 'owner-only permissions'（main.py:242/252-253）在部署平台上不成立——同机恶意软件/其他管理员可任意读取（deferred 清单接受的只是'0600 测试在 Windows 空转'，本条指向控制本身的实效与文档表述，非重复裁决）。残余：单用户演示笔记本上属可接受风险等级；建议 docs 安全分析如实声明 Windows 下无静态保护（可选 DPAPI），并声明对称密钥的双向冒充含义。归属：文档级，阶段 6/W4。",
+    "evidence": "\"key_hex\": self._keys[tid].hex(),\n\"c2_history\": [c.hex() for c in self._c2.get(tid, [])],\n// hsm 侧：\nfd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)\n... os.chmod(self.path, 0o600)  # Windows 上仅只读位，无 ACL 效果\n// RTL 侧（对称性）：assign sp_key = DEVICE_KEY;",
+    "function_context": "DeviceKeyStore.save ↔ terminal_fsm.v Speck 实例（同一 K 双向使用）",
+    "sources": [
+      "security_threat"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 658,
+    "category": "operational-security/replay-window-erosion",
+    "description": "c2reset 的运维耦合削弱防重放且无审计：服务器窗口跨重启持久化（正确行为），而 RTL 计数器每次上电确定性复位——因此每一次真终端断电重启（换电池）都必然命中 RESULT_REPLAY，运维必须执行 c2reset 清空该终端整个重放窗才能恢复。实际后果：(1) 现场运行中防重放窗被例行清空（每次换电池一次），窗口最常处于空态、恰在终端刚重启的时刻（也是 P2 终端重放攻击最强时刻）；(2) c2reset 无确认提示、无审计记录（仅 console 打印），setkey 同样——共址者/误操作可无痕降级防重放或替换密钥。REPL 为本地控制台（信任边界内），故非远程漏洞，属运维加固项。建议：W4 修复计数器种子非易失/随机化（与 P2 同一修复，可一并消除 c2reset 的例行必要性）；c2reset/setkey 增加确认与追加式操作日志。",
+    "evidence": "tid = int(args[0])\nprotocol.reset_c2_history(tid)\nstore.clear_c2_history(tid)\nprint(f\"[C2]     terminal {tid}: replay window cleared \"\n      f\"(power-cycled terminal may authenticate again)\")",
+    "function_context": "cmd_c2reset（配合 protocol.reset_c2_history）",
+    "sources": [
+      "security_threat"
+    ]
+  }
+]

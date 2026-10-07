@@ -1,0 +1,50 @@
+[
+  {
+    "severity": "P3",
+    "file": "sim/tb/tb_speck.v",
+    "line": 97,
+    "category": "integration-consistency/comment-residue",
+    "description": "tb_speck.v T2 用例的注释推导链（L97-104）使用字节序修复前的旧约定（plaintext bytes[0:4]→x），与已冻结的 NSA 约定（bytes[0:4]→y，speck.py L58 / terminal_fsm.v L107-109 / protocol_contract.md）相反，且其声称值按当前约定计算不成立。实测（$TEMP 脚本，双实现一致）：按 L97 注释输入 key=131211100b0a090803020100、pt=74614620736e6165（线上字节序）计算得 y_ct=0x4f83816c/x_ct=0x3d1f8792，而 L101/L104 声称 e32233fa/dac3b619；L97 的 ct=19b6c3dafa3322e3 亦与真相源 speck.py _nsa_kat_test（L184-185 正确采用 65616e7320466174→6c947541ec52799f）不同源。注意：T2 实际驱动值（L106-111）经 Python 独立复算与 NSA 官方 KAT 精确吻合（pt wire=65616e7320466174→ct wire=6c947541ec52799f），T5a/T6 驱动的旧约定向量（96'h00010203_08090a0b_10111213 + 64'h65616e73_20466174→e32233fa_dac3b619）在 RTL word 语义下自洽（Python 复算匹配），故 TB 功能与 11/11 通过不受影响——纯属误导性注释残留（HANDOFF L98 记录的'speck.py 文档字符串字节序写反已修'同类问题在 TB 中未清理）。W4 更换密钥/参数时若照此注释推导将得出错误向量。",
+    "evidence": "L97: \"// key=131211100b0a090803020100 pt=74614620736e6165 ct=19b6c3dafa3322e3\"；L100: \"x=0x20466174   y=0x65616e73\"（bytes[0:4]→x，与 speck.py L58 \"# NSA: bytes[0:4] → y, bytes[4:8] → x\" 相反）；实测输出：\"golden... key=131211100b0a090803020100 pt=74614620736e6165 -> y_ct=4f83816c x_ct=3d1f8792\"（≠ L104 声称 e32233fa_dac3b619）",
+    "function_context": "tb_speck T2 KAT 用例注释（实际驱动 L106-111 正确）",
+    "sources": [
+      "integration"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "sim/tb/tb_level3_protocol.v",
+    "line": 167,
+    "category": "integration-consistency/comment-residue",
+    "description": "tb_level3_protocol.v RESULT 黄金帧的注释行写 CRC \"f5 35\"，但同帧实际数组赋值为 ff/1d（L176），二者矛盾。经 pack() 精确复算（seq=0x50, result=0, hd=5, r2=7b45b0545e59aa94），正确 CRC 即 ff 1d——与 HANDOFF L82 声明一致，数组值正确、TB 通过；注释中的 f5 35 为旧值残留（对 256 个可能的 CRC_EXTRA 值暴力求解均无法产生 f535，证明其不属于任何当前合法配置）。chall_gold 帧已同法验证一致（pack() 复算 seq=0x51 CHALLENGE 帧 CRC=62 80 匹配）。仅注释误导，无功能影响。",
+    "evidence": "L167: \"// RESULT: FD 0A 00 00 50 01 02 93 00 00 00 05 7b 45 b0 54 5e 59 aa 94 f5 35\" vs L176: \"result_gold[20]=8'hff; result_gold[21]=8'h1d; // CRC (9-byte header verified)\"；pack() 实测: \"FD 0A ... AA 94 FF 1D\"；暴力搜索输出: \"CRC_EXTRA values producing wire CRC f535: []\"",
+    "function_context": "tb_level3_protocol result_gold 黄金帧初始化",
+    "sources": [
+      "integration"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/protocol_contract.md",
+    "line": 113,
+    "category": "integration-consistency/doc-lag",
+    "description": "契约 §5 时序图第 ⑥ 步注释仍写\"终端验证 R2: 与 BRAM 中基站模板做 HD 比对, 通过才发 CONFIRM\"——这是 W2 旧语义（R2 与模板汉明距比对）。A1 之后终端实际行为是 Speck 重计算+逐字节精确比对（terminal_fsm.v S_CALC_R2 用自身 DEVICE_KEY 加密 C2 得 r2_expected，S_VERIFY_R2 L360 逐字节比较 fp_rd_data != r2_expected[..] 即 BLOCKED），不存在任何 HD 比对。阶段 4 提交仅更新了 L61（RESULT 码登记 4=REPLAY，已核实正确），L113-114 属阶段 3 变更后的滞后残留，落在阶段 6 待办（HANDOFF L160 'protocol_contract.md：R2 算法定义+字节序约定'）范围内——记录供阶段 6 更新清单，避免外部读者按 HD 比对理解终端验证逻辑。",
+    "evidence": "L113-114: \"[终端验证 R2: 与 BRAM 中基站模板做 HD 比对,\\n 通过才发 CONFIRM, 失败进 BLOCKED]\" vs terminal_fsm.v L360: \"if (fp_rd_data != r2_expected[fp_rd_addr[3:0] - 5'd2]) begin ... state <= S_BLOCKED; // R2 不匹配\"（逐字节比较，非 HD）",
+    "function_context": "docs/protocol_contract.md §5 消息交换时序图",
+    "sources": [
+      "integration"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/HANDOFF_SUMMARY.md",
+    "line": 163,
+    "category": "integration-consistency/doc-residue",
+    "description": "HANDOFF §7 '下一步'列表编辑残留：L159 已插入新条目 '2. 执行 A1 阶段 6：文档 + 提交'（含三行子项），但旧的 '3. 执行 A1 阶段 6：文档更新 + 提交'（L163）未删除，导致阶段 6 在列表中出现两次（编号 1=阶段5、2=阶段6、3=阶段6 重复、4=选择下一任务）。新会话按此清单执行会困惑或重复执行。附带小项：L162 待办 'check_contract_sync.py 重跑' 未注明实际路径 tools/check_contract_sync.py（scripts/ 下无此文件）。",
+    "evidence": "L159: \"2. 执行 A1 阶段 6：文档 + 提交\"（含 L160-162 三个子项）与 L163: \"3. 执行 A1 阶段 6：文档更新 + 提交\"（无子项，旧残留）；实测: scripts/ 下仅有 gen_speck_vectors.py，check_contract_sync.py 位于 tools/",
+    "function_context": "docs/HANDOFF_SUMMARY.md §7 下一步（git diff 49f811d..2a75293 编辑残留）",
+    "sources": [
+      "integration"
+    ]
+  }
+]

@@ -151,7 +151,7 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 
 <div style="border:1px solid var(--auth-b);border-radius:10px;padding:8px;margin-bottom:6px">
 <div style="font-size:11px;font-weight:600;color:var(--auth);margin-bottom:4px">🧠 认证大脑</div>
-<div class="afbox"><span class="fi">🎯</span><div class="ft"><b>terminal_fsm.v</b><span>12态协议控制器 · 含防重放</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
+<div class="afbox"><span class="fi">🎯</span><div class="ft"><b>terminal_fsm.v</b><span>12态协议控制器 · 含防重放（服务器侧；终端侧跨断电重放待W4，见HANDOFF P1-5）</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
 </div>
 
 <div style="border:1px solid var(--comm-b);border-radius:10px;padding:8px;margin-bottom:6px">
@@ -258,11 +258,11 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <div class="domain dm-auth">
 <div class="dhead"><span class="di">🧠</span><div><h2>功能域 3：认证流程控制器</h2><p class="dd">整个系统的"大脑"，按严格协议完成双向身份认证。含多重安全防护。</p></div></div>
 <div class="dbody"><div class="nodes">
-<div class="node"><div class="nh"><span class="ni">🎯</span><span class="nn">terminal_fsm.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>12态FSM：空闲→发请求→等题→答题→发答案→等判定→验基站→确认→会话。含C2防重放、动态R2、载荷校验、超时保护。</div><div class="nf"><b>真实状态：</b>仿真验证了通过流/拒绝流/超时流/灰区。<b>但PUF答题用的是种子直通占位——真实指纹测量还没接入。</b>另外R2期望值用的是~C2简化公式，与PC端HMAC-SHA256不匹配。</div></div>
+<div class="node"><div class="nh"><span class="ni">🎯</span><span class="nn">terminal_fsm.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>12态FSM：空闲→发请求→等题→答题→发答案→等判定→验基站→确认→会话。含C2防重放（服务器侧有效；终端侧跨断电重放待W4修复，见HANDOFF P1-5）、动态R2、载荷校验、超时保护。</div><div class="nf"><b>真实状态：</b>仿真验证了通过流/拒绝流/超时流/灰区。<b>但PUF答题用的是种子直通占位——真实指纹测量还没接入。</b>R2期望值已统一为Speck64/96重算（A1阶段3），与PC端SpeckHSM黄金向量逐位一致。</div></div>
 </div></div>
 <p class="dnote">⚠ <b>三个未闭环的关键点：</b><br>
 ① <b>PUF占位</b>：terminal_fsm 收到挑战后直接把种子当响应发回。真实场景需要调用环振阵列测量频率再生成响应。<b>需要写"接入层"代码。</b><br>
-② <b>R2不匹配</b>：FPGA端期望 R2=~C2（简化公式），PC端生成 R2=HMAC(key,C2)。两端不一致，<b>真实联调时必须统一到同一算法</b>。<br>
+② <b>R2已统一</b>（A1完成）：FPGA与PC均用Speck64/96，黄金向量7b45b0545e59aa94双侧一致；残余为终端侧跨断电重放（W4，HANDOFF P1-5）。<br>
 ③ <b>灰区无测试</b>：灰区加测流程(EXTRA_CHALLENGE)在Level 3 TB中没有完整测试路径。</p>
 </div>
 
@@ -285,7 +285,7 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <div class="node"><div class="nh"><span class="ni">📋</span><span class="nn">协议引擎等6个模块</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>protocol + crp_pool + template_db + threshold + hsm + main。67项单元测试通过。</div><div class="nf"><b>真实状态：</b>--loopback模式可自测。但<b>串口通信循环未实现</b>——PC无法通过真实串口和FPGA对话。这是PC端最大的缺口。</div></div>
 <div class="node"><div class="nh"><span class="ni">📊</span><span class="nn">评估工具</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>hamming_analysis + compare_devices + quantizer。分析指纹质量。</div><div class="nf"><b>真实状态：</b>工具可用但输入格式需要适配真实测量数据格式。W4时需要更新。</div></div>
 </div></div>
-<p class="dnote">⚠ <b>关键缺口：</b>PC端目前只能在回环模式自言自语。<b>要和真实FPGA通信需要写串口收发循环</b>（从串口读帧→解析→处理→发回复帧）。没有这个，整个系统无法联调。另外R2生成算法（HMAC）与FPGA端（~C2）不一致，需统一。</p>
+<p class="dnote">⚠ <b>关键缺口：</b>PC端目前只能在回环模式自言自语。<b>要和真实FPGA通信需要写串口收发循环</b>（从串口读帧→解析→处理→发回复帧）。没有这个，整个系统无法联调。R2算法已统一为Speck64/96（A1，双侧黄金向量7b45b0545e59aa94一致）；残余安全项为终端侧跨断电重放（W4，HANDOFF P1-5）。</p>
 </div>
 
 <!-- Radio -->
@@ -319,7 +319,7 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 
 <div class="todo-item"><div class="tn">5</div><div class="tt"><b>写 PC 串口通信循环</b><span>实现"从串口读帧→解析→处理→发回复"的循环。没有这个PC无法和FPGA真实通信</span></div><span class="tp high">高优</span></div>
 
-<div class="todo-item"><div class="tn">6</div><div class="tt"><b>统一 R2 验证算法</b><span>FPGA端用~C2（简化），PC端用HMAC-SHA256。两端不一致会导致真实联调失败。需统一到同一算法</span></div><span class="tp high">高优</span></div>
+<div class="todo-item"><div class="tn">6</div><div class="tt"><b>✅ 统一 R2 验证算法（A1 已完成）</b><span>FPGA 与 PC 均用 Speck64/96，黄金向量 7b45b0545e59aa94 双侧一致。残余：终端侧跨断电重放（W4，HANDOFF P1-5）</span></div><span class="tp done">已完成</span></div>
 
 <div class="todo-item"><div class="tn">7</div><div class="tt"><b>接入真实 PUF 测量</b><span>替换terminal_fsm中的种子直通占位→调用challenge_decode+ro_array→用频率差生成响应。这是核心功能</span></div><span class="tp high">高优</span></div>
 

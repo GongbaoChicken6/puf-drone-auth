@@ -94,15 +94,15 @@ module tb_speck;
 
         // T2: KAT（Python 交叉验证向量）
         $display("[T2] KAT 交叉验证");
-        // key=131211100b0a090803020100 pt=74614620736e6165 ct=19b6c3dafa3322e3
-        // 字节→字（小端）：
-        //   k0=0x10111213  l0=0x08090a0b  l1=0x00010203
-        //   x=0x20466174   y=0x65616e73
-        //   x_ct=0xdac3b619 y_ct=0xe32233fa
-        // key_in = {l1, l0, k0} = 0x00010203_08090a0b_10111213
-        // plaintext_in = {y, x} = 0x65616e73_20466174
-        // expected = {y_ct, x_ct} = 0xe32233fa_dac3b619
-        // NSA official KAT: key=0001020308090a0b10111213 pt=65616e7320466174 ct=6c947541ec52799f
+        // NSA official KAT (frozen convention, matches drivers below):
+        //   key=0001020308090a0b10111213 pt=65616e7320466174 ct=6c947541ec52799f
+        // 字节→字（小端, NSA 约定 bytes[0:4]→y / [4:8]→x, 密文先 y 后 x）：
+        //   k0=0x03020100  l0=0x0b0a0908  l1=0x13121110
+        //   y=0x736e6165   x=0x74614620
+        //   y_ct=0x4175946c x_ct=0x9f7952ec
+        // key_in = {l1, l0, k0} = 96'h13121110_0b0a0908_03020100
+        // plaintext_in = {y, x} = 64'h736e6165_74614620
+        // expected = {y_ct, x_ct} = 64'h4175946c_9f7952ec
         run_speck(
             96'h13121110_0b0a0908_03020100,
             64'h736e6165_74614620,
@@ -113,13 +113,13 @@ module tb_speck;
 
         // T3: 边角向量（用 Python 预计算）
         $display("[T3] 边角向量");
-        // 全 0：key=0, pt=0 → Python: ct=84958ba87e36180a
-        // 字节：84 95 8b a8 7e 36 18 0a
+        // 全 0：key=0, pt=0 → Python: ct=7e36180a84958ba8（先 y 后 x）
+        // 字节：7e 36 18 0a 84 95 8b a8
         // x_ct=LE(84,95,8b,a8)=0xa88b9584  y_ct=LE(7e,36,18,0a)=0x0a18367e
         run_speck(96'h0, 64'h0, 64'h0a18367e_a88b9584, "T3_zero");
 
-        // 全 FF：key=FF*12, pt=FF*8 → Python: ct=7bfa447e12ddc0b5
-        // 字节：7b fa 44 7e 12 dd c0 b5
+        // 全 FF：key=FF*12, pt=FF*8 → Python: ct=12ddc0b57bfa447e（先 y 后 x）
+        // 字节：12 dd c0 b5 7b fa 44 7e
         // x_ct=LE(7b,fa,44,7e)=0x7e44fa7b  y_ct=LE(12,dd,c0,b5)=0xb5c0dd12
         run_speck({12{8'hFF}}, {8{8'hFF}}, 64'hb5c0dd12_7e44fa7b, "T3_ff");
 
