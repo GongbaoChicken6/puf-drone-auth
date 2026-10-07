@@ -76,10 +76,10 @@ module tb_speck;
 
             if (w >= 200) begin
                 errors = errors + 1;
-                $display("[%0h] TIMEOUT pt=%h", label, pt);
+                $display("[%0s] TIMEOUT pt=%h", label, pt);
             end else if (ciphertext_out !== expected_ct) begin
                 errors = errors + 1;
-                $display("[%0h] FAIL pt=%h got=%h exp=%h", label, pt, ciphertext_out, expected_ct);
+                $display("[%0s] FAIL pt=%h got=%h exp=%h", label, pt, ciphertext_out, expected_ct);
             end
         end
     endtask
@@ -137,11 +137,13 @@ module tb_speck;
         // T4: 全量向量回放（单源 .mem；cwd 相对路径兼容仓库根/sim 目录两种运行方式）
         $display("[T4] 全量向量回放 speck_random.mem");
         begin : T4_BLOCK
-            integer fd, sc, chars, vcount;
+            integer fd, sc, chars, vcount, err0;
             reg [1023:0] line;
+            reg [127:0] vlabel;
             reg [95:0]  v_key;
             reg [63:0]  v_pt, v_ct;
             vcount = 0;
+            err0   = errors;
             fd = $fopen("sim/testvectors/speck_random.mem", "r");
             if (fd == 0) fd = $fopen("testvectors/speck_random.mem", "r");
             if (fd == 0) begin
@@ -150,14 +152,13 @@ module tb_speck;
             end else begin
                 chars = $fgets(line, fd);
                 while (chars > 0) begin
-                    if (line[15:8] == "/" && line[7:0] == "/") begin
-                        // 头部注释行：跳过（行尾 "// label" 由 %h 格式自然忽略）
-                    end else begin
-                        sc = $sscanf(line, "%h %h %h", v_key, v_pt, v_ct);
-                        if (sc == 3) begin
-                            vcount = vcount + 1;
-                            run_speck(v_key, v_pt, v_ct, "T4_mem");
-                        end
+                    // 注释行（含 .mem 头部与行尾 "// label"）由 %h 立即失配
+                    // （sc != 3）自然跳过；计数锁 EXPECTED_MEM_VECTORS 兜底。
+                    sc = $sscanf(line, "%h %h %h", v_key, v_pt, v_ct);
+                    if (sc == 3) begin
+                        vcount = vcount + 1;
+                        $sformat(vlabel, "T4#%0d", vcount);
+                        run_speck(v_key, v_pt, v_ct, vlabel);
                     end
                     chars = $fgets(line, fd);
                 end
@@ -166,8 +167,11 @@ module tb_speck;
                     errors = errors + 1;
                     $display("  [T4 FAIL] vector count %0d != %0d (generator/TB out of sync)",
                              vcount, EXPECTED_MEM_VECTORS);
-                end else
+                end else if (errors == err0) begin
                     $display("  [T4 PASS] %0d 组向量全部匹配（KAT/边角/游走/进位/隔离/随机）", vcount);
+                end else begin
+                    $display("  [T4 FAIL] %0d 组中存在值失配（见上方 T4#n 明细）", vcount);
+                end
             end
         end
 

@@ -1,7 +1,7 @@
 # PUF 无人机认证项目 · 交接摘要
 生成时间：2026-10-08（**A1 全部六个阶段完成**；上版为阶段 3 后/阶段 4 后两版）
 项目路径：D:\puf-drone-auth
-Git：57 commits · 139 files · tag w3-complete（A1 后新增阶段 4/5/6 三笔提交 + 审查证据）
+Git：57 commits（截至 A1 收官提交 a678274）· 144 files · tag w3-complete（阶段 4/5/6 三笔提交 + 各阶段审查证据入库）
 
 ## 一、项目概况
 
@@ -24,7 +24,7 @@ Git：57 commits · 139 files · tag w3-complete（A1 后新增阶段 4/5/6 三�
 
 - ✅ 阶段 2：向量基础设施
   - scripts/gen_speck_vectors.py（5 类向量，--check 模式）
-  - sim/testvectors/speck_random.mem（1175 组）
+  - sim/testvectors/speck_random.mem（1175 组，6 类含 NSA KAT；阶段 6 起由 tb_speck T4 全量回放消费）
   - CI 已接入（A1 后现状：ci_regression.ps1 = 12 TB + Python 五件套 + 契约同步门禁）
 
 - ✅ 阶段 3：FPGA 集成
@@ -137,7 +137,7 @@ Git：57 commits · 139 files · tag w3-complete（A1 后新增阶段 4/5/6 三�
 ### 六周排期
 - ✅ W1 信号验证（ro_ring + Artix-7 综合）
 - ✅ W2 阵列 + B 线 Python 全套
-- ✅ W3 协议栈 + 顶层 + 比特流（A1 进行中）
+- ✅ W3 协议栈 + 顶层 + 比特流（A1 已完成）
 - ⬜ W4 实验周（ML 攻击 + 温度 + PUF 接入——纯 Python 部分可提前）
 - ⬜ W5 冻结周（报告 + Skill + 视频）
 - ⬜ W6 交付周（11-03 提交）
@@ -152,7 +152,7 @@ Git：57 commits · 139 files · tag w3-complete（A1 后新增阶段 4/5/6 三�
 
 ### 纯电脑端可做的 21 项任务
 详见对话中的盘点，优先级最高的剩余项：
-- A1 阶段 4-6（当前进行中）
+- ~~A1 阶段 4-6~~（已全部完成，见 §二）
 - B5 PUF 真实接入（W4 核心创新）
 - B6 ML 攻击实验（W4 交付物，20 分）
 - D14 Skill 打包（15 分）
@@ -163,7 +163,7 @@ Git：57 commits · 139 files · tag w3-complete（A1 后新增阶段 4/5/6 三�
 - 所有 RTL 遵循 rtl-guardrails（Verilog-2001，无 output reg，同步复位，声明时初始化）
 - 每个阶段完成后用 auto-review 派遣多代理审查
 - 审查发现按 P0→P1→P2→P3 修复，修复后跑全量回归
-- CI：scripts/ci_regression.ps1（12 TB + speck 自测 + 44 单测 + 金丝雀 + 向量新鲜度 + 契约同步）
+- CI：scripts/ci_regression.ps1 = 12 TB + Python 段（哨兵探针 + 五道检查：speck 自测 / 44 单测 / 金丝雀 / 向量新鲜度 / 契约同步）
 - 提交信息详细描述改动内容和原因
 
 ## 七、下一步（新会话直接从这里开始）

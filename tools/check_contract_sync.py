@@ -45,7 +45,14 @@ def build_frames():
 
 
 def contract_vectors():
-    """Parse S4 of the contract: '# NAME ... (NB)' header + hex body lines."""
+    """Parse S4 of the contract: '# NAME ... (NB)' header + hex body lines.
+
+    NOTE (gate_audit GATE-02): the scan region ends at the SECOND
+    occurrence of the substring "## 4." -- which today is inside the
+    "### 4.1" heading, purely by coincidence.  Renaming that heading
+    would silently widen the scan into section 4.1 prose; keep the
+    "### 4.x" numbering or anchor the split on full-line headings.
+    """
     md = (ROOT / "docs" / "protocol_contract.md").read_text(encoding="utf-8")
     section = md.split("## 4.")[1].split("## 5.")[0]
     out = {}
@@ -82,6 +89,12 @@ def main() -> int:
             bad += 1
         else:
             print(f"[OK]   {name} ({len(frame)}B)")
+    # Reverse direction (gate_audit GATE-01): vectors that live only in the
+    # contract with no protocol.py generator are drift too -- they look like
+    # contract to a reader but are invisible to every forward check.
+    for name in sorted(set(doc) - set(gen)):
+        print(f"[ORPHAN] {name}: in contract but no generator in build_frames()")
+        bad += 1
     if bad:
         print(f"\nDRIFT DETECTED: {bad} mismatch(es) -- update protocol.py AND contract/TB together!")
         return 1
