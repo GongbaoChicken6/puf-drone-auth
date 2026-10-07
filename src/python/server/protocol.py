@@ -37,7 +37,9 @@ same table, so the loop is self-consistent.
 from __future__ import annotations
 
 import struct
+import sys
 import threading
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
@@ -75,6 +77,10 @@ RESULT_PASS = 0
 RESULT_REJECT = 1
 RESULT_ERROR = 2       # protocol/state error
 RESULT_POOL_EMPTY = 3  # CRP pool exhausted: enrollment maintenance needed
+#: C2 repeated inside the replay window -> replayed ACCESS_REQUEST
+#: (A1 P1-2).  The RTL terminal treats any non-zero code as reject, so
+#: this code is wire-compatible with the W3 FPGA build.
+RESULT_REPLAY = 4
 
 #: Sentinel HD value meaning "not applicable".
 HD_NONE = 0xFF
@@ -136,6 +142,21 @@ class HFIDAProtocol:
     #: Extra challenges drawn when the first round lands in the gray zone.
     N_EXTRA_CHALLENGES = 3
 
+    #: Anti-replay window (A1 review P1-2): number of most-recent C2
+    #: values remembered per terminal.  A repeated C2 means a replayed
+    #: ACCESS_REQUEST, because the terminal contract (terminal_fsm.v)
+    #: advances C2 on every authentication.  Trade-off, stated honestly:
+    #: the RTL bytewise C2 counter has period 256, and the window is
+    #: deliberately SMALLER than that period -- a genuine terminal's
+    #: counter wrap (auth N+256 repeats the C2 of auth N) is then never
+    #: falsely rejected, at the cost of accepting replays aged beyond the
+    #: window.  Aged replays still cannot obtain R2 (the PUF round gates
+    #: RESULT_PASS behind fresh random seeds), so the residual exposure
+    #: is CRP-pool consumption only.  A 256-wide window would cover the
+    #: full period but demand 'c2reset' after every wrap.  Counter wrap
+    #: and aged replay are known W4 limitations.
+    C2_REPLAY_WINDOW = 128
+
     # Dual thresholds re-exported from threshold.py (single source of truth).
     TAU_PASS = TAU_PASS
     TAU_REJECT = TAU_REJECT
@@ -183,6 +204,9 @@ class HFIDAProtocol:
         self.lock = threading.RLock()
         self._seq: int = 0
         self._pending: dict[int, PendingAuth] = {}
+        # Anti-replay window per terminal (A1 P1-2): newest-last ordered
+        # map of recently seen C2 values; hydrated from DeviceKeyStore.
+        self._seen_c2: dict[int, OrderedDict[bytes, None]] = {}
 
     # ------------------------------------------------------------------
     # Framing
@@ -361,6 +385,11 @@ class HFIDAProtocol:
     def _parse_payload(cls, msg_id: int, payload: bytes) -> dict[str, Any]:
         """Decode payload bytes into named fields."""
         if msg_id == cls.MSG_ACCESS_REQUEST:
+            if len(payload) != 16:
+                raise ValueError(
+                    f"ACCESS_REQUEST payload must be 16 bytes, "
+                    f"got {len(payload)}"
+                )
             terminal_id, nonce = struct.unpack_from("<II", payload, 0)
             c2 = payload[8:16]
             return {"terminal_id": terminal_id, "nonce": nonce, "c2": c2}
@@ -373,9 +402,17 @@ class HFIDAProtocol:
                 raise ValueError("response payload not a multiple of 8 bytes")
             return {"r1s": [payload[i : i + 8] for i in range(0, len(payload), 8)]}
         if msg_id == cls.MSG_RESULT:
+            if len(payload) != 10:
+                raise ValueError(
+                    f"RESULT payload must be 10 bytes, got {len(payload)}"
+                )
             result, hd = struct.unpack_from("<BB", payload, 0)
             return {"result": result, "hd": hd, "r2": payload[2:10]}
         if msg_id == cls.MSG_CONFIRM:
+            if len(payload) != 5:
+                raise ValueError(
+                    f"CONFIRM payload must be 5 bytes, got {len(payload)}"
+                )
             terminal_id, status = struct.unpack("<IB", payload)
             return {"terminal_id": terminal_id, "status": status}
         raise ValueError(f"unknown message id {hex(msg_id)}")
@@ -389,13 +426,20 @@ class HFIDAProtocol:
         """Handle MSG_ACCESS_REQUEST: issue N_CHALLENGES fresh seeds.
 
         Also serves as the server-initiated entry point (REPL "auth"
-        command and unit tests) via its alias start_auth().
+        command and unit tests) via its alias start_auth().  A C2 that
+        repeats a value inside the replay window (see C2_REPLAY_WINDOW)
+        is refused with RESULT_REPLAY before any pool challenge is spent.
         """
         tid = int(terminal_id)
         with self.lock:
             if not self.templates.has_terminal(tid):
                 return self.pack(
                     self.MSG_RESULT, result=RESULT_ERROR, hd=HD_NONE
+                )
+            if c2 is not None and not self._remember_c2(tid, c2):
+                # A1 review P1-2: repeated C2 -> replayed ACCESS_REQUEST.
+                return self.pack(
+                    self.MSG_RESULT, result=RESULT_REPLAY, hd=HD_NONE
                 )
             try:
                 seeds = self.pools.get(tid).draw(self.N_CHALLENGES)
@@ -430,11 +474,14 @@ class HFIDAProtocol:
                 raise ProtocolError(
                     f"expected {len(session.seeds)} responses, got {len(r1s)}"
                 )
+            # Validate/bind C2 *before* any scoring state changes, so a
+            # failed attempt (replay/conflict) leaves the session exactly
+            # as it was and a corrected retry cannot double-count
+            # (silent-r2 review R2N1).
+            self._update_session_c2(session, c2)
             hds = self.templates.hamming_distances(tid, session.seeds, list(r1s))
             session.hd_sum = sum(hds)
             session.n_responses = len(hds)
-            if c2 is not None:
-                session.c2 = c2
             decision = decide_scaled(session.hd_sum, session.n_responses)
             session.last_decision = decision
             if decision == DECISION_PASS:
@@ -470,13 +517,16 @@ class HFIDAProtocol:
                     f"expected {len(session.extra_seeds)} extra responses, "
                     f"got {len(r1s)}"
                 )
+            # C2 validation first: on this path the scores ACCUMULATE (+=),
+            # so a failed attempt must not have written anything before the
+            # ProtocolError -- otherwise a corrected retry silently doubles
+            # the extra round and mis-decides REJECT (silent-r2 R2N1).
+            self._update_session_c2(session, c2)
             hds = self.templates.hamming_distances(
                 tid, session.extra_seeds, list(r1s)
             )
             session.hd_sum += sum(hds)
             session.n_responses += len(hds)
-            if c2 is not None:
-                session.c2 = c2
             decision = decide_scaled(session.hd_sum, session.n_responses)
             session.last_decision = decision
             if decision == DECISION_PASS:
@@ -511,10 +561,92 @@ class HFIDAProtocol:
             )
         return session
 
+    def _remember_c2(self, tid: int, c2: bytes) -> bool:
+        """Record C2 as seen; return False when it was seen before.
+
+        Only the last C2_REPLAY_WINDOW values are kept per terminal
+        (oldest evicted first).  Call with self.lock held.
+        """
+        c2b = self._as_bytes("c2", c2, 8)
+        seen = self._seen_c2.setdefault(tid, OrderedDict())
+        if c2b in seen:
+            return False
+        seen[c2b] = None
+        while len(seen) > self.C2_REPLAY_WINDOW:
+            seen.popitem(last=False)
+        return True
+
+    # -- C2 replay-window persistence --------------------------------------
+    def set_c2_history(self, terminal_id: int, c2s: Sequence[bytes]) -> None:
+        """Hydrate one terminal's replay window (e.g. from DeviceKeyStore)."""
+        with self.lock:
+            seen = self._seen_c2.setdefault(int(terminal_id), OrderedDict())
+            seen.clear()
+            for c2 in c2s[-self.C2_REPLAY_WINDOW :]:
+                seen[self._as_bytes("c2", c2, 8)] = None
+
+    def c2_history(self, terminal_id: int) -> list[bytes]:
+        """Oldest-first copy of one terminal's replay window."""
+        with self.lock:
+            return list(self._seen_c2.get(int(terminal_id), OrderedDict()))
+
+    def reset_c2_history(self, terminal_id: int) -> None:
+        """Forget one terminal's replay window.
+
+        Recovery path for a power-cycled terminal whose C2 counter
+        restarted at its reset value -- from the server's point of view
+        that is indistinguishable from a replay until cleared.
+        """
+        with self.lock:
+            self._seen_c2.pop(int(terminal_id), None)
+
+    def _update_session_c2(self, session: PendingAuth, c2: bytes | None) -> None:
+        """Bind or restate a session's C2 (call with self.lock held).
+
+        Late binding: a session started without C2 (start_auth / test
+        path) accepts a C2 here, but only after the anti-replay window
+        accepts it -- otherwise this parameter would bypass
+        on_access_request's replay check (defect review).  A C2 that
+        conflicts with the value already bound to the session is a
+        protocol error; restating the same value is harmless.
+        """
+        if c2 is None:
+            return
+        c2b = self._as_bytes("c2", c2, 8)
+        if session.c2 is None:
+            if not self._remember_c2(session.terminal_id, c2b):
+                raise ProtocolError(
+                    f"terminal {session.terminal_id}: late C2 rejected "
+                    f"as replay"
+                )
+            session.c2 = c2b
+        elif c2b != session.c2:
+            raise ProtocolError(
+                f"terminal {session.terminal_id}: C2 changed mid-session"
+            )
+
     def _finish_pass(self, session: PendingAuth) -> bytes:
-        """Complete a successful authentication: fetch R2 from the HSM."""
+        """Complete a successful authentication: fetch R2 from the HSM.
+
+        The session's terminal id is forwarded so per-terminal backends
+        (SpeckHSM) select the matching device key: R2 = Speck(K_term, C2).
+        When the session never received a C2 (server-initiated start_auth
+        without one) the documented fallback plaintext is 0^8.
+        """
         c2 = session.c2 if session.c2 is not None else b"\x00" * 8
-        r2 = self.hsm.respond(c2)
+        try:
+            r2 = self.hsm.respond(c2, terminal_id=session.terminal_id)
+        except Exception as exc:
+            # HSM-side failure (missing key, transport error): answer
+            # with a RESULT_ERROR frame instead of letting the exception
+            # escape -- a broken HSM must never kill the server or leak
+            # a traceback onto the wire path (silent-failure review).
+            # Diagnostics go to stderr so NameError-class programming
+            # bugs stay distinguishable from missing-key errors (R2N3).
+            print(f"[HSM]    R2 generation failed: "
+                  f"{type(exc).__name__}: {exc}", file=sys.stderr)
+            session.state = "BLOCKED"
+            return self.pack(self.MSG_RESULT, result=RESULT_ERROR, hd=HD_NONE)
         session.state = "SESSION"
         return self.pack(
             self.MSG_RESULT,

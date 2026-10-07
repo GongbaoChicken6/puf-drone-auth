@@ -1,0 +1,98 @@
+[
+  {
+    "severity": "P2",
+    "file": "scripts/ci_regression.ps1",
+    "line": 60,
+    "category": "silent-failure/CI-gate",
+    "description": "CI 的 Python 段在 python 不在 PATH 时会静默假通过：Windows PowerShell 5.1 下命令未找到（CommandNotFoundException，$ErrorActionPreference=Continue 不终止）不会设置 $LASTEXITCODE，它保留上一次原生命令（最后一个 PASS 的 xsim）留下的 0。于是两个 -ne 0 守卫都判假，脚本打印 '  OK' 并 exit 0，0 个 Python 检查实际执行——CI 门禁在工具缺失时报告成功而非失败。已用复刻脚本实测：伪命令调用后 $LASTEXITCODE=0（两次），最终打印 OK、退出码 0。同脚本对 Vivado 用绝对路径防住了同类问题，python 是唯一无防护的原生命令。python 现装在用户目录（C:\\Users\\<user>\\...\\Python313），换账户/服务运行/升级后即触发。修复建议：先 Get-Command python 探测，或在段首显式 $LASTEXITCODE=1 复位。",
+    "evidence": "& python \"src\\python\\common\\speck.py\" > $null 2>&1\nif ($LASTEXITCODE -ne 0) { Write-Host \"PYTHON SPECK SELF-TEST FAILED\"; exit 1 }\n$out = & python \"tests\\test_a1_phase4.py\" 2>&1\n$pyCode = $LASTEXITCODE\n...\nif ($pyCode -ne 0) { Write-Host \"PYTHON UNIT TESTS FAILED\"; exit 1 }\nWrite-Host \"  OK\"",
+    "function_context": "ci_regression.ps1 Python 段（第 59-66 行）",
+    "sources": [
+      "silent"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "src/python/server/main.py",
+    "line": 324,
+    "category": "error-handling/unhandled-exception",
+    "description": "DeviceKeyStore.save() 的 OSError 未被任何调用层捕获，直接杀死整个 REPL：repl() 只捕 (ProtocolError, PoolExhaustedError) 和 (ValueError, KeyError)（main.py:628-631），而 key_for/set_key/set_c2_history/clear_c2_history 全部自动 save()（main.py:324/334/353/358）；_ensure_device_key 在 cmd_auth 的 try 之外调用（main.py:469，try 从 471 开始）。雪上加霜：cmd_auth 的 finally 调 _flush_c2_state（494-497）会再次 save() 再次抛 OSError，替换/掩盖进行中的原始异常；main() 的 finally（703-706）同样先 _flush_c2_state 再 transport.close()，finally 内抛异常导致 transport.close()（707-708）被跳过（串口泄漏）。实测：save() 抛 OSError 时 REPL 未打印任何 [ERROR] 直接以 OSError 崩溃退出。Windows 上常见触发：device_keys.json 被杀软/备份/编辑器锁定、data 目录只读、磁盘满。密钥已写入内存但未落盘的中间态也随之产生（key_for 在 save 前已改 _keys）。",
+    "evidence": "def key_for(self, terminal_id: int) -> tuple[bytes, bool]:\n    ...\n    key = secrets.token_bytes(DEVICE_KEY_BYTES)\n    self._keys[tid] = key\n    self.save()\n    return key, True\n...\n# repl():\n        except (ProtocolError, PoolExhaustedError) as exc:\n            print(f\"[PROTOCOL ERROR] {exc}\")\n        except (ValueError, KeyError) as exc:\n            print(f\"[ERROR] {exc}\")\n# main():\n    finally:\n        _flush_c2_state(protocol, store)\n        if isinstance(transport, SerialTransport):\n            transport.close()",
+    "function_context": "DeviceKeyStore.save/key_for + repl + cmd_auth finally + main finally",
+    "sources": [
+      "silent"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 283,
+    "category": "error-handling/validation-gap",
+    "description": "DeviceKeyStore.load() 的非 schema 校验缺口导致无上下文崩溃且校验不对称：(1) json.loads（269 行）抛 JSONDecodeError 不带文件路径，main.py:680 处未捕获，启动即裸 traceback；(2) rec[\"key_hex\"]（275 行）缺失时抛裸 KeyError('key_hex')，无文件/终端上下文；(3) int(tid_str)（281 行）非数字时 ValueError 无文件上下文；(4) c2_history 项只做 fromhex 不验长度（283 行），与 key 的长度校验（276-280 行，带路径消息）不对称——7 字节项可正常 load，随后在 main.py:690 protocol.set_c2_history 处以无文件上下文的 'c2 must be 8 bytes, got 7' 崩溃。四条路径均已实测复现。均为响亮崩溃而非静默，故 P3；但错误定位差且 tests/test_a1_phase4.py 仅覆盖 schema 错误（test_bad_schema_rejected），这些分支零覆盖。",
+    "evidence": "data = json.loads(self.path.read_text(encoding=\"utf-8\"))\n...\nfor tid_str, rec in data.get(\"terminals\", {}).items():\n    key = bytes.fromhex(rec[\"key_hex\"])\n    if len(key) != DEVICE_KEY_BYTES:\n        raise ValueError(...)\n    tid = int(tid_str)\n    self._keys[tid] = key\n    self._c2[tid] = [bytes.fromhex(h) for h in rec.get(\"c2_history\", [])]",
+    "function_context": "DeviceKeyStore.load",
+    "sources": [
+      "silent"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 372,
+    "category": "state-consistency/persistent-side-effect",
+    "description": "对不存在（未注册模板）的终端执行 auth/enroll 会先永久铸造并持久化 Speck 密钥，然后认证才被 protocol.on_access_request 的 templates.has_terminal 检查（protocol.py:415-418）以 RESULT_ERROR 拒绝——失败操作在秘密密钥文件中留下持久垃圾状态。实测：REPL 会话执行 auth 99 后，device_keys.json 中永久存在终端 99 的密钥（同会话还装了 -5），status 的 terminals_with_keys 虚高，且此后每次 auth 的 _flush_c2_state 都会为其重写整个 JSON。输入笔误（auth 98）即污染密钥库。建议先查模板存在再铸钥。",
+    "evidence": "def _ensure_device_key(\n    store: DeviceKeyStore, protocol: HFIDAProtocol, terminal_id: int\n) -> None:\n    hsm = protocol.hsm\n    if not isinstance(hsm, SpeckHSM) or hsm.has_key(terminal_id):\n        return\n    key, created = store.key_for(terminal_id)\n    hsm.set_key(terminal_id, key)",
+    "function_context": "_ensure_device_key（由 cmd_auth:469 / cmd_enroll:434 调用）",
+    "sources": [
+      "silent"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 515,
+    "category": "input-validation",
+    "description": "setkey/c2reset/auth/enroll 的 terminal_id 只做 int() 转换，无任何范围/合法性校验：负数 id 被接受并持久化（实测 setkey -5 0001020308090a0b10111213 成功安装终端 '-5'）。坏输入（c2reset foo、setkey 坏 hex/坏长度）均有 [ERROR] 反馈不崩溃（实测确认），但合法却无意义的 id 会静默进入密钥库。线上字段为 32 位 terminal_id，无溢出风险，仅为数据卫生问题。",
+    "evidence": "try:\n    tid = int(args[0])\n    key = bytes.fromhex(args[1])\nexcept ValueError as exc:\n    print(f\"[ERROR] bad argument: {exc}\")\n    return",
+    "function_context": "cmd_setkey（cmd_c2reset:546、cmd_auth:468 同模式）",
+    "sources": [
+      "silent"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/hsm.py",
+    "line": 34,
+    "category": "error-handling/import-masking",
+    "description": "裸 except ImportError 不仅捕获'相对包不可用'，也会捕获 ..common.speck 模块内部抛出的 ImportError（如未来 speck.py 引入缺失依赖），随后兜底路径以 from src.python.common.speck import Speck6496 二次执行同一模块并抛出第二个更易误导的错误，掩盖真实根因。当前无实际影响（speck.py 仅 import stdlib struct；兜底 parents[3] 已实测正确——standalone 导入 hsm 成功取得 src.python.common.speck.Speck6496），属潜在诊断隐患，不确定是否有运行期后果。",
+    "evidence": "try:  # package mode (src.python.server.hsm)\n    from ..common.speck import Speck6496\nexcept ImportError:  # pragma: no cover - direct script sys.path bootstrap\n    import sys\n\n    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))\n    from src.python.common.speck import Speck6496",
+    "function_context": "hsm.py 模块级导入兜底",
+    "sources": [
+      "silent"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/protocol.py",
+    "line": 584,
+    "category": "error-handling/state-on-exception",
+    "description": "_finish_pass 对 self.hsm.respond() 无任何包含：HSM 故障（SpeckHSM 对未铸钥终端抛 KeyError）以 Python 异常穿出 on_response，而非打包 RESULT_ERROR 帧。实测：锁由 with 正确释放（RLock 可重获），残留 pending session 停在 state='CHALLENGED'、4 个池挑战已消耗、C2 已进重放窗；下一次 on_access_request 会覆盖 _pending，REPL 层 KeyError 被 main.py:630 捕获有反馈——当前用法可恢复，故 P3；但未来帧级服务器路径将直接丢回复无 RESULT 帧。",
+    "evidence": "def _finish_pass(self, session: PendingAuth) -> bytes:\n    c2 = session.c2 if session.c2 is not None else b\"\\x00\" * 8\n    r2 = self.hsm.respond(c2, terminal_id=session.terminal_id)\n    session.state = \"SESSION\"\n    return self.pack(",
+    "function_context": "HFIDAProtocol._finish_pass（on_response/on_extra_response 锁内调用）",
+    "sources": [
+      "silent"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 204,
+    "category": "silent-bypass/serial-mode",
+    "description": "SerialTransport.counter_challenge 仍返回 secrets.token_bytes(8)（既有 W3 占位，非本次 diff 改动，但与新重放窗直接交互）：串口模式下 C2 是服务器伪造的随机值——新加的 C2 重放窗永不触发（随机 64 位不重复，防重放静默失效），且 R2=Speck(K, 随机C2) 与真实终端按自身 RTL 计数器算出的期望 R2 必不相等，串口 REPL 路径的互认证静默不可用。阶段 4 范围为 PC 集成（loopback 冒烟已过），代码内注释已声明待 W3 接收循环落地，故标 P3 且不确定串口模式是否在阶段 4 演示中启用。",
+    "evidence": "def counter_challenge(self, terminal_id: int) -> bytes:\n    \"\"\"The real terminal sends C2 inside MSG_ACCESS_REQUEST; the REPL\n    path generates it here until the full receive loop lands (W3).\"\"\"\n    return secrets.token_bytes(8)",
+    "function_context": "SerialTransport.counter_challenge",
+    "sources": [
+      "silent"
+    ]
+  }
+]

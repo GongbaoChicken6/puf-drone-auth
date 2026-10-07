@@ -54,4 +54,25 @@ for ($i = 0; $i -lt $tbNames.Count; $i++) {
 Write-Host "`n=== $pass/$($tbNames.Count) PASS, $fail FAIL ==="
 Remove-Item xsim.dir -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item *.pb -Force -ErrorAction SilentlyContinue
-if ($fail -gt 0) { exit 1 } else { exit 0 }
+if ($fail -gt 0) { exit 1 }
+
+Write-Host "=== CI: Python (Speck self-test + A1 phase-4 unit tests) ==="
+# Silent-failure review P2: a missing python must fail the gate, not
+# inherit $LASTEXITCODE=0 from the last xsim run (PS 5.1 never sets it
+# on CommandNotFoundException).
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    Write-Host "PYTHON NOT FOUND ON PATH"; exit 1
+}
+$LASTEXITCODE = 1  # reset before each native call: launch failure != success
+& python "src\python\common\speck.py" > $null 2>&1
+if ($LASTEXITCODE -ne 0) { Write-Host "PYTHON SPECK SELF-TEST FAILED"; exit 1 }
+$LASTEXITCODE = 1
+$out = & python "tests\test_a1_phase4.py" 2>&1
+$pyCode = $LASTEXITCODE
+if ($pyCode -ne 0) {
+    $out | Select-Object -Last 40 | ForEach-Object { Write-Host "  $_" }
+    Write-Host "PYTHON UNIT TESTS FAILED"; exit 1
+}
+$out | Select-Object -Last 4 | ForEach-Object { Write-Host "  $_" }
+Write-Host "  OK"
+exit 0

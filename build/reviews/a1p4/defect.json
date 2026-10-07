@@ -1,0 +1,98 @@
+[
+  {
+    "severity": "P3",
+    "file": "src/python/server/protocol.py",
+    "line": 151,
+    "category": "边界条件/安全权衡",
+    "description": "重放窗口 C2_REPLAY_WINDOW=128 小于 RTL C2 计数器 256 次认证的去重周期：捕获 129~256 次认证前的 ACCESS_REQUEST 重放可绕过窗口检查被接受（实测复现：auth#1 的 C2 在 129 次认证后重放收到 result=3 POOL_EMPTY 而非 RESULT_REPLAY，即已通过重放检查并消耗池挑战）。代码注释只把『计数器回绕』列为 W4 限制，未提及周期中段的 aged-replay 缺口；窗口设为 256 可在同等内存量级下覆盖整个周期（代价是回绕时真实终端需 c2reset）。当前 PUF 轮仍拦截 R2 签发，实际影响限于池消耗 DoS，且属已文档化权衡的邻界情况，故定 P3。",
+    "evidence": "C2_REPLAY_WINDOW = 128  // 伴随注释: The window stays below the 256-auth period of the RTL bytewise C2 counter so one full counter period never collides with itself (counter wrap-around itself is a known W4 limitation, honestly out of scope here).",
+    "function_context": "HFIDAProtocol.C2_REPLAY_WINDOW / _remember_c2",
+    "sources": [
+      "defect"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/protocol.py",
+    "line": 461,
+    "category": "逻辑/防重放绕过（休眠路径）",
+    "description": "on_response（461 行）与 on_extra_response（503 行）接受可选 c2 参数直接覆盖 session.c2，该值未经 _remember_c2 重放窗口校验即可进入 _finish_pass 参与 R2 计算。当前所有调用点（main.py cmd_auth、测试）均不传该参数，属于休眠绕过路径；但在 C2 已具重放语义后，该参数成为潜在不一致点，建议移除或同样过窗。参数本身为先阶段遗留，非本次回归。",
+    "evidence": "if c2 is not None:\n                session.c2 = c2",
+    "function_context": "HFIDAProtocol.on_response / on_extra_response",
+    "sources": [
+      "defect"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/protocol.py",
+    "line": 419,
+    "category": "边界条件/错误处理",
+    "description": "on_access_request 对非 8 字节 c2 会在 _remember_c2→_as_bytes 处抛 ValueError 而非返回 RESULT_ERROR 帧；而 _parse_payload 对 0x0090 载荷无 ≥16B 校验（payload[8:16] 可静默返回短切片）。当前 REPL 路径自产 8B C2 不可达，但未来接入真实 RX 环路后，畸形帧将导致异常逃逸而非优雅拒绝。属既有解析宽松性与新代码路径的组合，非本次回归。",
+    "evidence": "if c2 is not None and not self._remember_c2(tid, c2):  // _remember_c2 内: c2b = self._as_bytes(\"c2\", c2, 8) → raise ValueError(f\"{name} must be {length} bytes, got {len(value)}\")",
+    "function_context": "HFIDAProtocol.on_access_request / _remember_c2 / _parse_payload",
+    "sources": [
+      "defect"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/protocol.py",
+    "line": 435,
+    "category": "兼容性/休眠路径",
+    "description": "start_auth 别名允许 c2=None：跳过重放记录，且 _finish_pass 将以 b\"\\x00\"*8 作为明文计算 R2=Speck(K,0^8)，RTL 终端永远无法验证。当前无调用方使用该别名路径（全仓 grep 确认），休眠缺陷；若保留建议显式拒绝或文档标注。",
+    "evidence": "start_auth = on_access_request  // _finish_pass: c2 = session.c2 if session.c2 is not None else b\"\\x00\" * 8",
+    "function_context": "HFIDAProtocol.start_auth / _finish_pass",
+    "sources": [
+      "defect"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 300,
+    "category": "并发",
+    "description": "DeviceKeyStore 无锁且所有 save() 共用同一 .tmp 路径：并发保存时多线程对同一 tmp 文件 O_TRUNC 交叉写入并竞态 os.replace，Windows 实测抛 PermissionError(WinError 32)/FileNotFoundError（4 线程×30 次保存均复现）；目标文件因 os.replace 原子性未损坏。当前 REPL 单线程使用不可达，属潜伏并发缺陷；多实例/未来多线程接入时会丢保存并抛异常。",
+    "evidence": "tmp = self.path.with_suffix(self.path.suffix + \".tmp\")\n        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)",
+    "function_context": "DeviceKeyStore.save",
+    "sources": [
+      "defect"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 265,
+    "category": "错误处理",
+    "description": "load() 对损坏文件的处理不统一：非法 JSON 抛原始 json.JSONDecodeError（不含文件路径上下文）；顶层为 list 的 JSON 抛裸 AttributeError（'list' object has no attribute 'get'）而非预期 的 schema ValueError（均实测复现）。均为 fail-fast 不丢数据，仅错误信息质量与类型契约问题。",
+    "evidence": "data = json.loads(self.path.read_text(encoding=\"utf-8\"))\n        if data.get(\"schema\") != _DEVICE_KEY_SCHEMA:  # data 为 list 时此处 AttributeError",
+    "function_context": "DeviceKeyStore.load",
+    "sources": [
+      "defect"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 296,
+    "category": "状态丢失（API 层）",
+    "description": "save() 序列化 terminals 时仅遍历 self._keys，set_c2_history 为无 key 终端记录的重放窗口在下次 save 时被静默丢弃（实测复现：tid=42 history 重载后为空）。出厂 REPL 流不可达（_flush_c2_state 按 hsm.terminal_ids() 迭代，有 key 才有窗口），仅 API 误用时的静默状态丢失；建议 save 时校验或 set_c2_history 拒绝无 key 终端。",
+    "evidence": "\"terminals\": {\n                str(tid): {\n                    \"key_hex\": self._keys[tid].hex(),\n                    \"c2_history\": [c.hex() for c in self._c2.get(tid, [])],\n                }\n                for tid in sorted(self._keys)\n            },",
+    "function_context": "DeviceKeyStore.save / DeviceKeyStore.set_c2_history",
+    "sources": [
+      "defect"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 497,
+    "category": "错误处理（不确定，介于 P2/P3）",
+    "description": "cmd_auth 的 finally 每次认证都执行 _flush_c2_state→store.save() 磁盘写，但 repl 的异常捕获仅 (ProtocolError, PoolExhaustedError)/(ValueError, KeyError)（630 行）：save 的 OSError（磁盘错误或 Windows 上 AV/OneDrive 短暂锁文件导致 os.replace PermissionError）将逃逸并终止整个 REPL 会话；main() finally 中同一调用抛异常还会跳过 transport.close()（706-708 行）。单用户演示环境概率低且此前状态已落盘，按『不确定标 P3』规则定级；建议将 flush 异常降级为打印警告。",
+    "evidence": "finally:\n        # Persist the widened replay window even on protocol errors, so a\n        # crash right after an authentication cannot reopen the replay gap.\n        _flush_c2_state(protocol, store)  // repl: except (ValueError, KeyError) as exc: print(f\"[ERROR] {exc}\")",
+    "function_context": "cmd_auth / repl / main",
+    "sources": [
+      "defect"
+    ]
+  }
+]

@@ -58,7 +58,7 @@ crc = (crc >> 8) ^ (tmp << 8) ^ (tmp << 3) ^ (tmp >> 4)   // 16-bit 截断
 
 **多字节字段一律小端**（u32、msgid、CRC）。8B 种子/响应为不透明字节串，原样传输不做字节交换。
 
-**RESULT 码**：0=PASS, 1=REJECT, 2=ERROR, 3=POOL_EMPTY；HD 特殊值 0xFF=HD_NONE（即错误路径无 HD）。
+**RESULT 码**：0=PASS, 1=REJECT, 2=ERROR, 3=POOL_EMPTY, 4=REPLAY（C2 落入服务端重放窗→疑似重放，A1 阶段 4 新增；终端侧对任意非零码一律拒绝，与 W3 RTL 兼容）；HD 特殊值 0xFF=HD_NONE（即错误路径无 HD）。
 
 ## 4. 黄金帧向量（TB 直接硬编码）
 

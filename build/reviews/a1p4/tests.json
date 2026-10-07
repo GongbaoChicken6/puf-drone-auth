@@ -1,0 +1,114 @@
+[
+  {
+    "severity": "P2",
+    "file": "tests/test_a1_phase4.py",
+    "line": 25,
+    "category": "coverage-gap",
+    "description": "main.py 的 A1 新增 REPL/持久化胶水函数零测试覆盖：_ensure_device_key (main.py:361)、_flush_c2_state (main.py:379)、cmd_setkey (main.py:500)、cmd_c2reset (main.py:532) 及 repl() 的 setkey/c2reset 分发 (main.py:609-617) 均未被任何测试调用。cmd_c2reset 是规格 P1-3 的断电恢复路径，cmd_setkey 是 RTL 密钥对齐路径，回归无保护。",
+    "evidence": "tests/test_a1_phase4.py:25 仅 from src.python.server.main import DeviceKeyStore, LoopbackTransport，:265 仅再导入 SimulatedTerminal；全文件 grep 无 _ensure_device_key/_flush_c2_state/cmd_setkey/cmd_c2reset 引用。对照 main.py:361 def _ensure_device_key(、:379 def _flush_c2_state(、:500 def cmd_setkey(、:532 def cmd_c2reset(。",
+    "function_context": "test-coverage: main._ensure_device_key/_flush_c2_state/cmd_setkey/cmd_c2reset/repl",
+    "sources": [
+      "src/python/server/main.py:361-385",
+      "src/python/server/main.py:500-555",
+      "tests/test_a1_phase4.py:25"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "src/python/server/protocol.py",
+    "line": 460,
+    "category": "coverage-gap",
+    "description": "on_response / on_extra_response 的迟到 C2 覆盖分支未测：protocol.py:460-461 与 :502-503 的 if c2 is not None: session.c2 = c2（该 C2 将直接决定 R2=Speck(K,C2)，属安全敏感路径），以及 _finish_pass 的 C2=None 回退 protocol.py:583（c2 = session.c2 if session.c2 is not None else 8 个 0 字节）。现有测试的 C2 全部经 on_access_request 传入（tests:173/:187/:241/:254），on_response 调用均不带 c2（tests:245/:256）。",
+    "evidence": "tests/test_a1_phase4.py:245 msg2, f2 = HFIDAProtocol.parse(proto.on_response(1, r1s))（无 c2 参数）；protocol.py:460 if c2 is not None: / :461 session.c2 = c2。",
+    "function_context": "test-coverage: protocol.on_response/on_extra_response c2-override branch, _finish_pass None-fallback",
+    "sources": [
+      "src/python/server/protocol.py:460-461",
+      "src/python/server/protocol.py:502-503",
+      "src/python/server/protocol.py:577-591",
+      "tests/test_a1_phase4.py:245"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "tests/test_a1_phase4.py",
+    "line": 194,
+    "category": "coverage-gap",
+    "description": "P1-2 核心主张『服务器重启后重放窗仍生效』无端到端测试。main.py:690 protocol.set_c2_history(tid, store.c2_history(tid))（重启再水化）与 main.py:385 _flush_c2_state 内 store.set_c2_history(tid, protocol.c2_history(tid))（落盘）是修复的关键接线，均零覆盖。最接近的 test_history_roundtrip_via_store (tests:194-204) 只断言 list 相等，不断言重载后重放 C2 收到 RESULT_REPLAY。",
+    "evidence": "tests/test_a1_phase4.py:204 self.assertEqual(proto2.c2_history(1), [W3_FIRST_C2, bytes(8)]) —— 仅数据 roundtrip，无行为断言；main.py:690 与 main.py:379-386 未见测试引用。",
+    "function_context": "test-coverage: main.main() c2-history rehydration + _flush_c2_state persistence loop",
+    "sources": [
+      "src/python/server/main.py:379-386",
+      "src/python/server/main.py:689-690",
+      "tests/test_a1_phase4.py:194-204"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "tests/test_a1_phase4.py",
+    "line": 274,
+    "category": "assertion-strength",
+    "description": "SimulatedTerminal 回绕断言过弱且触达私有状态：tests:274 直接写 term._auth_count = 0x5F，随后仅 assertNotEqual(c2_a, c2_b) (:277)。即使实现改为带进位传播（违反 RTL 契约 terminal_fsm.v:402 c2_counter[k] <= c2_counter[k] + 8'd1 逐字节无进位），两次输出仍不同，断言照样通过——注释宣称的 RTL semantics 并未被真正锚定。应断言精确回绕值（C2_INIT=0xA0..0xA7，+0x60 后应为 0x00..0x07）。",
+    "evidence": "tests/test_a1_phase4.py:273-277 注释 Byte wrap-around has no carry (RTL semantics), still distinct. / term._auth_count = 0x5F / self.assertNotEqual(c2_a, c2_b)；src/rtl/w3_protocol/terminal_fsm.v:402。",
+    "function_context": "test-quality: TestSimulatedTerminalC2.test_c2_sequence_matches_rtl_contract",
+    "sources": [
+      "tests/test_a1_phase4.py:263-277",
+      "src/rtl/w3_protocol/terminal_fsm.v:402",
+      "src/python/server/main.py:108"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "tests/test_a1_phase4.py",
+    "line": 140,
+    "category": "test-gap-on-ci-platform",
+    "description": "0600 权限测试在 CI 平台上是空操作：tests:140-142 在 os.name == nt 时仅 assertTrue(path.exists()) 即 return。scripts/ci_regression.ps1 是 PowerShell/Windows 流水线，即密钥文件（含 Speck 秘钥的机密材料，main.py save() 以 0o600 os.open 写入并 chmod）的 owner-only 安全属性在 CI 所跑平台上从未被断言，仅 POSIX 本地手跑才生效。",
+    "evidence": "tests/test_a1_phase4.py:140-142 if os.name == \"nt\": 分支提前返回；main.py DeviceKeyStore.save 中 fd = os.open(tmp, ..., 0o600) 与 os.chmod(self.path, 0o600)；CI 调用链 scripts/ci_regression.ps1:62 & python \"tests\\test_a1_phase4.py\"。",
+    "function_context": "test-quality: TestDeviceKeyStore.test_file_permissions_owner_only",
+    "sources": [
+      "tests/test_a1_phase4.py:136-143",
+      "src/python/server/main.py:298-320",
+      "scripts/ci_regression.ps1:62"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "scripts/ci_regression.ps1",
+    "line": 64,
+    "category": "ci-diagnostics",
+    "description": "CI 失败时诊断信息被截断：ci_regression.ps1:64 的 $out | Select-Object -Last 4 只回显最后 4 行，而 unittest 的失败 traceback/用例名打印在 Ran 20 tests 汇总之前，红灯时 CI 日志看不到任何失败用例名与堆栈。另外 :60 将 Speck 自测输出整体丢弃（重定向到 null），失败时只有一句 PYTHON SPECK SELF-TEST FAILED。可重复性本身已验证：直接 python tests\\test_a1_phase4.py 得 20/20 OK（0.083s, exit 0），测试经 TempDirTest (tests:40-44) 逐用例临时目录隔离，无顺序依赖。",
+    "evidence": "scripts/ci_regression.ps1:60 & python \"src\\python\\common\\speck.py\" > $null 2>&1；:62-65 $out = & python \"tests\\test_a1_phase4.py\" 2>&1 ... $out | Select-Object -Last 4；实跑输出 Ran 20 tests in 0.083s / OK / EXIT=0。",
+    "function_context": "ci-wiring: ci_regression.ps1 Python segment",
+    "sources": [
+      "scripts/ci_regression.ps1:59-67",
+      "tests/test_a1_phase4.py:40-44"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/hsm.py",
+    "line": 178,
+    "category": "coverage-gap",
+    "description": "SpeckHSM 公共 API 两个方法无直接覆盖：has_key (hsm.py:178-180) 在测试中零调用（其唯一生产调用方 _ensure_device_key 也无覆盖，见 P2 项）；terminal_ids (hsm.py:182-184) 仅经 hsm_status 间接走到 len()。另 protocol.py:419 的 c2=None 旁路分支（旧调用方不带 C2 时不做重放检查）也无测试钉住语义。",
+    "evidence": "tests/test_a1_phase4.py 全文无 has_key/terminal_ids 字样；hsm_status 测试 tests:85-90 只断言 dict 输出；protocol.py:419 if c2 is not None and not self._remember_c2(...)。",
+    "function_context": "test-coverage: SpeckHSM.has_key/terminal_ids, HFIDAProtocol.on_access_request c2=None branch",
+    "sources": [
+      "src/python/server/hsm.py:178-184",
+      "src/python/server/protocol.py:419",
+      "tests/test_a1_phase4.py:85-90"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "tests/test_a1_phase4.py",
+    "line": 236,
+    "category": "flaky-risk",
+    "description": "TestEndToEnd 两个用例依赖随机噪声模拟并强断言 RESULT_PASS：SimulatedTerminal 以 NORMAL_FLIP_PROB=0.02 (main.py:82) 逐位翻转，若首轮聚合分落入灰区则 on_response 返回 MSG_EXTRA_CHALLENGE 而非 MSG_RESULT，tests:246 的 assertEqual(msg2, MSG_RESULT) 将失败。该概率尚未量化（需读 threshold.py 的 TAU_PASS/TAU_REJECT 与 decide_scaled 才能给出具体失败率），机制上存在非零 flake 风险；建议 E2E 用 flip_prob=0 构造终端或固定 RNG 种子。",
+    "evidence": "main.py:82 NORMAL_FLIP_PROB = 0.02；main.py:110 def __init__(self, terminal_id: int, flip_prob: float = NORMAL_FLIP_PROB)；tests:245-247 msg2, f2 = HFIDAProtocol.parse(proto.on_response(1, r1s)) 后 assertEqual(msg2, HFIDAProtocol.MSG_RESULT) / assertEqual(f2[\"result\"], RESULT_PASS)。",
+    "function_context": "test-quality: TestEndToEnd noise-dependent strict assertions",
+    "sources": [
+      "tests/test_a1_phase4.py:236-260",
+      "src/python/server/main.py:82",
+      "src/python/server/main.py:118-133"
+    ]
+  }
+]

@@ -1,0 +1,145 @@
+[
+  {
+    "id": "TYPES-01",
+    "severity": "P2",
+    "file": "src/python/server/hsm.py",
+    "line": 62,
+    "category": "interface-design/LSP",
+    "description": "抽象基类 HSM.respond 的签名 'terminal_id: int | None = None' 在类型层面宣称 None 是合法输入（且是默认值），但 SpeckHSM.respond(L187-199) 对 terminal_id=None 直接抛 KeyError——子类强化了前置条件，静态类型/签名层面是谎言，只有运行时才暴露。基类 docstring（L65-66）只说 'single-key backends ignore it'，未声明 'None 对 per-terminal 后端非法'。调用方若按基类签名以默认参数调用（protocol.py 之外的未来调用点、第三方 HSM 实现），会得到未声明的 KeyError。LSP 修复方向：基类将 terminal_id 定为必传位置参数并由单键后端显式忽略（类型上 int），或拆分 KeyedHSM/SingleKeyHSM 两个 Protocol，或至少在基类 docstring 的 Raises 节声明。当前唯一生产调用点 protocol.py:621 恒传 int，实际路径安全，故 P2 而非 P1。",
+    "evidence": "hsm.py:62: def respond(self, c2: bytes, terminal_id: int | None = None) -> bytes:  || hsm.py:198-199: if terminal_id is None: raise KeyError(\"SpeckHSM needs terminal_id for per-terminal key selection\")  || 探针实测: SpeckHSM(keys={1:12B}).respond(golden_c2) → KeyError(\"'SpeckHSM needs terminal_id for per-terminal key selection'\")。SimulatedHSM.respond(L96-104) 与 SerialHSM.respond(L240-244) 接受并忽略 terminal_id。",
+    "function_context": "HSM.respond / SpeckHSM.respond / SimulatedHSM.respond / SerialHSM.respond",
+    "sources": [
+      "types"
+    ]
+  },
+  {
+    "id": "TYPES-02",
+    "severity": "P3",
+    "file": "src/python/server/hsm.py",
+    "line": 199,
+    "category": "exception-contract",
+    "description": "SpeckHSM 用 KeyError 表达两个不同错误：terminal_id=None（L199，参数缺失=编程错误）与终端未注册密钥（L202-205，业务状态错误）。两害：① str(KeyError) 会把消息再包一层引号（探针实测输出 \"'SpeckHSM needs terminal_id...'\"），REPL main.py:688 打印出畸形双引号消息；② 基类 HSM 未定义任何异常契约，导致 protocol.py:_finish_pass(L620-622) 只能裸 'except Exception' 兜底——这同时会捕获 AttributeError/TypeError 等编程错误并静默转成 RESULT_ERROR 帧，掩盖真实缺陷。建议：定义 HSMError 异常层级（或至少在基类 respond 文档声明 raises），_finish_pass 收窄为 (HSMError, TimeoutError, OSError)。",
+    "evidence": "hsm.py:199: raise KeyError(\"SpeckHSM needs terminal_id for per-terminal key selection\")  || hsm.py:202-205: raise KeyError(f\"terminal {terminal_id} has no Speck device key ...\")  || protocol.py:621-628: try: r2 = self.hsm.respond(c2, terminal_id=session.terminal_id) except Exception: ... return self.pack(self.MSG_RESULT, result=RESULT_ERROR, hd=HD_NONE)  || 探针实测: str(KeyError) == \"'terminal 42 has no Speck device key (register one via DeviceKeyStore or SpeckHSM.set_key)'\"（多一层引号）。",
+    "function_context": "SpeckHSM.respond / HFIDAProtocol._finish_pass",
+    "sources": [
+      "types"
+    ]
+  },
+  {
+    "id": "TYPES-03",
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 372,
+    "category": "concurrency-semantics",
+    "description": "DeviceKeyStore 的读写锁策略不一致：写方法 key_for(L353)/set_key(L368)/set_c2_history(L388)/clear_c2_history(L394) 持 self._lock（L264 注释 'Serializes mutations and atomic saves'），但读方法 all_keys(L372-374) 与 c2_history(L377-379) 完全不加锁（探针实测 inspect 源码不含 _lock）。CPython GIL 下 dict(x)/list(x) 的 C 级循环不释放 GIL，实际竞态风险很低，但接口契约层面：① 并发读者可能观察到写者 save() 前的内存态与磁盘态不一致；② 'mutable 方法串行化' 的承诺对读路径未声明是依赖 GIL 还是依赖锁。建议读方法同样持锁（RLock 无死锁风险），或在注释中显式声明读路径依赖 GIL 原子性。拷贝语义本身正确：all_keys 返回 dict 浅拷贝、c2_history 返回 list 浅拷贝，值类型 bytes 不可变，无别名逃逸（正面确认）。",
+    "evidence": "main.py:372-374: def all_keys(self) -> dict[int, bytes]: \"\"\"Copy of every known terminal key...\"\"\" return dict(self._keys)  || main.py:377-379: def c2_history(self, terminal_id: int) -> list[bytes]: return list(self._c2.get(int(terminal_id), []))  || main.py:264-267: '# Serializes mutations and atomic saves...' self._lock = threading.RLock()  || 探针实测: inspect.getsource(all_keys+c2_history) 不含 '_lock'，set_key 含。",
+    "function_context": "DeviceKeyStore.all_keys / DeviceKeyStore.c2_history",
+    "sources": [
+      "types"
+    ]
+  },
+  {
+    "id": "TYPES-04",
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 292,
+    "category": "type-coercion/str-int-boundary",
+    "description": "store JSON 键 str↔int 转换边界松散：load() 用裸 int(tid_str) 解析终端键，接受非规范键并静默重映射。探针实测（构造 JSON {\"1_0\":…, \"+7\":…, \" 9 \":…}）：加载得到 {10, 7, 9}——\"1_0\"→10（Python 下划线分组）、\"+7\"→7、\" 9 \"→9，无任何告警。手工编辑/外部工具/旧版本写入的文件可能把终端 id 静默折叠或重映射（例如手工写入 \"07\" 与 \"7\" 合并），且 c2_history 与 key 绑定随之漂移。同类隐患 \"0x..\"/全角数字会抛 ValueError 被包装（该路径已有良好上下文），但上述三类是静默通过。建议校验 tid_str 严格规范形式（tid_str == str(int(tid_str)) 且非空、无符号、无空白），不符合即报带路径的 ValueError。严重度受限于触发条件（需文件被带外修改，schema 校验已存在）。",
+    "evidence": "main.py:292: tid = int(tid_str)  || 探针实测: DeviceKeyStore(path).load() 对 {\"1_0\",\"+7\",\" 9 \"} 键 → sorted(all_keys())==[7, 9, 10]，静默接受。",
+    "function_context": "DeviceKeyStore.load",
+    "sources": [
+      "types"
+    ]
+  },
+  {
+    "id": "TYPES-05",
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 436,
+    "category": "api-design/write-amplification",
+    "description": "'全部变更方法自动 save' 的一致性策略（正确且被 4 个 mutator 一致执行——正面确认）在批量路径上造成写放大：_flush_c2_state 对 hsm.terminal_ids() 循环逐终端调 store.set_c2_history，而 set_c2_history 每次都全量序列化+原子重写整个 JSON。探针实测：5 终端一次 flush 触发 5 次全量 save。该函数在每次 cmd_auth 的 finally（L552）与 main() 退出 finally（L768）都执行，N 终端时每次认证结束产生 N 次磁盘全量写。建议为 DeviceKeyStore 提供批量接口（如 set_c2_histories(dict) 或 context-manager 批处理/defer save），既消除放大又保持'不可能忘记 save'的不变式。",
+    "evidence": "main.py:435-436: for tid in hsm.terminal_ids(): store.set_c2_history(tid, protocol.c2_history(tid))  || main.py:388-390: with self._lock: self._c2[int(terminal_id)] = list(c2s); self.save()  || 探针实测: 5 终端循环 set_c2_history → save 计数 5 次（每次全量 JSON 重写）。",
+    "function_context": "_flush_c2_state / DeviceKeyStore.set_c2_history",
+    "sources": [
+      "types"
+    ]
+  },
+  {
+    "id": "TYPES-06",
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 349,
+    "category": "api-design/return-type",
+    "description": "key_for 返回裸 tuple[bytes, bool]，第二元素 'created' 的语义（本次调用是否新铸造）只能靠 docstring 传达，调用点解包处可读性弱（main.py:416 'key, created = store.key_for(tid)'）。同时方法名是读样式（key_for）却携带铸造+落盘副作用（get-or-create 语义），docstring 已如实声明，但类型签名无法表达'此读有副作用'。建议返回 NamedTuple（如 class MintedKey(NamedTuple): key: bytes; created: bool）或将'查询'与'确保存在'拆为两个方法。当前唯一调用方 _ensure_device_key 用法正确，风险低。",
+    "evidence": "main.py:349-351: def key_for(self, terminal_id: int) -> tuple[bytes, bool]: \"\"\"Return (key, created): the terminal's key, minting a fresh CSPRNG 12-byte key and persisting it immediately on first use.\"\"\"  || main.py:416: key, created = store.key_for(tid)",
+    "function_context": "DeviceKeyStore.key_for / _ensure_device_key",
+    "sources": [
+      "types"
+    ]
+  },
+  {
+    "id": "TYPES-07",
+    "severity": "P3",
+    "file": "src/python/server/hsm.py",
+    "line": 174,
+    "category": "type-coercion",
+    "description": "terminal_id 在多个边界做裸 int(terminal_id) 强转而不校验类型：① SpeckHSM.set_key L174 int(7.9)→7 静默截断（探针实测 set_key(7.9, 12B) 后 terminal_ids()==[7]）；② bool 是 int 子类，has_key(True)/set_key(True,…) 会命中/写入 tid=1 的键（探针实测 has_key(True)==True，而 True 在 u32 线上域语义上是终端 1 还是类型错误无从分辨）；③ store 侧 main.py:410 同样裸 int()。注解写 int 但运行时零校验，等价于 Any 边界。建议边界处用 operator.index(x)（拒绝 float/str，接受 int）加 'not isinstance(x, bool)' 排除，或至少在 set_key 校验。内部 API、调用方当前均传 int，故 P3。",
+    "evidence": "hsm.py:174: tid = int(terminal_id)  || 探针实测: SpeckHSM().set_key(7.9, bytes(12)) → terminal_ids()==[7]；SpeckHSM(keys={1:…}).has_key(True) → True  || main.py:410: tid = int(terminal_id)",
+    "function_context": "SpeckHSM.set_key / SpeckHSM.has_key / _ensure_device_key",
+    "sources": [
+      "types"
+    ]
+  },
+  {
+    "id": "TYPES-08",
+    "severity": "P3",
+    "file": "src/python/server/protocol.py",
+    "line": 101,
+    "category": "type-safety/stringly-typed",
+    "description": "PendingAuth.state 与 _require_session(expected_state: str)（L535-544）用裸字符串状态机：'CHALLENGED'/'GRAY'/'SESSION'/'IDLE'/'BLOCKED' 字面量散布于 L101/L482/L487/L531/L627/L629/L639，类型层无 Literal 约束。拼写错误（如 'CHALLLENGED'）静态不可查，只在运行时以 'expected state ... session is ...' ProtocolError 形式暴露——可诊断但可预防。建议 Literal[\"CHALLENGED\",\"GRAY\",\"SESSION\",\"IDLE\",\"BLOCKED\"] 或 Enum。当前所有字面量拼写一致（已核对全部出现点），无现实缺陷。",
+    "evidence": "protocol.py:101: state: str = \"CHALLENGED\"  # CHALLENGED -> GRAY -> SESSION/IDLE/BLOCKED  || protocol.py:535: def _require_session(self, tid: int, expected_state: str) -> PendingAuth:  || protocol.py:540: if session.state != expected_state:",
+    "function_context": "PendingAuth / HFIDAProtocol._require_session",
+    "sources": [
+      "types"
+    ]
+  },
+  {
+    "id": "TYPES-09",
+    "severity": "P3",
+    "file": "src/python/server/protocol.py",
+    "line": 430,
+    "category": "error-handling-consistency",
+    "description": "on_access_request 对输入错误的处理路径不一致：未注册终端→RESULT_ERROR 帧（L426-429）、窗口内重放→RESULT_REPLAY 帧（L430-434）、池空→POOL_EMPTY 帧（L437-440），唯独畸形长度 C2 经 _remember_c2→_as_bytes(L323-330) 抛出未声明的 ValueError 穿透调用栈（探针实测 on_access_request(1, c2=b\"short\") → ValueError: c2 must be 8 bytes, got 5）。wire 路径安全（parse 已强制 16B 载荷→c2 恰 8B，L386-394），仅 REPL/直调可见，REPL 有 except ValueError 兜底（main.py:688），故 P3；但同一函数三种'坏输入'两种协议，接口语义分裂。建议在 on_access_request 顶部先行 _as_bytes 校验并返回 RESULT_ERROR 帧，或文档声明长度由 parse 层独责。",
+    "evidence": "protocol.py:430: if c2 is not None and not self._remember_c2(tid, c2):  || protocol.py:327-329: raise TypeError(...)/raise ValueError(f\"{name} must be {length} bytes, got {len(value)}\")  || 探针实测: proto.on_access_request(1, c2=b\"short\") → ValueError('c2 must be 8 bytes, got 5')（非 RESULT 帧）",
+    "function_context": "HFIDAProtocol.on_access_request / _remember_c2 / _as_bytes",
+    "sources": [
+      "types"
+    ]
+  },
+  {
+    "id": "TYPES-10",
+    "severity": "P3",
+    "file": "src/python/server/protocol.py",
+    "line": 471,
+    "category": "state-mutation-ordering",
+    "description": "on_response（L468-471）与 on_extra_response（L507-512）两个调用点都是'先评分更新 session（hd_sum/n_responses），后 _update_session_c2 验证 C2'的顺序；当迟到 C2 被重放窗拒绝或与会话冲突时抛 ProtocolError，但此时 session 已被半更新。探针实测：on_response 触发 'late C2 rejected as replay' 异常后 session 呈 hd_sum=0/n_responses=4/c2=None/state='CHALLENGED'。可恢复（on_response 对 hd_sum 是赋值非累加，重试覆盖；state 未变故 _require_session 仍放行），无安全影响，但异常路径留下中间态会话违背最小惊异。建议将 _update_session_c2 提到评分之前（验证失败时会话保持原样）。",
+    "evidence": "protocol.py:468-471: hds = self.templates.hamming_distances(...); session.hd_sum = sum(hds); session.n_responses = len(hds); self._update_session_c2(session, c2)  || protocol.py:507-512: hds = self.templates.hamming_distances(...); session.hd_sum += sum(hds); session.n_responses += len(hds); self._update_session_c2(session, c2)  || 探针实测: raise 后 _pending[1] 为 hd_sum=0, n_responses=4, state='CHALLENGED', c2=None",
+    "function_context": "HFIDAProtocol.on_response / HFIDAProtocol.on_extra_response / _update_session_c2",
+    "sources": [
+      "types"
+    ]
+  },
+  {
+    "id": "TYPES-11",
+    "severity": "P3",
+    "file": "src/python/server/hsm.py",
+    "line": 280,
+    "category": "api-design/type-dispatch",
+    "description": "hsm_status 用 isinstance 三连分支（SpeckHSM/SimulatedHSM/SerialHSM + 兜底 type(hsm).__name__）做类型分派，属性访问全部依赖 isinstance 收窄（hsm.terminal_ids/hsm.secret/hsm.port/hsm.baud）。每新增 HSM 后端都必须修改此自由函数，且它无法访问不属于三个已知类的信息——开闭原则破口。mypy 能通过（isinstance narrowing 有效），但更稳的设计是各子类提供 status() 虚方法或类属性 backend_name。现状功能正确（探针/测试 test_status 通过），P3 观察项。",
+    "evidence": "hsm.py:278-289: def hsm_status(hsm: HSM) -> dict[str, Any]: if isinstance(hsm, SpeckHSM): return {\"backend\": \"speck64/96\", ...} if isinstance(hsm, SimulatedHSM): ... if isinstance(hsm, SerialHSM): ...",
+    "function_context": "hsm_status",
+    "sources": [
+      "types"
+    ]
+  }
+]

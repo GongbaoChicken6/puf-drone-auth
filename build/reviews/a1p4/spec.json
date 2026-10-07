@@ -1,0 +1,26 @@
+[
+  {
+    "severity": "P3",
+    "file": "docs/protocol_contract.md",
+    "line": 61,
+    "category": "spec-compliance/doc-lag",
+    "description": "阶段 4 在 protocol.py 新增线上可见的 RESULT 码 RESULT_REPLAY=4（重放拒绝），但协议契约文档的 RESULT 码表仍只列 0-3，未同步登记 4 的语义。RTL 侧兼容性已核实（terminal_fsm.v S_VERIFY_R2 对任意非零 result 码一律 S_BLOCKED+result_r=2'd2，result 字段为 u8，4 在值域内），check_contract_sync.py 实测 6/6 OK（黄金帧集不含 REPLAY 帧故未报警），因此只是文档滞后而非线上冲突。契约文档更新按 HANDOFF_SUMMARY L53 归属阶段 6（'protocol_contract.md：R2 算法定义 + 字节序约定 + 新黄金帧'），阶段 6 执行时应一并补上 4=REPLAY 及 R2=Speck(K,C2) 算法定义。",
+    "evidence": "docs/protocol_contract.md L61: \"**RESULT 码**：0=PASS, 1=REJECT, 2=ERROR, 3=POOL_EMPTY\"  vs  src/python/server/protocol.py L79-82: \"#: C2 repeated inside the replay window -> replayed ACCESS_REQUEST #: (A1 P1-2).  The RTL terminal treats any non-zero code as reject, so #: this code is wire-compatible with the W3 FPGA build. RESULT_REPLAY = 4\"",
+    "function_context": "docs/protocol_contract.md §2 消息表 / protocol.py RESULT 常量区",
+    "sources": [
+      "spec"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "src/python/server/main.py",
+    "line": 112,
+    "category": "spec-compliance/observation",
+    "description": "观察项（非阶段 4 规格缺口）：loopback 模拟终端 SimulatedTerminal.secret 每次进程启动用 secrets.token_bytes(32) 重新随机，导致跨服务器重启的完整认证 PASS 演示不可行（重启后终端 PUF 指纹与已存模板不匹配，实测 c2reset 清窗后 verdict 仍 REJECT）。阶段 4 规格只要求 Speck device key（R2 生成侧）持久化，该要求已满足；终端 PUF secret 的持久化不在任何阶段规格内（真实 RTL 终端 PUF 天然稳定）。记录此项供 W4/演示规划：跨重启 R2 验证演示应使用 setkey 对齐的真实 RTL 终端而非 loopback 模拟器。",
+    "evidence": "main.py L112: \"self.secret = secrets.token_bytes(32)\"（SimulatedTerminal.__init__，每进程新生成）",
+    "function_context": "SimulatedTerminal.__init__",
+    "sources": [
+      "spec"
+    ]
+  }
+]
