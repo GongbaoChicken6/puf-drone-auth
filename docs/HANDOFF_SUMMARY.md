@@ -45,12 +45,14 @@ Git：51 commits · 111 files · tag w3-complete
     - 审查证据：build/reviews/a1p4/（CONSENSUS.md 终审报告 + FIXLIST.md 四轮修复轨迹 + 7 份审查 JSON）
     - 黄金对齐：REPL setkey W3 密钥后首次认证 R2 = 7b45b0545e59aa94（与 tb_terminal_fsm 逐位一致）
 
+- ✅ 阶段 5：集成测试（2026-10-08，经 3 视角交叉审查 + 共识终审 PASS：P0/P1/P2=0，11 项 FIXED-VERIFIED）
+    - 全量回归 **12/12 TB**（含新接入的 tb_w3_top 顶层链路 TB）+ Python 五件套（speck 自测 + 44 单测 + 金丝雀 + 1175 向量新鲜度 + 哨兵守卫），CI-EXIT=0
+    - 线性金丝雀 scripts/test_r2_nonlinearity.py：C0 三重负对照（仿射/宽扇入 GF(2)/xor-tree 全被抓）+ C1 平衡 + C2 一阶 + C3 二阶 + **C4 精确 GF(2) 线性判定**（高斯消元，完全线性映射零漏检）——Speck 双密钥 exact-linear 0/64
+    - 审查中修复的预先存在缺陷：①tb_challenge_decode 终止标记不符合 CI 约定（"11/11 全 PASS"声明从未在 CI 脚本上成立过）②gen_speck_vectors --check 恒真且静默重写销毁 stale 证据（P0，重构为纯计算比对）③CI 预置 $LASTEXITCODE 假失败（A/B 实证删除，机制未定已诚实记录）④python shim 假通过链（-CommandType Application + 哨兵探针）
+    - 证据：build/reviews/a1p5/（CONSENSUS.md 终审 + 3 份审查 JSON + 4 份 CI 日志谱系 README）
+    - deferred：CI 超时作业化（W4 首项）、日志 RemoteException 包装行（证据语义无损）
+
 **未完成：**
-    
-- ⬜ 阶段 5：集成测试（~1.5h）
-    - 全量 11 TB 回归
-    - Python 单测（speck.py + hsm.py 新路径）
-    - 线性金丝雀（scripts/test_r2_nonlinearity.py——验证 R2 不可被线性拟合）
     
 - ⬜ 阶段 6：文档 + 提交（~1h）
     - protocol_contract.md：R2 算法定义 + 字节序约定 + 新黄金帧
@@ -164,11 +166,9 @@ Git：51 commits · 111 files · tag w3-complete
 
 ## 七、下一步（新会话直接从这里开始）
 
-1. 执行 A1 阶段 5：全量回归 + 金丝雀
-   - scripts/ci_regression.ps1 跑全量（11 TB + Python 段 44 测试）
-   - scripts/test_r2_nonlinearity.py 线性金丝雀（R2 不可被线性拟合）
-2. 执行 A1 阶段 6：文档 + 提交
+1. 执行 A1 阶段 6：文档 + 提交（唯一剩余阶段）
    - protocol_contract.md：R2 算法定义 + 字节序约定 + 新黄金帧 + RESULT 码 4 已登记
    - project_design.md：安全分析更新 + 熵值诚实声明（防重放窗口 128 权衡见 protocol.py 注释与 CONSENSUS.md deferred 裁决；含 W4 安全待办：P1-5 终端跨断电重放 / 44-bit 熵离线穷举 / 密钥保管 Windows 权限失实）
    - tools/check_contract_sync.py 重跑（注意：位于 tools/ 而非 scripts/）
-3. A1 完成后：选择下一任务（B5 PUF 接入 / B6 ML 攻击 / D14 Skill / D13 报告）
+   - W4 待办增补：CI 超时作业化（共识终审建议列 W4 首项，防 TB 死循环挂死）
+2. A1 完成后：选择下一任务（B5 PUF 接入 / B6 ML 攻击 / D14 Skill / D13 报告）

@@ -1,0 +1,50 @@
+[
+  {
+    "severity": "P3",
+    "file": "build/reviews/a1p5/P5_CONTEXT.md",
+    "line": 12,
+    "category": "spec-compliance/claim-unreproducible",
+    "description": "缺陷 2 的根因机制声明不可复现。P5_CONTEXT 声称 '$LASTEXITCODE=1 预置在 .ps1 脚本作用域创建影子副本，原生命令真实退出码写入父作用域，脚本内读取恒为 1（实验矩阵 V4/V6）→ speck 自测被误判 FAIL'。本轮三重独立复现（Windows PowerShell 5.1.26100.9444——与 CI 运行环境相同的唯一解释器，系统无 pwsh7）全部证伪该机制：(a) .ps1 内预置 $LASTEXITCODE=1 后 & cmd /c 'exit 0' → 读到 0；(b) 预置 1 后 & cmd /c 'exit 5' → 读到 5；(c) 决定性实验——把被删除的两处预置原样加回现行 CI Python 段（TEMP 复刻，含 2>&1 重定向与真实 python），健康环境完整执行 → 44 tests + canary 全绿、exit 0，与现行版输出逐字节一致。即预置在 CI 实际结构（脚本顶层作用域）下既不制造假失败、也无防御价值。此外'首轮全量 CI 即如此（speck 被误判 FAIL）'与现存日志矛盾：ci_first_run_10of11.log 显示首轮在 TB 段 10/11 后 L57 exit 1 提前退出，Python 段从未执行，亦无任何其他日志佐证 speck 段曾 FAIL。处置本身（删除预置）经本轮实验验证结果安全且必要通道完整（见下条），但根因叙事不实：真实失败（若发生过）原因未定。风险：未来维护者按'预置=作用域阴影'的错误心智模型修改 CI 门禁。要求：更正 P5_CONTEXT 第 12 行机制描述；若曾有真实 speck 段失败，补档其实际退出码与输出。",
+    "evidence": "P5_CONTEXT L12: \"在 .ps1 脚本作用域预置 $LASTEXITCODE=1 创建影子副本，原生命令（python）的真实退出码写入父作用域，脚本内读取恒为 1 → speck 自测被误判 FAIL（首轮全量 CI 即如此）。实验矩阵确证：脚本文件内预置+cmd /c exit 0 → 读到 1（V6）\"。本轮实测（三组，均为 powershell.exe 5.1 -File）：\"V6 script-scope preassign=1, native exit 0, read = 0\"；\"V6b preassign=1, native exit 5, read = 5\"；加回预置的完整 CI Python 段健康执行 → \"Ran 44 tests ... OK / CANARY PASS / OK / OUTER-EXIT=0\"。ci_first_run_10of11.log 尾行：\"=== 10/11 PASS, 1 FAIL ===\"（脚本 L57 在此 exit，Python 段未执行）",
+    "function_context": "scripts/ci_regression.ps1 Python 段（预置删除决策的依据文档）",
+    "sources": [
+      "p5_spec"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "scripts/ci_regression.ps1",
+    "line": 86,
+    "category": "spec-compliance/evidence-gap",
+    "description": "--check 向量新鲜度门禁在成功路径完全静默（输出重定向 > $null 且成功时不打印任何行），导致 ci_full_run.log 中无任何痕迹证明该项执行过——P5_CONTEXT L16 '向量 --check 新鲜度 1175 组 up-to-date' 的证据只存在于 exit 0 这一间接事实。功能本身经本轮手动实跑验证有效（python scripts/gen_speck_vectors.py --check → exit 0，输出 'PASS: ...speck_random.mem is up to date (1175 vectors)'）。同理金丝雀仅回显 -Last 3 行（数值已在日志中，尚可）。建议：--check 成功时向控制台打印一行摘要（如 'vectors 1175 up-to-date'），使全量回归日志可独立审计五件套逐项执行。非功能缺陷，证据可审计性建议。",
+    "evidence": "L86-88: \"& python \\\"scripts\\\\gen_speck_vectors.py\\\" --check > $null 2>&1\" + \"if ($LASTEXITCODE -ne 0) { Write-Host \\\"SPECK VECTOR FRESHNESS CHECK FAILED\\\"; exit 1 }\"（成功路径零输出）；本轮手动实跑: \"PASS: D:\\puf-drone-auth\\scripts\\..\\sim\\testvectors\\speck_random.mem is up to date (1175 vectors)\" exit=0；ci_full_run.log 中 '=== CI: Python' 段无任何 --check 相关行",
+    "function_context": "ci_regression.ps1 Python 段 --check 门禁",
+    "sources": [
+      "p5_spec"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/HANDOFF_SUMMARY.md",
+    "line": 50,
+    "category": "spec-compliance/doc-update-needed",
+    "description": "HANDOFF 现文本与阶段 5 完成态不一致（只报告，不修改；按项目流程归阶段 6 '文档+提交'更新）：L50-53 阶段 5 仍为 ⬜ 未完成，但阶段 5 三项交付已全部完成并验证（全量 11/11 TB 回归、44 单测+speck 自测、线性金丝雀——本轮逐项独立复验，见审查正文）；L167-169 '下一步 1. 执行 A1 阶段 5' 已被执行，应推进为阶段 6；L162 'CI：scripts/ci_regression.ps1 跑 11 TB' 描述已滞后（现还含 speck 自测+44 单测+金丝雀+--check 新鲜度的 Python 段）。注：上一轮审查指出的 L163 重复'阶段 6'条目与 check_contract_sync.py 路径问题已被提交 5f0642a 修复（现 L165-174 结构干净、L173 已注明 tools/ 路径），无需重复处理。",
+    "evidence": "L50: \"- ⬜ 阶段 5：集成测试（~1.5h）\"（仍标记未完成）；L167-169: \"1. 执行 A1 阶段 5：全量回归 + 金丝雀 ... scripts/test_r2_nonlinearity.py 线性金丝雀\"；对照实证：本轮 ci_full_run.log 11/11 + 独立重跑 Python 段 exit 0（44 tests + CANARY PASS）+ --check exit 0（1175 组 up-to-date）",
+    "function_context": "docs/HANDOFF_SUMMARY.md §二 未完成清单 / §七 下一步",
+    "sources": [
+      "p5_spec"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "sim/tb/tb_w3_top.v",
+    "line": 12,
+    "category": "spec-compliance/coverage-scope",
+    "description": "'全量 11 TB 回归'的'全量'口径存在既定缺口：sim/tb 实际有 12 个 TB 文件，tb_w3_top.v（顶层链路 TB：btn→debounce→FSM→frame→FIFO→UART→loopback→parser，含 TB_W3_TOP_PASS/FAIL 标记与 watchdog）不在 ci_regression.ps1 的 11 TB 列表中，从未被 CI 覆盖；HANDOFF §五 'sim/tb/ — 11 套 TB' 的计数也与目录实际（12）不符。此为阶段 3 以来既有边界（CI 列表创建时即 11 个），非本增量引入，且规格文本（HANDOFF L51）明确以'11 TB'定义全量——按规格验收无违规；但从声明真实性角度，'全量回归'措辞与实际覆盖面（11/12）有出入。建议：向项目方确认 tb_w3_top 的取舍——接入 CI（第 12 个）或在文档注明排除原因（如依赖未完成的上板适配），并同步修正'11 套 TB'计数。",
+    "evidence": "实测: Get-ChildItem sim\\tb tb_*.v → COUNT=12（含 tb_w3_top.v）；tb_w3_top.v L87: \"if (errors == 0) $display(\\\"[T1 PASS] Full chain: btn→debounce→FSM→frame→FIFO→UART→loopback→parser\\\")\" 及 TB_W3_TOP_PASS 标记；ci_regression.ps1 L21-28 $tbs 数组仅列 11 个（无 tb_w3_top.v）；HANDOFF §五: \"sim/tb/ — 11 套 TB（~2100 行）\"",
+    "function_context": "sim/tb 测试台集合 vs ci_regression.ps1 TB 列表 vs HANDOFF §五 口径",
+    "sources": [
+      "p5_spec"
+    ]
+  }
+]

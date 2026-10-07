@@ -133,7 +133,14 @@ def gen_all_vectors():
     return vectors
 
 
-def generate():
+def build_content():
+    """Compute vectors + formatted content WITHOUT touching the output file.
+
+    Split out of generate() so --check compares against a pure computation:
+    the old check() called generate() (which rewrites the file) and then
+    compared against what had just been written -- a tautological PASS that
+    also silently destroyed stale evidence (ci_gate review P0).
+    """
     os.makedirs(OUT_DIR, exist_ok=True)
     vectors = gen_all_vectors()
 
@@ -147,8 +154,6 @@ def generate():
         lines.append(f"{k:024x} {p:016x} {c:016x} // {label}")
 
     content = "\n".join(lines) + "\n"
-    with open(OUT_FILE, "w") as f:
-        f.write(content)
 
     # 统计
     n_kat = sum(1 for v in vectors if v[0].startswith("NSA"))
@@ -158,6 +163,21 @@ def generate():
     n_iso = sum(1 for v in vectors if v[0].startswith("ISO"))
     n_rnd = sum(1 for v in vectors if v[0].startswith("RND"))
 
+    return content, vectors
+
+
+def generate():
+    """Generate vectors and WRITE them to the .mem file (report stats)."""
+    content, vectors = build_content()
+    with open(OUT_FILE, "w") as f:
+        f.write(content)
+
+    n_kat = sum(1 for v in vectors if v[0].startswith("NSA"))
+    n_edge = sum(1 for v in vectors if v[0].startswith("EDGE"))
+    n_walk = sum(1 for v in vectors if v[0].startswith("WALK"))
+    n_carry = sum(1 for v in vectors if v[0].startswith("CARRY"))
+    n_iso = sum(1 for v in vectors if v[0].startswith("ISO"))
+    n_rnd = sum(1 for v in vectors if v[0].startswith("RND"))
     print(f"Generated {len(vectors)} vectors:")
     print(f"  NSA KAT:  {n_kat}")
     print(f"  Edge:     {n_edge}")
@@ -166,8 +186,13 @@ def generate():
     print(f"  Iso:      {n_iso}")
     print(f"  Random:   {n_rnd}")
     print(f"Output: {OUT_FILE}")
+    _cross_impl_check(vectors)
+    return content
 
-    # 同时验证双实现一致性
+
+def _cross_impl_check(vectors):
+    """同时验证双实现一致性（生成/检查两条路径共用）"""
+    # （原 generate() 尾部的抽检逻辑，见下）
     for label, k_bus, p_bus, c_bus in vectors[:5]:  # 抽检前 5 条
         key_bytes = struct.pack("<III",
             k_bus & 0xFFFFFFFF,        # k0
@@ -185,22 +210,25 @@ def generate():
 
     print("  Cross-impl check (first 5): PASS")
 
-    return content
-
 
 def check():
+    """Freshness check: PURE computation vs on-disk content, never writes.
+
+    The old version regenerated (rewriting the file) before comparing,
+    which made the PASS tautological and silently destroyed a stale file
+    (ci_gate review P0).  Now a stale file FAILS and is left untouched.
+    """
     if not os.path.exists(OUT_FILE):
         print(f"FAIL: {OUT_FILE} does not exist")
         return False
-    expected = generate()
+    expected, _ = build_content()  # pure: no file writes, no stat prints
     with open(OUT_FILE, "r") as f:
         actual = f.read()
     if actual == expected:
         print(f"PASS: {OUT_FILE} is up to date ({expected.count(chr(10))-4} vectors)")
         return True
-    else:
-        print(f"FAIL: {OUT_FILE} is stale (run gen_speck_vectors.py to regenerate)")
-        return False
+    print(f"FAIL: {OUT_FILE} is stale (run gen_speck_vectors.py to regenerate)")
+    return False
 
 
 if __name__ == "__main__":

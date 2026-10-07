@@ -1,0 +1,62 @@
+[
+  {
+    "severity": "P2",
+    "file": "scripts/test_r2_nonlinearity.py",
+    "line": 147,
+    "category": "检验力缺口/声明过强",
+    "description": "金丝雀对『宽扇入 GF(2) 线性映射』完全无检出能力，而此类映射是 100% 可线性拟合/可预测的，与输出声明 'CANARY PASS: no linear structure detected in R2'（L147）及 docstring『R2 = Speck64/96(K, C2) 不可被线性拟合』（L2）的承诺矛盾：C2 检查只覆盖单输入位→单输出位相关，C3 只覆盖输入位对奇偶→单输出位相关；当每个输出位是≥3个输入位的模2和时两者期望相关均为0。实验实证（%TEMP% 探针，固定种子与金丝雀相同）：(a) GF2 随机行掩码线性映射（CRC/LSFR 类现实退化的代理）bal=2.00σ、c1=0.2109<0.3125、c2=0.3125<0.3750 → 全部 C1-C3 通过；(b) 字节异或折叠（xor-tree，8 字节输出相同）bal=1.62σ、c1=0.2109、c2=0.2734 → 同样通过。即若未来有人把 R2 算法替换为 CRC 类线性混合，CI 金丝雀门禁静默 PASS。负对照 ~C2（C0）恰是对角仿射（最易检形态，corr 必饱和 ±1，实测 1.0 复算确认），制造了『仿射必被抓』的过强自证。修复建议：N=256 样本 > 65 未知量，对每个输出位用 GF(2) 高斯消元精确判定『存在完全线性表示』（残差全 0 即 FAIL，对完全线性零假阳性），或将 CRC/xor-tree 加入负对照集要求必被抓，并把输出措辞弱化为『未检测到一阶/二阶位级相关』。当前 26 轮 Speck 实现无此结构，金丝雀不会对现有正确实现假通过，故 P2 而非 P1。",
+    "evidence": "print(\"CANARY \" + (\"PASS: no linear structure detected in R2\" if ok else \"FAIL\"))  // 实验: GF2-wide-fan-in bal=2.00s c1=0.2109 c2=0.3125 -> ESCAPES all C1-C3; xor-tree-fold bal=1.62s c1=0.2109 c2=0.2734 -> ESCAPES all C1-C3",
+    "function_context": "check_order1 / check_order2 / negative_control",
+    "sources": [
+      "canary_stats"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "scripts/test_r2_nonlinearity.py",
+    "line": 2,
+    "category": "检验力边界未文档化",
+    "description": "少轮化灵敏度边界实测（%TEMP% 探针，monkeypatch speck._ROUNDS 后重跑金丝雀核心检查，同固定种子）：1 轮被 C3 抓住（二阶奇偶 corr 饱和 1.0000）；2 轮 bal=2.38σ/c1=0.2578/c2=0.2812 静默 PASS；4/8/12 轮同样 PASS（数值与 26 轮同量级）。即金丝雀对『轮数削减』这类最现实的弱化在 ≥2 轮时无检出——这是设计内的正确沉默（少轮 Speck 的弱点是差分/密钥恢复类，不表现为 N=256 样本的一/二阶位相关），但 docstring『系统搜索线性结构』未声明该边界，读者易高估覆盖（能抓：对角仿射/翻转/置换/常数/1 轮饱和；抓不住：≥2 轮少轮化、宽扇入线性（见 P2）、高阶非线性、密钥恢复）。建议在 docstring 补边界声明。",
+    "evidence": "E4 rounds= 1: c2=1.0000 -> CAUGHT(FAIL); rounds= 2: bal=2.38s c1=0.2578 c2=0.2812 -> misses(PASS); rounds= 4: c1=0.2578 -> misses; rounds= 8/12/26 同量级 misses",
+    "function_context": "module docstring / check_order1 / check_order2",
+    "sources": [
+      "canary_stats"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "scripts/test_r2_nonlinearity.py",
+    "line": 14,
+    "category": "统计注释数值错误",
+    "description": "注释中的族错误率与期望最大值数值不准确：(1) L14『C1 位平衡 … 族错误率 ~1.7e-4』——P(|Z|>4)=6.334e-5，×64 次比较 = 4.054e-3，注释偏小约 24 倍（精确复算 erfc(4/√2)×64）；(2) L17『各界相对期望最大值（约 3.7~4.6σ）均有余量』——高斯近似 E[max]≈√(2ln m) 给 2.88σ(64)/4.08σ(4096)/4.85σ(129024)，且实测 order2 已达 0.3125×16=5.00σ 超出注释上界 4.6σ，C3 阈值余量实际仅 1.0σ（先验假阳性 2.546e-4，固定种子下 E1 双跑输出逐字节一致、无 flaky）。C2/C3 的族错误率注释（~2e-3/~3e-4）经复算正确（2.348e-3/2.546e-4）。阈值本身保守有效，仅注释声明需修正。",
+    "evidence": "C1 位平衡     : |偏差| <= 4σ  （64 次比较，族错误率 ~1.7e-4）  // 复算: P(|Z|>4)=6.334e-05 x64 = 4.054e-03; 各界相对期望最大值（约 3.7~4.6σ）  // 复算: 2.88/4.08/4.85σ, 实测 order2=5.00σ",
+    "function_context": "module docstring (thresholds block)",
+    "sources": [
+      "canary_stats"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "scripts/test_r2_nonlinearity.py",
+    "line": 129,
+    "category": "双密钥样本绑定",
+    "description": "每个密钥循环内重建 rng = random.Random(SEED)，两个密钥复用完全相同的 256 个 C2 样本：跨密钥检验退化为『同明文集双密钥』（对密钥独立性仍是有效检验），但若该固定 C2 集合恰好与某位结构共振，两个密钥的检查同时受影响——双密钥相对单密钥的边际风险覆盖低于独立采样（如 SEED 与 SEED^key 衍生独立流）。当前实测两密钥均远离阈值，无实际后果；属设计观察。",
+    "evidence": "for name, key in KEYS:\n        rng = random.Random(SEED)   # 两密钥共用同一 C2 样本序列",
+    "function_context": "main",
+    "sources": [
+      "canary_stats"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "scripts/ci_regression.ps1",
+    "line": 75,
+    "category": "CI 证据日志可读性",
+    "description": "unittest 的结果输出（'Ran 44 tests … OK'）走 stderr，在 PowerShell 5.1 的 2>&1 捕获下被包装为 ErrorRecord，落盘日志 ci_full_run.log 中出现孤立行 'System.Management.Automation.RemoteException' 夹在 'Ran 44 tests in 0.288s' 与 'OK' 之间。退出码判定不受影响（$pyCode 取自 $LASTEXITCODE，CI-EXIT=0 正确），但作为竞赛证据链的日志混入疑似异常字样，易被后续读者误判为 CI 存在错误。建议对 $out 逐条字符串化（$out | ForEach-Object { \"$_\" }）或仅捕获 stdout。",
+    "evidence": "$out = & python \"tests\\test_a1_phase4.py\" 2>&1  // ci_full_run.log 实录: 'Ran 44 tests in 0.288s' / 'System.Management.Automation.RemoteException' / 'OK'",
+    "function_context": "ci_regression.ps1 Python section",
+    "sources": [
+      "canary_stats"
+    ]
+  }
+]

@@ -9,7 +9,8 @@
 //       （Fisher-Yates 构造保证，逐轮逐值复核，100 次全部检查）；
 //    3. 延迟测量：统计 start 脉冲采样沿到 done 置位的时钟周期数；
 //    4. 边界用例：全零种子（LFSR 停 0、j 恒 0）仍须输出合法排列。
-//  全部通过打印 TB_PASS，否则打印 TB_FAIL 并列出错项。
+//  全部通过打印 TB_CHALLENGE_DECODE_PASS，否则打印 TB_CHALLENGE_DECODE_FAIL
+//  并列出错项（CI 门禁约定 TB_<模块名>_PASS）。
 //////////////////////////////////////////////////////////////////////////////////
 module tb_challenge_decode;
 
@@ -167,10 +168,12 @@ module tb_challenge_decode;
         // ---- 汇总 ----
         $display("[TB] 延迟统计（固定种子 100 次）：min = %0d，max = %0d", lat_min, lat_max);
         if (err_cnt == 0) begin
-            $display("TB_PASS: 100 次确定性 + 每轮排列性质 + 全零边界 用例全部通过");
+            // CI 门禁约定：TB_<模块名>_PASS（与 tb_byte_fifo/tb_crc16 等一致；
+        // 旧标记 "TB_PASS" 不匹配 ci_regression.ps1 的 TB_.*_PASS 正则）
+        $display("TB_CHALLENGE_DECODE_PASS: 100 次确定性 + 每轮排列性质 + 全零边界 用例全部通过");
         end
         else begin
-            $display("TB_FAIL: 共 %0d 项错误", err_cnt);
+            $display("TB_CHALLENGE_DECODE_FAIL: 共 %0d 项错误", err_cnt);
         end
         $finish;
     end
