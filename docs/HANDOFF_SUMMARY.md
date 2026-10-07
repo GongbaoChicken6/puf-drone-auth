@@ -103,6 +103,14 @@ Git：57 commits（截至 A1 收官提交 a678274）· 144 files · tag w3-compl
 - **W4 密钥熵不足**：16 环 ~44 bit 根熵 + 链路明文 (C2,R2) 对 = 离线穷举 oracle（GPU 小时级恢复 K 后永久冒充基站）。W4：K = PUF_out XOR station_random 或 HKDF 混合基站侧高熵秘密；或提升根熵 ≥80 bit
 - **明文对称密钥保管**：device_keys.json 明文持有全部密钥；Windows/NTFS 下 os.chmod 0600 仅只读位、无 ACL 保护（main.py docstring "owner-only" 表述在部署平台失实）；对称密钥=能读任一侧即可冒充另一侧。阶段 6 文档诚实化（可选 DPAPI）
 - **c2reset/setkey 无确认无审计**：每次真终端换电池必然触发 c2reset 清空整个重放窗（与 P1-5 同源，W4 修复后例行性消失）；运维命令应加确认提示与追加式操作日志
+
+### A1 整体复审新增备注（2026-10-08 全六阶段交叉审查，全部 P3 级）
+
+- **SimulatedHSM 已休眠**：A1 后无任何生产调用方与测试覆盖（规格要求保留供 legacy enroll），W4 决策点：删除或补 3-4 行最小单测防 bit-rot
+- **on_confirm 无运行时调用方**：HF-IDA 最后一步（基站确知终端已验证 R2）的 PC 侧消费在串口接收环路落地时必须接线（W3 上板清单第 5 条的自然延伸）
+- **互操作 harness 固化建议**：整体复审的跨阶段实演（RTL 语义终端模型↔真实服务器栈，18/18 断言：黄金 R2/重放拒止/跨重启持久/灰区/CONFIRM 闭环）价值高，建议 W4 固化为 tests/test_interop_rtl_model.py（本次为一次性证据，见 build/reviews/a1full/interop_run.json）
+- **串口联调前置：注册语义配对**：当前 loopback 终端响应=HMAC、RTL W3 占位=种子直通——未来串口环路联调时，enroll 必须用与终端一致的响应语义（或对真实终端注册），否则 PUF 评分必 REJECT、易误判为协议缺陷
+- 本轮已顺手修复：tb_level3 两处 ~C2 过时注释、tb_gap 新增 GH 用例（码 4 + 正确 R2_7 → REJECT，锁定阶段 4 语义）、check_contract_sync 输出措辞诚实化（TB 数组为人工镜像，工具不读）
 - **setkey 明文输入通道**（安全编码扫描）：密钥以 REPL 参数明文输入，留存于终端回显/录屏/脚本日志。W4 接真实密钥前改 getpass 隐藏回显或从 0600 文件/环境变量导入
 - **DeviceKeyStore 跨进程 last-writer-wins**（安全编码扫描，实验实证）：两服务器实例共享同一密钥文件时，陈旧实例的 save 会静默抹除另一实例的新密钥（单实例 REPL 假设下可接受）。W4：文件锁或 mtime 失配检测
 - **SimulatedHSM.save_secret 遗留 API**（安全编码扫描）：明文 write_text、无 0600/原子写，低于 DeviceKeyStore 新基线；全仓无调用方。W4 前删除或对齐基线

@@ -262,6 +262,20 @@ module tb_gap_regression;
         if (auth_result !== 2'd3) begin errors = errors + 1; $display("[GF FAIL] result=%0d exp 3 (forged R2 must block)", auth_result); end
         else $display("[GF PASS] forged R2 (1-byte flip) -> BLOCKED(3) : core security property holds");
 
+        //================ GH: RESULT code 4 (REPLAY) -> REJECT ================
+        // A1 阶段 4 语义锁定：终端对任意非零 result 码一律拒绝。即使 R2 完全
+        // 正确（本轮期望 R2_7），码 4（服务端重放拒止）也必须被终端拒绝。
+        $display("[GH] 7th auth with CORRECT R2_7 but result=4 (REPLAY)");
+        pulse_auth;
+        wait (mf_frame_done === 1'b1); @(negedge clk);     // ACCESS (C2=a7..ae)
+        load_challenge; feed_frame(24'h0091, 8'd32);
+        wait (mf_frame_done === 1'b1); @(negedge clk);     // R1
+        load_result(8'h04, 8'h7f,8'h3a,8'h29,8'hdf,8'h81,8'h75,8'h1e,8'h59); // R2_7 correct, code=REPLAY
+        feed_frame(24'h0093, 8'd10);
+        repeat (10) @(negedge clk);
+        if (auth_result !== 2'd2) begin errors = errors + 1; $display("[GH FAIL] result=%0d exp 2 (non-zero code must reject)", auth_result); end
+        else $display("[GH PASS] result=4 (REPLAY) rejected despite correct R2 -> REJECT(2)");
+
         repeat (5) @(negedge clk);
         if (errors == 0) $display("TB_GAP_REGRESSION_PASS");
         else             $display("TB_GAP_REGRESSION_FAIL errors=%0d", errors);

@@ -98,7 +98,7 @@ def main() -> int:
     if bad:
         print(f"\nDRIFT DETECTED: {bad} mismatch(es) -- update protocol.py AND contract/TB together!")
         return 1
-    print("\nCONTRACT SYNC OK: protocol.py == contract S4 (TB golden arrays derive from the same source)")
+    print("\nCONTRACT SYNC OK: protocol.py == contract S4 " "(TB golden arrays are manually mirrored -- this tool does not read them)")
     return 0
 
 

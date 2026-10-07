@@ -6,7 +6,7 @@
 // 验证协议状态机与真实帧构造器/帧解析器的接口时序（非简化模型）。
 //
 // T1: 完整通过流程（ACCESS→CHALLENGE→R1→RESULT→CONFIRM→SESSION）
-//     R2 = ~C2（动态绑定，验证 C2 重放修复）
+//     R2 = Speck(K,C2)（A1 统一算法，黄金值 Python 预计算 7b45b0545e59aa94）
 //============================================================================
 module tb_level3_protocol;
 
@@ -215,7 +215,7 @@ module tb_level3_protocol;
         // Step 5: 等 frame_parser 输出 frame_ok（terminal 收到 CHALLENGE）
         // （frame_ok 是单拍，可能已经过了——用 auth_busy 或直接等 R1 的 done）
 
-        // Step 6: 喂 RESULT（R2 = ~C2）
+        // Step 6: 喂 RESULT（R2 = Speck(K,C2)，黄金值见 result_gold）
         for (i = 0; i < 22; i = i + 1) frame_bytes[i] = result_gold[i];
         feed_frame_bytes(22);
 
