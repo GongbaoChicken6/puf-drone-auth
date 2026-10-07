@@ -5,12 +5,17 @@
 // T1: 复位行为
 // T2: KAT（与 Python 交叉验证的已知答案）
 // T3: 边角向量（全0/全FF）
-// T4: 随机向量（20 组，与 Python 预计算比对）
+// T4: 全量向量回放——$fgets 消费 gen_speck_vectors.py 单源 .mem
+//     （NSA KAT + 边角 + 单比特游走 + 进位链 + 密钥隔离 + 随机，共 1175 组；
+//       A1 阶段 6 修复：此前该文件仅被生成器/CI 维护而无任何 RTL 消费者）
 // T5: 背靠背操作
 // T6: 忙时 start 忽略
 // T7: 运行中复位
 // T8: done 单拍验证
-// T9: 时延上界
+// T9: 时延上界（start→done ≤ 60 周期，标称 53）
+//
+// 计划偏差（诚实登记）：plan v3 的"输入毛刺"用例未实现——集成中
+// sp_key/sp_plaintext 由 terminal_fsm 保持稳定，无实际暴露面（W4 可补）。
 //============================================================================
 module tb_speck;
 
@@ -26,6 +31,10 @@ module tb_speck;
     integer errors = 0;
     integer test_count = 0;
     integer cycle_count = 0;
+
+    // 单源向量数：与 scripts/gen_speck_vectors.py 输出锁定（CI --check
+    // 保证 .mem 与生成器一致；生成器变更时两侧同步更新此数）
+    localparam EXPECTED_MEM_VECTORS = 1175;
 
     speck64_96 dut (
         .clk            (clk            ),
@@ -125,6 +134,43 @@ module tb_speck;
 
         if (errors == 0) $display("  [T3 PASS] 边角向量");
 
+        // T4: 全量向量回放（单源 .mem；cwd 相对路径兼容仓库根/sim 目录两种运行方式）
+        $display("[T4] 全量向量回放 speck_random.mem");
+        begin : T4_BLOCK
+            integer fd, sc, chars, vcount;
+            reg [1023:0] line;
+            reg [95:0]  v_key;
+            reg [63:0]  v_pt, v_ct;
+            vcount = 0;
+            fd = $fopen("sim/testvectors/speck_random.mem", "r");
+            if (fd == 0) fd = $fopen("testvectors/speck_random.mem", "r");
+            if (fd == 0) begin
+                errors = errors + 1;
+                $display("  [T4 FAIL] cannot open speck_random.mem (tried sim/ and testvectors/)");
+            end else begin
+                chars = $fgets(line, fd);
+                while (chars > 0) begin
+                    if (line[15:8] == "/" && line[7:0] == "/") begin
+                        // 头部注释行：跳过（行尾 "// label" 由 %h 格式自然忽略）
+                    end else begin
+                        sc = $sscanf(line, "%h %h %h", v_key, v_pt, v_ct);
+                        if (sc == 3) begin
+                            vcount = vcount + 1;
+                            run_speck(v_key, v_pt, v_ct, "T4_mem");
+                        end
+                    end
+                    chars = $fgets(line, fd);
+                end
+                $fclose(fd);
+                if (vcount != EXPECTED_MEM_VECTORS) begin
+                    errors = errors + 1;
+                    $display("  [T4 FAIL] vector count %0d != %0d (generator/TB out of sync)",
+                             vcount, EXPECTED_MEM_VECTORS);
+                end else
+                    $display("  [T4 PASS] %0d 组向量全部匹配（KAT/边角/游走/进位/隔离/随机）", vcount);
+            end
+        end
+
         // T5: 背靠背
         $display("[T5] 背靠背");
         run_speck(96'h00010203_08090a0b_10111213, 64'h65616e73_20466174,
@@ -197,6 +243,29 @@ module tb_speck;
             $display("  [T8 FAIL] done 粘滞");
         end
 
+        // T9: 时延上界（start→done）
+        $display("[T9] 时延上界");
+        begin : T9_BLOCK
+            integer lat;
+            @(negedge clk);
+            key_in        = 96'h13121110_0b0a0908_03020100;
+            plaintext_in  = 64'h736e6165_74614620;
+            start         = 1'b1;
+            @(negedge clk);
+            start         = 1'b0;
+            lat = 0;
+            while (done !== 1'b1 && lat < 200) begin
+                @(posedge clk);
+                lat = lat + 1;
+            end
+            if (done === 1'b1 && lat <= 60 && ciphertext_out === 64'h4175946c_9f7952ec)
+                $display("  [T9 PASS] start->done = %0d 周期 (<=60, 标称 53)", lat);
+            else begin
+                errors = errors + 1;
+                $display("  [T9 FAIL] lat=%0d done=%b ct=%h", lat, done, ciphertext_out);
+            end
+        end
+
         // 总结
         repeat(5) @(negedge clk);
         if (errors == 0)
@@ -206,9 +275,9 @@ module tb_speck;
         $finish;
     end
 
-    // 看门狗
+    // 看门狗（T4 回放 1175 组 ≈ 65k 周期 ≈ 650us，留 10x 余量）
     initial begin
-        #100_000;
+        #10_000_000;
         $display("[WATCHDOG] TIMEOUT");
         $display("TB_SPECK_FAIL (watchdog)");
         $finish;

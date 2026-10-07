@@ -1,3 +1,5 @@
+> **[SUPERSEDED]** 本中间版已被 docs/plans/A1_speck_plan_v3_final.md（三代理共识终版）取代，仅作历史存档。
+
 # A1 实施计划 v2：Speck64/96 轻量级密码统一 R2 算法
 
 ## 调研结论

@@ -1,7 +1,7 @@
 # PUF 无人机认证项目 · 交接摘要
-生成时间：2026-10-08（A1 阶段 4 完成后；上版 2026-10-07 为阶段 3 后）
+生成时间：2026-10-08（**A1 全部六个阶段完成**；上版为阶段 3 后/阶段 4 后两版）
 项目路径：D:\puf-drone-auth
-Git：51 commits · 111 files · tag w3-complete
+Git：57 commits · 139 files · tag w3-complete（A1 后新增阶段 4/5/6 三笔提交 + 审查证据）
 
 ## 一、项目概况
 
@@ -25,7 +25,7 @@ Git：51 commits · 111 files · tag w3-complete
 - ✅ 阶段 2：向量基础设施
   - scripts/gen_speck_vectors.py（5 类向量，--check 模式）
   - sim/testvectors/speck_random.mem（1175 组）
-  - CI 已接入（ci_regression.ps1 含 11 TB）
+  - CI 已接入（A1 后现状：ci_regression.ps1 = 12 TB + Python 五件套 + 契约同步门禁）
 
 - ✅ 阶段 3：FPGA 集成
   - terminal_fsm.v：新增 S_CALC_R2 状态（4'd12），Speck 实例化
@@ -54,10 +54,12 @@ Git：51 commits · 111 files · tag w3-complete
 
 **未完成：**
     
-- ⬜ 阶段 6：文档 + 提交（~1h）
-    - protocol_contract.md：R2 算法定义 + 字节序约定 + 新黄金帧
-    - project_design.md：安全分析更新 + 熵值诚实声明
-    - check_contract_sync.py 重跑
+- ✅ 阶段 6：文档 + 提交（2026-10-08，经 3 视角交叉审查：契约位级/文档诚实性/收官完整性）
+    - protocol_contract.md：新增 §4.1 R2 生成算法定义（算法参数/三方字节序/C2 语义/黄金向量/金丝雀）+ §4 增 RESULT_A1_GOLDEN 黄金帧；check_contract_sync 扩展至 7 帧并接入 CI
+    - project_design.md：hsm 接口/终端 R2 验证语义（HD→Speck 精确比对）修正 + "A1 后安全态势"诚实声明块（5 条可/不可声明）
+    - **tb_speck 补齐 T4 全量向量回放**（$fgets 消费单源 .mem，1175 组全匹配——修复"向量无 RTL 消费者"P2）+ T9 时延上界（实测 53 周期）；输入毛刺用例登记为计划偏差（集成中输入恒稳，W4 可补）
+    - 旧计划文档加 SUPERSEDED 版本链标注；main.py save() docstring 平台限定；伪代码示意标注
+    - 证据：build/reviews/a1p6/（3 份审查 JSON）
 
 ## 三、关键技术决策（已定稿）
 
@@ -161,14 +163,15 @@ Git：51 commits · 111 files · tag w3-complete
 - 所有 RTL 遵循 rtl-guardrails（Verilog-2001，无 output reg，同步复位，声明时初始化）
 - 每个阶段完成后用 auto-review 派遣多代理审查
 - 审查发现按 P0→P1→P2→P3 修复，修复后跑全量回归
-- CI：scripts/ci_regression.ps1 跑 11 TB
+- CI：scripts/ci_regression.ps1（12 TB + speck 自测 + 44 单测 + 金丝雀 + 向量新鲜度 + 契约同步）
 - 提交信息详细描述改动内容和原因
 
 ## 七、下一步（新会话直接从这里开始）
 
-1. 执行 A1 阶段 6：文档 + 提交（唯一剩余阶段）
-   - protocol_contract.md：R2 算法定义 + 字节序约定 + 新黄金帧 + RESULT 码 4 已登记
-   - project_design.md：安全分析更新 + 熵值诚实声明（防重放窗口 128 权衡见 protocol.py 注释与 CONSENSUS.md deferred 裁决；含 W4 安全待办：P1-5 终端跨断电重放 / 44-bit 熵离线穷举 / 密钥保管 Windows 权限失实）
-   - tools/check_contract_sync.py 重跑（注意：位于 tools/ 而非 scripts/）
-   - W4 待办增补：CI 超时作业化（共识终审建议列 W4 首项，防 TB 死循环挂死）
-2. A1 完成后：选择下一任务（B5 PUF 接入 / B6 ML 攻击 / D14 Skill / D13 报告）
+**A1 已全部完成**（六阶段 + 五轮多代理审查，证据 build/reviews/a1p4~a1p6/）。选择下一任务：
+
+1. **B5 PUF 真实接入**（W4 核心创新，最高优先）：替换种子直通占位 → challenge_decode + ro_array 真实测量；同时处理 W4 安全项（P1-1 真密钥 / P1-4 PUF / P1-5 终端重放三选一 / 44-bit 熵混合 / CI 超时作业化）
+2. **B6 ML 攻击实验**（W4 交付物，20 分）：实验 A 合成 arbiter 基线 + 实验 B 排序重构攻击（设计见 project_design.md §W4）
+3. D14 Skill 打包（15 分）/ D13 报告初稿（15 分）
+
+上板前必做清单仍见 §五（真实引脚/时钟适配/复位源/电台/串口循环）。

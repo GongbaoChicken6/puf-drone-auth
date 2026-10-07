@@ -1,0 +1,38 @@
+[
+  {
+    "severity": "P2",
+    "file": "sim/tb/tb_speck.v",
+    "line": 8,
+    "category": "closure/verification-coverage-gap",
+    "description": "验证覆盖宣称与实际不符：1175 组测试向量在全部代码库中无任何 RTL 消费者（git grep：speck_random.mem 仅被其生成器 gen_speck_vectors.py:27 引用一次，sim/ 与 src/ 无任何 $readmemh/fopen/.mem 引用），而 plan v3（docs/plans/A1_speck_plan_v3_final.md L40/43/63）承诺 tb_speck 含 'T4 随机1000（固定种子）/T9 输入毛刺/T10 时延上界' 共 10 类用例。实际 tb_speck.v 只有 7 类（T1 复位/T2 KAT/T3 边角/T5 背靠背/T6 忙时start/T7 运行中复位/T8 done单拍），头注释第 5-13 行仍列出 T4/T9 但正文不存在对应段落——文件内自相矛盾。HANDOFF L22 记 '8 用例全过'，与 plan 的 10 类从未对账，偏差无任何文档解释。后果：speck_random.mem 被 CI 新鲜度门禁持续维护（--check）、被 HANDOFF/阶段 5 证据引用（'1175 组'），制造'随机向量已在 RTL 侧验证'的印象，实际 RTL Speck 核只见过 KAT+约 7 个手工向量+黄金 R2（随机交叉验证仅存在于 Python 双实现自测）。修复二选一：tb_speck 补 $readmemh 消费 .mem（落实 T4），或在 plan/HANDOFF 诚实登记偏差并处置死工件。",
+    "evidence": "// tb_speck.v 头注释 L5-13：// T1: 复位行为 ... // T4: 随机向量（20 组，与 Python 预计算比对）... // T9: 时延上界 —— 正文只有 T1(85)/T2(95)/T3(114)/T5(128)/T6(135)/T7(163)/T8(184)\n// git grep -i readmemh -- sim src → 无匹配；git grep -i speck_random → 唯一命中 scripts/gen_speck_vectors.py:27（OUT_FILE 定义）\n// plan v3 L40：tb_speck.v：10 类用例（T1.../T4 随机1000/.../T10 时延上界）；L64：sim/testvectors/speck_random.mem | 新建 | 数据 | 1000 组随机向量",
+    "function_context": "tb_speck.v 用例集 ↔ sim/testvectors/speck_random.mem ↔ plan v3 验证范围",
+    "sources": [
+      "p6_closure"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/HANDOFF_SUMMARY.md",
+    "line": 57,
+    "category": "closure/handoff-writeback-missing",
+    "description": "阶段 6 增量（当前 diff）不含 HANDOFF_SUMMARY.md 的收官回写——a1p5 共识已把该回写作为流程项移交阶段 6（DEFERRED→阶段 6，D3），阶段 5 半部分已落实（L48 ✅），但提交当前增量后将保留 4 处过时内容：①L55-60 阶段 6 仍 ⬜ 未完成；②L2 头部时间戳标签'（A1 阶段 4 完成后…）'与内容不符（正文已含阶段 5 结果）；③L28 'CI 已接入（ci_regression.ps1 含 11 TB）'与 L164 'CI：scripts/ci_regression.ps1 跑 11 TB' 与实际 12 TB 矛盾（CI 脚本 $tbs 现为 12 项含 tb_w3_top；同文件 L49 已写 '12/12 TB'——文件内部自相矛盾）；④§七 L169 下一步仍为'执行 A1 阶段 6'而非 B5/B6/D14/D13 选择。最终改动清单（只报告不修改）：阶段 4-6 完成态标记+日期、11→12 两处修正、时间戳标签更新、§七 改写为 A1 完成后任务选择（B5 PUF 接入 / B6 ML 攻击 / D14 Skill 打包 / D13 报告初稿）、可选登记本报告 F1 的向量偏差。",
+    "evidence": "L2: 生成时间：2026-10-08（A1 阶段 4 完成后；上版 2026-10-07 为阶段 3 后）\nL28:   - CI 已接入（ci_regression.ps1 含 11 TB）\nL49:   - 全量回归 **12/12 TB**（含新接入的 tb_w3_top 顶层链路 TB）\nL57: - ⬜ 阶段 6：文档 + 提交（~1h）\nL164: - CI：scripts/ci_regression.ps1 跑 11 TB\nL169: 1. 执行 A1 阶段 6：文档 + 提交（唯一剩余阶段）\n// git diff 377298b --stat：仅 docs/protocol_contract.md + docs/project_design.md，无 HANDOFF",
+    "function_context": "HANDOFF_SUMMARY.md 收官回写（a1p5 CONSENSUS D3 移交项）",
+    "sources": [
+      "p6_closure"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "tools/check_contract_sync.py",
+    "line": 33,
+    "category": "closure/sync-tool-coverage-and-wiring",
+    "description": "契约同步工具不在 CI 中且不覆盖阶段 6 新增内容：(a) ci_regression.ps1 无任何 check_contract_sync 引用（grep 证实），而 CI 也不读任何 docs/*.md——'纯 .md 变更不影响 CI' 的判断正确（本轮验证），但代价是未来单边改文档/改代码的漂移只有手动跑该工具才能发现，建议在 CI Python 段追加 `& python tools\\check_contract_sync.py`（纯 Python、无 Vivado 依赖、亚秒级）；(b) build_frames() 只重建 §4 的 6 个示例帧（seq=0x42、r2=C0..C7），阶段 6 新写入 §4.1 的黄金 RESULT 帧（seq=0x50、hd=5、r2=7b45b0545e59aa94、CRC ff1d——本轮已三方独立验证正确：protocol.py pack 复算逐字节一致 + tb_level3 result_gold[0:21] 一致 + speck.py 重算 R2 一致）不在其校验范围，黄金帧仍是'文档单边'声明；(c) 潜在解析脆弱性：contract_vectors() 用 md.split('## 4.')[1].split('## 5.')[0] 切片把 §4.1 散文也划入扫描区，未来 §4.1 若出现纯 hex 字节行会静默并入最后一个条目（当前黄金帧行因散文包裹未触发，6/6 通过）。建议同步扩展 build_frames() 增加 seq=0x50 黄金帧条目。",
+    "evidence": "L24: p = H(system_id=1, component_id=2); L25: p._seq = 0x42\nL33: frames[\"RESULT\"] = p.pack(H.MSG_RESULT, result=0, hd=5, r2=bytes([0xC0 + i for i in range(8)]))\nL44: section = md.split(\"## 4.\")[1].split(\"## 5.\")[0]\n// 本轮复跑：python tools/check_contract_sync.py → 6/6 OK, exit 0\n// 本轮独立复算 §4.1 黄金帧：frame=fd0a000050010293000000057b45b0545e59aa94ff1d 与契约文档逐字节一致\n// git grep check_contract_sync -- scripts → 无匹配（不在 CI）",
+    "function_context": "check_contract_sync.build_frames/contract_vectors ↔ ci_regression.ps1 Python 段",
+    "sources": [
+      "p6_closure"
+    ]
+  }
+]

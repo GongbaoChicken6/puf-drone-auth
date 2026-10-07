@@ -326,7 +326,11 @@ class DeviceKeyStore:
         return self
 
     def save(self) -> None:
-        """Persist atomically with owner-only file permissions (0600).
+        """Persist atomically with owner-only permissions on POSIX (0600).
+
+        Windows/NTFS caveat: os.chmod 0600 maps to a read-only bit only,
+        with NO ACL restriction -- see the honest declaration in
+        project_design.md ("A1 后安全态势") and HANDOFF W4 backlog.
 
         Serialized by self._lock so concurrent mutations cannot interleave
         writes to the shared .tmp path.

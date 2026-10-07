@@ -112,30 +112,28 @@ W3: R1 = (group1_resp ⊕ group2_resp ⊕ group3_resp ⊕ group4_resp)  (64 bit,
           └─────────────┘
 ```
 
-### hsm.py 接口定义
+### hsm.py 接口定义（A1 后实际形态，代码为准）
 
 ```python
-# src/python/server/hsm.py
+# src/python/server/hsm.py（节选）
 class HSM:
-    """基站硬件安全模块 — 通过 UART 与 ZC702 实例 0 通信"""
+    """基站 R2 生成后端抽象。respond(c2, terminal_id) 由各后端实现：
+    per-terminal 后端（SpeckHSM）用 terminal_id 选择设备密钥，
+    单钥后端（SimulatedHSM/SerialHSM）忽略该参数。"""
 
-    def __init__(self, port: str, baud: int = 115200):
-        self.serial = serial.Serial(port, baud)
+class SpeckHSM(HSM):
+    """A1 默认后端：R2 = Speck64/96(K_terminal, C2)——与 RTL 的
+    speck64_96.v 逐位一致，终端用同一密钥重算即可验证（对称设计）。
+    per-terminal 12 字节密钥经 DeviceKeyStore（JSON, 0600, 原子写）
+    持久化；黄金向量 7b45b0545e59aa94 双侧一致。"""
 
-    def respond(self, c2: bytes) -> bytes:
-        """接收终端反挑战 C2,调用实例 0 生成 R2"""
-        self.serial.write(c2)
-        r2 = self.serial.read(8)  # 64-bit response
-        return r2
-
-    def enroll(self, n_challenges: int = 100) -> dict:
-        """注册模式:采集实例 0 的 CRP 作为基站模板"""
-        ...
+class SerialHSM(HSM):
+    """UART 到 ZC702 实例 0 的传输后端（W3+ 硬件联调用）"""
 ```
 
-### 终端验证 R2 的凭据来源
+### 终端验证 R2 的凭据来源（A1 更新）
 
-终端在**注册阶段**接收并存储基站模板（实例 0 的期望响应集），存于 PL 的 BRAM 中（只读寄存器组，运行期不可修改）。验证时：终端将收到的 R2 与存储的模板做 HD 比对。
+终端持有与基站对称的设备密钥 K（RTL 为 DEVICE_KEY 参数，W4 起从 PUF 稳定位提取）。验证时：终端用 K 重算 Speck(K, C2) 得期望 R2，与 RESULT 帧中的 R2 **逐字节精确比对**（terminal_fsm S_CALC_R2/S_VERIFY_R2），失配即 BLOCKED——不再使用 W2 设想的"基站模板 HD 比对"。已知限制：上电 C2 确定性复位使该验证无跨断电新鲜度（终端侧 RESULT 重放，HANDOFF P1-5，W4 修复）。
 
 ---
 
@@ -321,10 +319,12 @@ class HFIDAProtocol:
         self.pools: dict[int, CRPPool] = {}   # P1-R6: 每设备一个池
         self.lock = threading.Lock()          # P1-R7: 线程安全
 
+    # （示意伪代码：签名/阈值缩放/迟到 C2 重放窗验证等细节以 protocol.py 为准）
     def on_response(self, terminal_id: int, r1: bytes, c2: bytes):
         hd = self.templates.hamming_distance(terminal_id, r1)
         if hd <= self.TAU_PASS:
-            r2 = self.hsm.respond(c2)  # hsm.py 已定义
+            # A1: R2 = Speck(K_term, C2)（per-terminal 密钥）；C2 已过服务端重放窗
+            r2 = self.hsm.respond(c2, terminal_id=terminal_id)
             return self.pack(self.MSG_RESULT, result=PASS, r2=r2)
         elif hd >= self.TAU_REJECT:
             return self.pack(self.MSG_RESULT, result=REJECT)
@@ -341,7 +341,7 @@ class HFIDAProtocol:
         total_hd = self.pending_hd[terminal_id] + hd_extra
         # 用更宽的阈值（更多比特 → 更好的统计分辨力）
         if total_hd <= self.TAU_PASS * 2:  # 8 挑战 × 8 bit = 128 bit
-            r2 = self.hsm.respond(c2)
+            r2 = self.hsm.respond(c2, terminal_id=terminal_id)
             return self.pack(self.MSG_RESULT, result=PASS, r2=r2)
         else:
             return self.pack(self.MSG_RESULT, result=REJECT)
@@ -400,6 +400,13 @@ def ratio_to_bits(readings: list[int], n_bits: int = 64) -> list[str]:
 - ❌ 不可声明："抗机器学习攻击"（排序重构对 RO 结构有效）
 - ✅ 可声明："已量化安全边界：有效熵 ≈44 bit，排序重构需 ~120 CRP"
 - ✅ 可声明（未来工作）："增加环数至 64+ 可将有效熵提升至 ~296 bit"
+
+**A1 后新增安全态势（2026-10-08，诚实声明）**：
+- ✅ R2 已统一为 Speck64/96(K,C2)：线性和金丝雀（CI 常驻）证明 R2 无仿射/GF(2) 线性结构，旧 ~C2 可预测形态被负对照锁定为必抓
+- ✅ 服务器侧防重放：持久化 C2 重放窗（128 < 计数周期 256 的权衡见 protocol.py 注释；断电终端经 c2reset 恢复）
+- ❌ 不可声明："终端侧抗跨断电重放"——C2 上电确定性复位 + nonce 常量使录制的首次认证 RESULT 帧可在终端换电重启后冒充基站（威胁建模实验证实，HANDOFF P1-5，W4 三选一修复）
+- ❌ 不可声明："W4 密钥抗离线穷举"——44 bit 根熵 + 链路明文 (C2,R2) 对构成离线验证 oracle（GPU 小时级）；W4 缓解：K = PUF_out ⊕ station_random 或 HKDF 混入基站侧高熵秘密，或提熵 ≥80 bit
+- ❌ 不可声明："静态密钥文件受 OS 保护（Windows）"——os.chmod 0600 在 NTFS 仅只读位、无 ACL（Linux 下有效）；单用户演示可接受，W4 可选 DPAPI
 
 ---
 

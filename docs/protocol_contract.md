@@ -4,6 +4,8 @@
 > **RTL 实现必须与本文件一致，而非与 docs/project_design.md 一致**——B 线实现时对原设计做了
 > 5 处修正（C2 位置、N_CHALLENGES=4、CRC_EXTRA 占位表等），代码是唯一真相源。
 > 文中所有黄金向量由 protocol.py 生成并用 parse() 回验通过（2026-10-05）。
+> §4.1 与 §4 的 RESULT_A1_GOLDEN 于 A1（2026-10-08）新增：向量经 speck.py/protocol.py 双侧回验，
+> tools/check_contract_sync.py 重跑全绿（该工具现覆盖全部 §4 向量）。
 
 ---
 
@@ -83,9 +85,36 @@ FD 05 00 00 46 01 02 94 00 00 2A 00 00 00 01 78 F4
 # EXTRA_CHALLENGE seq=0x47 (36B)
 FD 18 00 00 47 01 02 95 00 00 D0 00 00 00 00 00 00 00 D1 01 01 01 01 01 01 01
    D2 02 02 02 02 02 02 02 7A 9F
+
+# RESULT_A1_GOLDEN seq=0x50 result=PASS hd=5 r2=Speck(W3 key,C2=a1..a8) (22B)
+FD 0A 00 00 50 01 02 93 00 00 00 05 7B 45 B0 54 5E 59 AA 94 FF 1D
 ```
 
 每个向量的验收方式：RTL 解析后字段值必须与 §3 布局一致，且 `protocol.py parse()` 能无异常解析 RTL 构造的同构帧。
+
+### 4.1 R2 生成算法定义（A1 冻结——RTL ↔ PC 逐位一致的唯一依据）
+
+**算法定义**：R2 = Speck64/96(K_terminal, C2)
+
+- Speck64/96（NSA 2013 规范）：字长 32 bit / 分组 64 bit / 密钥 96 bit / 26 轮 ARX（无 S 盒）；最好公开攻击 19/26 轮
+- K_terminal = 终端设备密钥（12 字节）。W3 演示 = NSA 公开 KAT 密钥（安全=零，HANDOFF P1-1，W4 从 PUF 稳定位提取）；PC 侧经 DeviceKeyStore 持久化或 REPL setkey 安装
+- C2 = 终端反挑战（8 字节计数器，语义见下）。明文即 C2 线上原字节，**无预异或、无重排**
+
+**字节序（speck.py ↔ speck64_96.v ↔ terminal_fsm.v 三方冻结，NSA 官方约定，全小端）**：
+
+- 密钥装载：K 字节 [0:4]→k0→key_in[31:0]，[4:8]→l0→key_in[63:32]，[8:12]→l1→key_in[95:64]。
+  W3 演示密钥 `96'h13121110_0b0a0908_03020100` ≡ 字节串 `0001020308090a0b10111213`
+- 明文装载：C2[0:4]→y→plaintext_in[63:32]，C2[4:8]→x→plaintext_in[31:0]。
+  PC 侧 `Speck6496(K).encrypt(c2)` 直接使用线上字节即得一致结果
+- 密文拆包：y_ct（ct[63:32]）先序列化、x_ct（ct[31:0]）后——与 terminal_fsm 的 r2_byte_0..7 映射逐位一致
+
+**C2 计数器语义（terminal_fsm.v 冻结）**：复位值 c2_counter[j] = 8'hA0 + j（字节串 A0..A7）；每次认证每字节独立 +1（无进位传播），周期 256；首次认证 C2 = a1..a8。服务器侧防重放：持久化重放窗（protocol.py C2_REPLAY_WINDOW=128，刻意小于周期以免误拒回绕的真终端；aged-replay 残余仅 CRP 池消耗，R2 签发仍被 PUF 轮门控——权衡与 W4 待办见 HANDOFF）。
+
+**R2 黄金向量（tb_terminal_fsm / tb_level3_protocol / Python tests / REPL 冒烟共用）**：K = `0001020308090a0b10111213`、C2 = `a1a2a3a4a5a6a7a8` → R2 = `7b45b0545e59aa94`。首次认证 RESULT 帧（seq=0x50, result=PASS, hd=5）字节为 `FD 0A 00 00 50 01 02 93 00 00 00 05 7B 45 B0 54 5E 59 AA 94 FF 1D`（与 tb_level3 result_gold 数组同源）。
+
+**线性和金丝雀（A1 阶段 5 接入 CI）**：scripts/test_r2_nonlinearity.py 验证 R2 无仿射/GF(2) 线性结构（含宽扇入；C4 精确判定 + 仿射/宽扇入/xor-tree 三重负对照），防止算法退化回 ~C2 类可预测形态。
+
+**终端侧 R2 验证**：见 §5 第⑥步注——终端用自身 DEVICE_KEY 重算 Speck(K,C2) 与帧中 R2 逐字节精确比对（非 HD 比对）。
 
 ## 5. 终端侧消息交换时序（terminal_fsm 的协议视角）
 

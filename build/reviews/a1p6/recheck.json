@@ -1,0 +1,47 @@
+[
+  {
+    "item": "1 [P2] tb_speck.v T4 全量向量回放（$fgets 消费 .mem，1175 组锁定）+ T9 时延 + 看门狗扩展",
+    "status": "VERIFIED",
+    "evidence": "代码实读：tb_speck.v L137-172 T4 块（$fopen 双路径 sim/testvectors/… 与 testvectors/… 兼容、$fgets 逐行、$sscanf(\"%h %h %h\") 三段解析、sc==3 才计入、vcount != EXPECTED_MEM_VECTORS(=1175, L37) 计数锁定 FAIL）；L246-267 T9 时延块；L278-284 看门狗 #10_000_000（10ms，注释给出 1175 组≈65k 周期≈650us 的 10x 余量推导）；L17-18 头注释诚实登记'输入毛刺用例未实现'计划偏差。实跑（本机 xvlog/xelab/xsim，从仓库根使相对路径生效）：[T4 PASS] 1175 组向量全部匹配（KAT/边角/游走/进位/隔离/随机）+ [T9 PASS] start->done = 53 周期 (<=60) + TB_SPECK_PASS tests=1181，xsim exit 0。变异对照（已恢复，sha256 前 16 位 b22a4af3b084af1c 与 a1p5 共识登记值一致，git diff 空）：①ct 字段原位翻转半字节 → [T4_mem] FAIL pt=736e616574614620 got=4175946c9f7952ec exp=41759f6c9f7952ec + TB_SPECK_FAIL errors=1（值比对路径）；②插入一字符使行不可解析 → [T4 FAIL] vector count 1174 != 1175 + TB_SPECK_FAIL（计数锁路径）；③同篡改下 CI 门禁 gen_speck_vectors --check exit 1、恢复后 exit 0（双门禁都在守，实证）。",
+    "notes": "三条行为学观察（均不破 fail-closed，不构成 STILL_BROKEN）：(a) 注释跳过检查 line[15:8]==\"/\"&&line[7:0]==\"/\" 实际检查的是行末两字符（$fgets 右对齐语义），基本为死分支——注释行实际靠 $sscanf 对非 hex 起始行 sc!=3 自然跳过，且 1175 计数锁使任何误解析自暴露；(b) 值失配时 '[T4 PASS] 1175 组…' 汇总行仍打印（该行只断言计数），但 TB_SPECK_FAIL 正确输出且 CI 正则 TB_.*_PASS 在 '[T4 PASS]'（无 TB_ 前缀）与 'TB_SPECK_FAIL' 上均不匹配 → CI 判 FAIL；(c) xsim 进程退出码在 TB 判 FAIL 时仍为 0（a1p5 已裁决：门禁靠正则非退出码）。环境注记：本 harness 的 process.env 缺 SystemRoot/SystemDrive 等导致 xvlog.bat 此前静默 exit 1——补全标准 Windows 环境后即可运行，同时解释了 p6_closure 轮无法实跑 xsim 的限制。",
+    "sources": [
+      "p6_recheck"
+    ]
+  },
+  {
+    "item": "2 [P3] check_contract_sync 扩展 RESULT_A1_GOLDEN（7/7）并接入 CI Python 段",
+    "status": "VERIFIED",
+    "evidence": "实跑：python tools/check_contract_sync.py → exit 0，7 行 [OK]（ACCESS_REQUEST/CHALLENGE/RESPONSE_R1/RESULT/CONFIRM/EXTRA_CHALLENGE/RESULT_A1_GOLDEN）+ CONTRACT SYNC OK。CI 接线：ci_regression.ps1 L115-120 —— $out4 = & python \"tools\\check_contract_sync.py\" 2>&1 | ForEach 字符串化 → $LASTEXITCODE -ne 0 时回显 -Last 10 + 'CONTRACT SYNC FAILED (docs vs protocol.py drift)' + exit 1（fail-closed）；成功路径 L120 可闻行（$out4 | -Last 1 | Write-Host），定稿日志 L31 实含 'CONTRACT SYNC OK: protocol.py == contract S4'。§4.1 黄金帧从文档单边声明变为工具校验项（上轮 p6_closure F3 的 (b) 半项关闭）。",
+    "notes": "工具解析器把 §4.1 散文划入扫描区的潜在脆弱性（上轮 F3 (c)）未显式修（当前黄金帧行散文包裹不触发），但新增的 RESULT_A1_GOLDEN 向量走 §4 正规 '# NAME 头 + 纯 hex 行' 通道，主风险已被覆盖。",
+    "sources": [
+      "p6_recheck"
+    ]
+  },
+  {
+    "item": "3 [P3] HANDOFF 收官回写（阶段 6 ✅ / 时间戳与 commit 计数 / 11→12 两处 / §七 改写）",
+    "status": "VERIFIED",
+    "evidence": "L2 '生成时间：2026-10-08（A1 全部六个阶段完成…）'；L4 'Git：57 commits · 139 files'；L55-62 阶段 6 ✅（含 T4/T9 落地与'输入毛刺用例登记为计划偏差'）；L166 'CI：scripts/ci_regression.ps1（12 TB + speck 自测 + 44 单测 + 金丝雀 + 向量新鲜度 + 契约同步）'；L169-177 §七 改写为 'A1 已全部完成…选择下一任务：1. B5 PUF 真实接入（并列 W4 安全项 P1-1/P1-4/P1-5/44-bit 熵/CI 超时） 2. B6 ML 攻击实验 3. D14 Skill 打包 / D13 报告初稿'。全文 grep '11 TB'：零命中（仅存的两处 '11/11' 为阶段 3 历史记录与阶段 5 缺陷引述，属准确历史语境非自相矛盾）。",
+    "notes": "",
+    "sources": [
+      "p6_recheck"
+    ]
+  },
+  {
+    "item": "4 其余 P3（契约头部日期注 / main.py docstring 平台限定 / plans SUPERSEDED×2 / 伪代码示意标注）",
+    "status": "VERIFIED",
+    "evidence": "契约头部：protocol_contract.md L7-8 '§4.1 与 §4 的 RESULT_A1_GOLDEN 于 A1（2026-10-08）新增：向量经 speck.py/protocol.py 双侧回验，tools/check_contract_sync.py 重跑全绿（该工具现覆盖全部 §4 向量）'；平台限定：main.py L328-333 save() docstring 'Persist atomically with owner-only permissions on POSIX (0600). Windows/NTFS caveat: os.chmod 0600 maps to a read-only bit only, with NO ACL restriction -- see the honest declaration in project_design.md…'；SUPERSEDED：A1_r2_unification_plan.md L1（被 v3_final 取代）+ A1_speck_plan.md L1（中间版→v3_final），共 2 处与清单一致；伪代码标注：project_design.md L322 '（示意伪代码：签名/阈值缩放/迟到 C2 重放窗验证等细节以 protocol.py 为准）'。",
+    "notes": "",
+    "sources": [
+      "p6_recheck"
+    ]
+  },
+  {
+    "item": "5 定稿 CI 证据 build/reviews/a1p6/ci_final_run.log（12/12 + 44 测试 + 金丝雀 + 1175 向量 + CONTRACT SYNC OK + CI-EXIT=0）",
+    "status": "VERIFIED",
+    "evidence": "日志实读：L6-17 逐行 12 个 [PASS]（含 tb_w3_top）+ L19 '=== 12/12 PASS, 0 FAIL ==='；L22 'Ran 44 tests' + L24 'OK'；L25-29 金丝雀输出（order1 0.2031 @bit46->25 / 0.2109 @bit24->46、exact-linear 0/64、'CANARY PASS: no affine/GF(2)-linear structure detected…'）——与当前盘上金丝雀的输出逐值一致（上轮我双跑同值），证据-工件失配（a1p5 ci_gate P2）已消除；L30 'PASS: …speck_random.mem is up to date (1175 vectors)'（可闻行）；L31 'CONTRACT SYNC OK: protocol.py == contract S4'（可闻行，对应新接线段）。CI-EXIT=0 为运行者外部记录（a1p5 共识 N1 已裁决该表述口径）。",
+    "notes": "L23 仍有一行 'System.Management.Automation.RemoteException' 包装行（'Ran 44 tests' 与 'OK' 之间）——a1p5 D2 DEFERRED-ACCEPTED 项，证据语义无损，与定稿裁决一致，非新缺陷。",
+    "sources": [
+      "p6_recheck"
+    ]
+  }
+]

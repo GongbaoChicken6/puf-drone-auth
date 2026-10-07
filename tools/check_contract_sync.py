@@ -35,6 +35,12 @@ def build_frames():
     frames["CONFIRM"] = p.pack(H.MSG_CONFIRM, terminal_id=42, status=1)
     es = [bytes([0xD0 + i] + [i] * 7) for i in range(3)]
     frames["EXTRA_CHALLENGE"] = p.pack(H.MSG_EXTRA_CHALLENGE, seeds=es)
+    # A1 golden RESULT frame (section 4.1 / tb_level3 result_gold): first-auth
+    # R2 = Speck(W3 demo key, C2=a1..a8) = 7b45b0545e59aa94 at seq 0x50.
+    p._seq = 0x50
+    frames["RESULT_A1_GOLDEN"] = p.pack(
+        H.MSG_RESULT, result=0, hd=5,
+        r2=bytes.fromhex("7b45b0545e59aa94"))
     return frames
 
 

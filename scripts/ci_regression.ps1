@@ -112,5 +112,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 # One audible line on success so the evidence log proves the check ran.
 $out3 | Select-Object -Last 1 | ForEach-Object { Write-Host "  $_" }
+$out4 = & python "tools\check_contract_sync.py" 2>&1 | ForEach-Object { "$_" }
+if ($LASTEXITCODE -ne 0) {
+    $out4 | Select-Object -Last 10 | ForEach-Object { Write-Host "  $_" }
+    Write-Host "CONTRACT SYNC FAILED (docs vs protocol.py drift)"; exit 1
+}
+$out4 | Select-Object -Last 1 | ForEach-Object { Write-Host "  $_" }
 Write-Host "  OK"
 exit 0

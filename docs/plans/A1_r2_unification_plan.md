@@ -1,3 +1,7 @@
+> **[SUPERSEDED]** 本 v0 方案（PUF-derived Key + 非线性混合）已被
+> docs/plans/A1_speck_plan_v3_final.md（Speck64/96）取代，仅作历史存档。
+> 文中"R2 = HMAC / ~C2"等现状描述反映的是 A1 之前的旧状态。
+
 # A1 Implementation Plan: Unify R2 Verification Algorithm
 
 ## 1. Problem
