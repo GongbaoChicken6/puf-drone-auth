@@ -67,24 +67,24 @@ footer{text-align:center;color:var(--dim);font-size:11px;margin-top:48px;padding
 </header>
 
 <div class="stats">
-<div class="stat"><div class="v g">40</div><div class="l">Git 提交</div></div>
-<div class="stat"><div class="v c">99</div><div class="l">文件入库</div></div>
-<div class="stat"><div class="v b">2,260</div><div class="l">RTL 行</div></div>
-<div class="stat"><div class="v c">1,858</div><div class="l">TB 行</div></div>
-<div class="stat"><div class="v p">2,434</div><div class="l">Python 行</div></div>
-<div class="stat"><div class="v g">47+</div><div class="l">测试用例</div></div>
+<div class="stat"><div class="v g">60</div><div class="l">Git 提交</div></div>
+<div class="stat"><div class="v c">147</div><div class="l">文件入库</div></div>
+<div class="stat"><div class="v b">2,431</div><div class="l">RTL 行</div></div>
+<div class="stat"><div class="v c">2,380</div><div class="l">TB 行</div></div>
+<div class="stat"><div class="v p">3,179</div><div class="l">Python 行</div></div>
+<div class="stat"><div class="v g">1,225+</div><div class="l">测试用例</div></div>
 <div class="stat"><div class="v g">100%</div><div class="l">通过率</div></div>
 <div class="stat"><div class="v c">653</div><div class="l">LUT (1.23%)</div></div>
-<div class="stat"><div class="v a">~30天</div><div class="l">距截止</div></div>
+<div class="stat"><div class="v a">~27天</div><div class="l">距截止</div></div>
 </div>
 
 <section>
 <h2>W3 通信栈 · 顶层集成完成</h2>
-<div class="sub">14 个 RTL 模块 · 10 套 TB · 比特流已验证</div>
+<div class="sub">15 个 RTL 模块 · 12 套 TB · 比特流已验证 · A1 Speck 统一 R2</div>
 <div class="stack">
 <div class="path">
 <h4>📤 发送路径</h4>
-<div class="step ok"><span>✅</span><span class="nm">terminal_fsm</span><span class="ln">302 行</span></div>
+<div class="step ok"><span>✅</span><span class="nm">terminal_fsm</span><span class="ln">445 行 · 含 A1 Speck</span></div>
 <div class="arr">↓</div>
 <div class="step ok"><span>✅</span><span class="nm">mavlink_frame</span><span class="ln">231 行</span></div>
 <div class="arr">↓</div>
@@ -126,8 +126,8 @@ footer{text-align:center;color:var(--dim);font-size:11px;margin-top:48px;padding
 </section>
 
 <section>
-<h2>仿真测试 10 套 TB · 47+ 用例全过</h2>
-<div class="sub">含 Level 2 真实 TX 链 · Level 3 全链路协议 · 顶层回环</div>
+<h2>仿真测试 12 套 TB · 1,225+ 用例全过</h2>
+<div class="sub">含 Level 2 真实 TX 链 · Level 3 全链路协议 · 顶层回环 · A1 全量向量回放与码 4 拒绝</div>
 <div class="tests">
 <div class="test"><div class="h"><b>tb_crc16</b><span>7/7 ✅</span></div><ul><li>黄金向量×3</li><li>全帧域 42B</li><li>损坏帧检测</li><li>init+dv 同拍</li></ul></div>
 <div class="test"><div class="h"><b>tb_mavlink_frame</b><span>9/9 ✅</span></div><ul><li>黄金帧×2 逐字节</li><li>len=0 最小帧</li><li>busy/phase/timeout</li><li>复位恢复</li></ul></div>
@@ -139,12 +139,14 @@ footer{text-align:center;color:var(--dim);font-size:11px;margin-top:48px;padding
 <div class="test"><div class="h"><b>tb_level3</b><span>2/2 ✅</span></div><ul><li>Level 3: 全链路协议</li><li>rx_inhibit 活性</li></ul></div>
 <div class="test"><div class="h"><b>tb_w3_top</b><span>1/1 ✅</span></div><ul><li>顶层回环</li><li>btn→UART→parser</li></ul></div>
 <div class="test"><div class="h"><b>tb_challenge_dec</b><span>4/4 ✅</span></div><ul><li>100×确定性</li><li>置换验证</li></ul></div>
+<div class="test"><div class="h"><b>tb_speck</b><span>1181 ✅</span></div><ul><li>NSA KAT + 边角</li><li>1175 组全量回放</li><li>时延 53 拍上界</li></ul></div>
+<div class="test"><div class="h"><b>tb_gap_regression</b><span>8/8 ✅</span></div><ul><li>陈旧/伪造 R2</li><li>灰区不递增</li><li>A1: 码 4 拒绝锁定</li></ul></div>
 </div>
 </section>
 
 <section>
-<h2>审查与质量保障 · 9 轮 auto-review</h2>
-<div class="sub">累计 140+ 处发现 · 全部修复 · 零回归</div>
+<h2>审查与质量保障 · 16 轮 auto-review</h2>
+<div class="sub">累计 220+ 处发现 · 全部闭环 · 零回归</div>
 <div class="revs">
 <div class="rev"><span class="sev pass">PASS</span><span class="txt"><b>项目结构</b> — .gitignore/LICENSE/llm_log 修复</span></div>
 <div class="rev"><span class="sev pass">PASS</span><span class="txt"><b>设计方案 v3.0</b> — 26 处发现全部修复</span></div>
@@ -155,6 +157,9 @@ footer{text-align:center;color:var(--dim);font-size:11px;margin-top:48px;padding
 <div class="rev"><span class="sev pass">35/35</span><span class="txt"><b>全阶段回归</b> — 7 轮 35 处修复全验证 · 零回归</span></div>
 <div class="rev"><span class="sev p0">P0×1</span><span class="txt"><b>盲区修复</b> — rx_inhibit 竞态 + C2 重放 + w3_top 超时 27→32bit</span></div>
 <div class="rev"><span class="sev pass">PASS</span><span class="txt"><b>w3_top 板级</b> — NSTD-1 修复 · 比特流验证成功 · XDC 模板更新</span></div>
+<div class="rev"><span class="sev p0">P0×1</span><span class="txt"><b>A1 阶段 5</b> — 向量门禁恒真 + shim 假通过链（全实验闭环）</span></div>
+<div class="rev"><span class="sev p1">P1×1</span><span class="txt"><b>A1 安全复审</b> — 终端跨断电重放 P1-5 登记 W4（威胁建模实证）</span></div>
+<div class="rev"><span class="sev pass">PASS</span><span class="txt"><b>A1 全六阶段整体复审</b> — E2E 追踪 + 追溯矩阵 + 互操作实演 18/18 · PASS</span></div>
 </div>
 </section>
 
@@ -163,7 +168,7 @@ footer{text-align:center;color:var(--dim);font-size:11px;margin-top:48px;padding
 <div class="timeline">
 <div class="tstep done"><h4>W1 信号验证 <span class="sb">✅ 完成</span></h4><p>双环振 · xvlog+Artix-7 · 板上待板到</p></div>
 <div class="tstep done"><h4>W2 阵列 + B 线 <span class="sb">✅ 完成</span></h4><p>16 环 + 解码 + UART + Python 全套 · xsim TB_PASS</p></div>
-<div class="tstep done"><h4>W3 协议整合 <span class="sb">✅ 完成</span></h4><p>7 模块 + 顶层 + 比特流 · 653 LUT · C2 重放保护 · Level 1-3 全过</p></div>
+<div class="tstep done"><h4>W3 协议整合 + A1 <span class="sb">✅ 完成</span></h4><p>15 模块 + 顶层 · A1 Speck 统一 R2 · 12 TB 全过 · 十轮审查闭环</p></div>
 <div class="tstep wait"><h4>W4 实验周 <span class="sb">⏳ 待开始</span></h4><p>ML 攻击 · 温度 · 无线联调（需板+电台）</p></div>
 <div class="tstep wait"><h4>W5 冻结周 <span class="sb">⏳ 待开始</span></h4><p>全量指标 · 报告初稿 · Skill · 视频</p></div>
 <div class="tstep wait"><h4>W6 交付周 <span class="sb">⏳ 待开始</span></h4><p><b style="color:var(--amber)">11-03 晚提交（硬死线 11-04 18:00）</b></p></div>
@@ -194,7 +199,7 @@ footer{text-align:center;color:var(--dim);font-size:11px;margin-top:48px;padding
 
 <footer>
 PUF Drone Auth · D:puf-drone-auth · 2026-10-06<br>
-40 commits · 99 files · ~6,550 lines · 47+ tests · 9 review rounds · 653 LUT · bitstream verified
+60 commits · 147 files · ~8,000 lines · 1,225+ tests · 16 review rounds · A1 complete
 </footer>
 </div>
 </body>
