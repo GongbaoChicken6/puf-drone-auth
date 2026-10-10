@@ -1,6 +1,6 @@
-# build_w3.tcl -- W3 build (no pin constraints, dev mode)
+﻿# build_w3.tcl -- W3 build (no pin constraints, dev mode)
 set PART xc7z020clg484-1
-set OD D:/fpga_work/w3_bitstream
+set OD D:/puf-drone-auth/build/vivado/w3_bitstream
 set SRC D:/puf-drone-auth/src
 
 file mkdir $OD

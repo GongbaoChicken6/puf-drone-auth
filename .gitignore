@@ -77,3 +77,6 @@ data/device_keys/
 *.pb
 # Vivado temp
 .Xil/
+
+# Vivado workspace (repo-internal; artifacts never committed)
+build/vivado/
