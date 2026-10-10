@@ -1,7 +1,7 @@
-# OOC synthesis of W3 protocol modules
+﻿# OOC synthesis of W3 protocol modules
 # Usage: vivado -mode batch -source build/tcl/synth_w3.tcl
 set PART xc7z020clg484-1
-set OD D:/fpga_work/w3_synth
+set OD D:/puf-drone-auth/build/vivado/w3_synth
 file mkdir $OD
 
 create_project -force w3_synth $OD -part $PART

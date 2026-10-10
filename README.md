@@ -1,4 +1,4 @@
-# PUF Hardware Fingerprint Authentication System
+﻿# PUF Hardware Fingerprint Authentication System
 
 Chip-intrinsic identity for drone swarm access control — no pre-shared keys, no key storage.
 
@@ -27,7 +27,7 @@ This project implements a **Physically Unclonable Function (PUF)** based mutual 
 
 ### Manual (GUI)
 
-See `docs/tutorials/w1_tutorial.md` for step-by-step Vivado GUI instructions.
+See `docs/tutorials/w1_tutorial.md` for the step-by-step board bring-up tutorial (GUI-level detail): factory BIST pre-check -> W1 ring-ratio readout via VIO -> w3_top heartbeat/button -> PC serial loop -> W4 map.
 
 ## Repository Structure
 

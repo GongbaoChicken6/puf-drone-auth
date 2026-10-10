@@ -1,4 +1,4 @@
-# One-click build + (optionally) program board & measure VIO
+﻿# One-click build + (optionally) program board & measure VIO
 # Usage: .\build\ps1\run_build.ps1 [-Measure]
 # All paths are now in the project repo (D:\puf-drone-auth) - no Chinese path staging needed.
 param(
@@ -10,7 +10,7 @@ param(
 $vivado = "D:\vivado\2026.1\Vivado\bin\vivado.bat"
 $srcDir = "$RepoRoot\src\rtl\w1_ratio"
 $tclDir = "$RepoRoot\build\tcl"
-$outDir = "D:\fpga_work\w1_auto"
+$outDir = "D:\puf-drone-auth\build\vivado\w1_auto"
 
 Write-Host "=== PUF Drone Auth Build ==="
 Write-Host "Repo root: $RepoRoot"
