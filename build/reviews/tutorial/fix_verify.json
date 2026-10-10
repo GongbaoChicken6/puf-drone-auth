@@ -1,0 +1,173 @@
+[
+  {
+    "severity": "medium",
+    "file": "build/tcl/build_w3.tcl",
+    "line": "17,20-22,32",
+    "category": "build-flow-inconsistency",
+    "description": "脚本路线（教程 2.4 第5步 明确给出 `vivado -mode batch -source build/tcl/build_w3.tcl`）里 add_files 清单只有 w3_top.v、顶层仍是 `set_property top w3_top` / `synth_design -top w3_top`，既没有 add_files 新增的板级 wrapper，也没有 create_ip clk_wiz_0。照脚本跑出来的是『w3_top + 无约束单端 sys_clk』设计，200MHz差分→100MHz 的时钟适配（教程 2.1/2.2 要求必须放在 wrapper）完全不生效，无法达成 2.5『DS10 0.75Hz 心跳』验收；与教程『w3_top 一行不改、时钟适配放 wrapper』的结论直接冲突。",
+    "evidence": "build_w3.tcl:17 `$SRC/rtl/w3_protocol/w3_top.v \\`；:20 `add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top.xdc`；:21 `set_property top w3_top [current_fileset]`；:22 `synth_design -top w3_top -part $PART`；:32 `write_bitstream -force $OD/w3_top.bit`。全 build/tcl、build/ps1 内无 `zc702` / `clk_wiz` 命中（grep 结果仅 build_w3.tcl:17,20,21,22,32）。教程 369-370 行把它列为生成比特流的脚本路线。wrapper 存在但未被任何构建流程引用：src/rtl/w3_protocol/w3_top_zc702.v:13-27,31-37,42-56。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "medium",
+    "file": "保姆教程_W1_从零到一号验证点.md",
+    "line": "325-343",
+    "category": "missing-step",
+    "description": "2.2 节只说『仓库已提供 wrapper … 看一遍它的端口名』，全教程没有任何一步要求把 w3_top_zc702.v 加入工程（Add Sources）并设为顶层（Set as Top）——『Set as Top』只在 W1 的 ro_ratio_top 处出现（L174），『Add Sources』只在路线一 W1 出现（L140）。顶层若仍是 w3_top / 未加入 wrapper 文件，2.2 第3步的 XDC 与 2.3 表的 clk_p/clk_n/sys_rst_btn_n/term_id_dip 这些端口在工程里根本不存在，2.4 第3步一删两条 DRC 豁免就会立刻 ERROR（且 `get_ports` 会直接报找不到端口）。",
+    "evidence": "教程:325 `1. 仓库**已提供** wrapper：`src\\rtl\\w3_protocol\\w3_top_zc702.v`…看一遍它的端口名，下面 XDC 用这些名字。`；:327 IP Catalog 生成 clk_wiz_0；:333-338 只讲时钟约束；全文 grep 'Set as Top|Add Sources' 仅命中 :140（W1 Add Sources 页）与 :174（ro_ratio_top Set as Top）。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "medium",
+    "file": "src/rtl/w3_protocol/w3_top.xdc",
+    "line": "15,34-35,40-41",
+    "category": "stale-port-names",
+    "description": "教程 2.3 要求把约束写成 wrapper 端口名（sys_rst_btn_n / term_id_dip[1:0] / clk_p,clk_n），但 w3_top.xdc 里待取消注释的占位行仍是 w3_top 的原端口名：`sys_rst_n`、`term_id_sw[0]/[1]`、`sys_clk`，false_path 还指向 w3_top 内部寄存器 rst_ff1_reg；文件第2行自己写着『ALL PINS ARE COMMENTED OUT -- uncomment and verify』，教程 2.3 也要求逐行取消注释。顶层为 wrapper 时照抄这些行 → get_ports 找不到端口 / 约束失效；且 create_clock -period 10.000 [get_ports sys_clk] 与 2.2 的 `create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]` 相互矛盾（200MHz 应为 5ns）。",
+    "evidence": "w3_top.xdc:15 `# set_property PACKAGE_PIN G19 [get_ports sys_rst_n]`；:34-35 `# … [get_ports {term_id_sw[0]}]` / `{term_id_sw[1]}`；:40 `# create_clock -period 10.000 -name sys_clk [get_ports sys_clk]`；:41 `# set_false_path -from [get_ports sys_rst_n] -to [get_pins … rst_ff1_reg/PRE]`。对照 wrapper 端口 w3_top_zc702.v:17-26（clk_p/clk_n/sys_rst_btn_n/auth_btn/term_id_dip）、教程:349 `[get_ports sys_rst_btn_n]`、:353 `term_id_dip[1:0]`、:335-337。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "medium",
+    "file": "保姆教程_W1_从零到一号验证点.md",
+    "line": "330",
+    "category": "config-instantiation-mismatch",
+    "description": "2.2 第2步要求 Clk Wizard 的 Optional Inputs『勾选 locked；**不要**勾 reset』，但仓库 wrapper 的例化把 reset 端口连上了 `.reset(1'b0)`。按教程不勾 reset 时，Clocking Wizard 生成的 clk_wiz_0 不含 reset 端口 → wrapper 例化在本该工作的一步上直接失败（端口不存在）。二者必须对齐：或勾选 reset 并在 wrapper 接 0，或删掉 wrapper 的 .reset 连接。",
+    "evidence": "教程:330 `*Optional Inputs* → 勾选 **locked**；**不要**勾 reset（…）`；src/rtl/w3_protocol/w3_top_zc702.v:31-37 `clk_wiz_0 u_mmcm (.clk_in1_p(clk_p), .clk_in1_n(clk_n), .reset(1'b0), .clk_out1(clk_100m), .locked(mmcm_locked));`。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "low",
+    "file": "保姆教程_W1_从零到一号验证点.md",
+    "line": "353,357",
+    "category": "self-contradiction",
+    "description": "同一小节的 353 行与 357 行互相矛盾：353 行说『wrapper 已把高 6 位 tie 0（.term_id_sw({6'h00, term_id_dip})），无需手工改代码』；357 行紧接着说『w3_top 里没有常量绑定…上板前必须自行把高 6 位 tie 成常量（如 8'h01）或外接 DIP，否则会留下 6 个未约束输入』。按 2.2 顶层为 wrapper 时 357 行的断言不成立（wrapper 已 tie，不存在 6 个未约束输入），且会诱导用户去改 RTL/做重复绑定；w3_top.xdc:36 也残留同一旧说法。",
+    "evidence": "教程:353 `.term_id_sw({6'h00, term_id_dip})`…无需手工改代码；教程:357 `term_id_sw[7:2] 注意：w3_top 里**没有**常量绑定（8 位端口直连 terminal_fsm），上板前必须自行把高 6 位 tie 成常量（如 8'h01）…否则会留下 6 个未约束输入`；wrapper:52 `.term_id_sw ({6'h00, term_id_dip})`；xdc:36 `# term_id_sw[7:2] = tie to constants in w3_top or use external DIP on FMC`。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "low",
+    "file": "src/rtl/w3_protocol/w3_top.xdc",
+    "line": "7-9",
+    "category": "stale-guidance",
+    "description": "XDC 的时钟段仍写着『Option A (recommended): change w3_top to have clk_p/clk_n ports + IBUFDS + MMCM』，与本轮修正后的教程结论（2.1/2.2：改 w3_top 端口会让 sim/tb/tb_w3_top.v elaborate 失败、拖挂 12/12 CI，必须做成独立板级 wrapper）正面冲突。该文件正是教程指定让读者逐行取消注释的底稿，建议改成引用 w3_top_zc702.v 的 wrapper 方案。",
+    "evidence": "w3_top.xdc:7-9 `# Design expects 100MHz single-ended → …` / `# w3_top to use FREQ_HZ=200_000_000 with differential input ports` / `# Option A (recommended): change w3_top to have clk_p/clk_n ports + IBUFDS + MMCM`；教程:315 `**板级 wrapper（推荐，见 2.2）**…**w3_top 一行不改**（否则 tb_w3_top 与 12/12 CI 会挂）`；:321-323。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "low",
+    "file": "保姆教程_W1_从零到一号验证点.md",
+    "line": "368",
+    "category": "typo-wrong-path",
+    "description": "脚本路径少了一个反斜杠：写作 `.scriptsci_regression.ps1`，按此执行找不到命令；真实脚本为 `scripts\\ci_regression.ps1`（scripts/ci_regression.ps1）。",
+    "evidence": "教程:368 字符码点序列为 96(`),46(.),115,99,114,105,112,116,115,99,105,95,114,… → 反引号内确为 `.scriptsci_regression.ps1`，无 `\\`；实际文件 D:\\puf-drone-auth\\scripts\\ci_regression.ps1（该脚本自述 Usage: .\\scripts\\ci_regression.ps1，ci_regression.ps1:2）。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "low",
+    "file": "src/rtl/w3_protocol/w3_top.v",
+    "line": "39",
+    "category": "doc-comment-mismatch",
+    "description": "端口声明注释写『1Hz 时钟心跳』，但实装是 `assign led_heartbeat = hb_cnt[26]`（100MHz/2^27≈0.745Hz，周期≈1.34s），与教程 2.5 的验收口径（0.75Hz、10 秒约 15 次变化）不一致。若读者按 RTL 注释的 1Hz 去数，会数出约 20 次并误判为不合格。",
+    "evidence": "w3_top.v:39 `output wire led_heartbeat // 1Hz 时钟心跳`；w3_top.v:106 `assign led_heartbeat = hb_cnt[26]; // 100MHz / 2^27 ≈ 0.75Hz`；教程:376 `约 **15 次变化 = 7~8 个完整亮灭来回**（周期 ≈1.34 s，0.75 Hz）`。算术核对：2^27/100e6 = 1.342s；10s/1.342 ≈ 7.45 个完整周期 → 约 15 次跳变。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "low",
+    "file": "D:\\文件\\ssssssss\\FPGA\\puf-drone-auth\\docs\\llm_log\\README.md",
+    "line": "1",
+    "category": "bom-hygiene",
+    "description": "主仓 D:\\puf-drone-auth 全文件（排除 .git、共全量递归）扫描首字节 EF BB BF 结果为 0 个，BOM 清理 PASS；但同一工作区内的**修复前旧克隆**仍残留 1 个 BOM 文本文件（该副本无 w3_top_zc702.v，教程副本哈希 DF4021CD… ≠ 当前 9638E68D…，确认是过时副本）。若有人误把它当真相源，会把 BOM 与过时内容重新引入。另 D:\\文件\\ssssssss\\FPGA\\参赛资料\\_extracted\\*.txt 8 个 BOM 文件属第三方赛题资料，与本修复无关。",
+    "evidence": "主仓扫描输出 `NO_BOM_FILES`（全量递归，无扩展名过滤）；旧副本扫描 `COUNT=1  D:\\文件\\ssssssss\\FPGA\\puf-drone-auth\\docs\\llm_log\\README.md`，字节 `239,187,191,35,32,77` = EF BB BF；对照主仓同路径 `35,32,77,111,118,101`（无 BOM）。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "info",
+    "file": "保姆教程_W1_从零到一号验证点.md",
+    "line": "51,52,84,226-229,456",
+    "category": "verified-fix",
+    "description": "J17 拆分与排障行：USB 口 A=串口(J17,Mini-B)、USB 口 B=JTAG(另一个口,以实物丝印为准) 已落地；排障表首行改为『插的是 J17（串口）而不是 JTAG 口』并给出自查法（设备管理器 CP210x COMx=串口；Auto Connect 看到 xc7z020=JTAG）。（清单里写的 L83/L222-224/L450 实际位于 84/226-229/456，内容齐备）",
+    "evidence": "教程:51 `**USB 口 A：串口**（J17，用套件的 Mini-B 线）`；:52 `**USB 口 B：JTAG**（板上另一个 USB 口…以实物丝印为准）`；:84 `电脑 ↔ **J17**（Type-A 转 Mini-B） | J17 是**串口**口（CP210x）——BIST 只走串口`；:226-229 JTAG 口 + `别把 JTAG 和串口搞混` + 自查；:456 `**插的是 J17（串口）而不是 JTAG 口**`。",
+    "verdict": "PASS"
+  },
+  {
+    "severity": "info",
+    "file": "保姆教程_W1_从零到一号验证点.md",
+    "line": "319-343",
+    "category": "verified-fix",
+    "description": "2.2 标题与正文改为『板级 wrapper（不要改 w3_top.v）』，引用仓库新文件 src/rtl/w3_protocol/w3_top_zc702.v，并说明改 w3_top 端口会让 sim/tb/tb_w3_top.v elaborate 失败、且仓库无 IP 仿真源（全仓 0 个 .xci）——已复核为真：仓库确实 0 个 .xci，tb_w3_top.v 按 .sys_clk(sys_clk) 例化 w3_top。",
+    "evidence": "教程:319 `### 2.2 时钟适配：板级 wrapper（**不要改 w3_top.v**）`；:321-323 `sim/tb/tb_w3_top.v 按 .sys_clk(sys_clk) 例化它，改端口会让这个 CI 用例 elaborate 失败…全仓 0 个 .xci`；:325 引用 wrapper 路径。实测：Get-ChildItem -Recurse -Include *.xci → `ZERO_XCI`；sim/tb/tb_w3_top.v:30-42 `w3_top #(.FREQ_HZ(10_000_000),…).sys_clk(sys_clk)`。",
+    "verdict": "PASS"
+  },
+  {
+    "severity": "info",
+    "file": "src/rtl/w3_protocol/w3_top_zc702.v",
+    "line": "13-56",
+    "category": "verified-fix",
+    "description": "新增板级 wrapper 自洽性复核全通过：clk_p/clk_n 差分 → clk_wiz_0 → 100MHz；rst_n = sys_rst_btn_n & mmcm_locked；term_id_dip[1:0] 内部有 {6'h00, term_id_dip} tie；例化 w3_top 的参数名/端口名/位宽与 w3_top.v 声明逐一匹配（FREQ_HZ/BAUD/TIMEOUT_S；sys_clk/sys_rst_n/radio_txd/radio_rxd/auth_btn/term_id_sw[7:0]/led_busy/led_result[1:0]/led_heartbeat）。xvlog 实编译 wrapper+w3_top+terminal_fsm EXIT=0 无 error。唯一与教程的口径冲突见 FAIL 项（reset 选项）。",
+    "evidence": "wrapper:13-27 端口（clk_p,clk_n,sys_rst_btn_n,auth_btn,term_id_dip[1:0],radio_txd,radio_rxd,led_busy,led_result[1:0],led_heartbeat）；:31-37 clk_wiz_0；:40 `wire rst_n = sys_rst_btn_n & mmcm_locked;`；:42-56 `.FREQ_HZ(100_000_000),.BAUD(BAUD),.TIMEOUT_S(TIMEOUT_S)` + 9 个端口；对照 w3_top.v:20-40 参数与端口声明（term_id_sw 为 [7:0]，wrapper 传 {6'h00,term_id_dip}=8bit）。xvlog 输出：`analyzing module w3_top_zc702` / `analyzing module w3_top` / EXIT=0。",
+    "verdict": "PASS"
+  },
+  {
+    "severity": "info",
+    "file": "保姆教程_W1_从零到一号验证点.md",
+    "line": "349-357",
+    "category": "verified-fix",
+    "description": "2.3 引脚表四项均已落地：复位端口名写 sys_rst_btn_n；LED 四行补『必须配 IOSTANDARD，XDC 原来只有 PACKAGE_PIN』；auth_btn 行写『XDC 原本无此行，已补注释占位』；term_id_dip 行说明 wrapper 已 tie 高位。附带的 357 行旧口径矛盾见独立 FAIL 项。",
+    "evidence": "教程:349 `[get_ports sys_rst_btn_n]`…**端口名用 wrapper 的 sys_rst_btn_n**；:350-352 `每行都要配 set_property IOSTANDARD LVCMOS25（XDC 里原来**只有 PACKAGE_PIN、没写电平**…）`；:354 `**XDC 里原本没有这一行**——已在 w3_top.xdc 补了注释占位`；:353 `.term_id_sw({6'h00, term_id_dip})`；xdc:22-25 LED 行确实只有 PACKAGE_PIN、无 IOSTANDARD；xdc:27-29 auth_btn 注释占位段存在。",
+    "verdict": "PASS"
+  },
+  {
+    "severity": "info",
+    "file": "保姆教程_W1_从零到一号验证点.md",
+    "line": "361-370",
+    "category": "verified-fix",
+    "description": "2.4 顺序已倒置正确：① 全部端口引脚+电平落定 → ② 确认约束文件被加载（脚本路线引用 build_w3.tcl 的 add_files -fileset constrs_1）→ ③ 才删两条 DRC 豁免（UCIO-1、NSTD-1）→ ④ CI 回归并说明 w3_top 未改则 12/12 全绿、改了 w3_top 必须同步改 tb_w3_top → ⑤ 生成比特流。两条豁免命令在当前 build_w3.tcl 中各自独立成行（:28,:29）。CI 实测 12/12 PASS + 44 Python 单测 OK + 金丝雀 PASS + 契约同步 OK。",
+    "evidence": "教程:361-370（①…⑤ 五步顺序）；build_w3.tcl:28 `set_property SEVERITY {Warning} [get_drc_checks UCIO-1]`、:29 `… NSTD-1]`；实跑 `.\\scripts\\ci_regression.ps1` 输出 `=== 12/12 PASS, 0 FAIL ===`、`Ran 44 tests … OK`、`CANARY PASS`、`CONTRACT SYNC OK`。脚本路线的可用性缺陷见独立 FAIL 项。",
+    "verdict": "PASS"
+  },
+  {
+    "severity": "info",
+    "file": "build/tcl/build_w3.tcl",
+    "line": "4,20",
+    "category": "verified-fix",
+    "description": "新增的 add_files 约束行语法与同仓 build_w1.tcl 写法一致（`add_files -fileset constrs_1 $SRC/…`），$SRC 在 build_w3.tcl:4 定义为 `D:/puf-drone-auth/src`，目标文件 $SRC/rtl/w3_protocol/w3_top.xdc 真实存在。",
+    "evidence": "build_w3.tcl:4 `set SRC D:/puf-drone-auth/src`；:20 `add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top.xdc`；build_w1.tcl 同形 `add_files -fileset constrs_1 $SRC/w1_ro_waiver.xdc`；文件系统实测 D:\\puf-drone-auth\\src\\rtl\\w3_protocol\\w3_top.xdc 存在（41 行，已逐行读取）。",
+    "verdict": "PASS"
+  },
+  {
+    "severity": "info",
+    "file": "保姆教程_W1_从零到一号验证点.md",
+    "line": "376,377",
+    "category": "verified-fix",
+    "description": "2.5 验收口径已改且与 RTL 实数吻合：心跳『10 秒内亮/灭变化约 15 次 = 7~8 个完整亮灭来回，周期≈1.34s』；复位『按住 GPIO_SW_N 不放→DS10 停在固定电平』。复核 w3_top.v 心跳分频 hb_cnt[26] → 2^27/100MHz=1.342s，10s≈7.45 个周期≈15 次跳变，数字自洽。",
+    "evidence": "教程:376 `约 **15 次变化 = 7~8 个完整亮灭来回**（周期 ≈1.34 s，0.75 Hz）`；:377 `按住 GPIO_SW_N 不放 | 按住期间 DS10 停在固定电平`；w3_top.v:106 `assign led_heartbeat = hb_cnt[26];`。",
+    "verdict": "PASS"
+  },
+  {
+    "severity": "info",
+    "file": "保姆教程_W1_从零到一号验证点.md",
+    "line": "109,155,163,264,287,289,315,403-411",
+    "category": "verified-fix",
+    "description": "其余教程修正项均在位：2.1 时钟行已指向板级 wrapper；第二节标『路线一·全 GUI』、快车道标『路线二·全脚本（推荐，与路线一互斥）』并含 ExecutionPolicy Bypass 兜底；VIO Refresh Rate=1000 且注明 0=停止自动刷新；验证点③含 FMC 断电插拔警告 + radio 引脚明确『待选』；-Measure CSV 归档命令写到 data/w1_readings/board1.csv、阈值换算 3.8e-4（=100/262144）正确；docs/w1_evidence 目录已存在。",
+    "evidence": "教程:315 时钟行；:109 `## 二、新建工程（**路线一 · 全 GUI**，每一下点击）`；:155 `**路线二 · 全脚本（推荐，与路线一互斥）**`；:163 `powershell -ExecutionPolicy Bypass -File …`；:264 `填 1000——注意 0 的含义是「停止自动刷新」`；:403-406 断电插拔 + `radio_txd/radio_rxd 待选…未选定引脚前本步暂缓`；:287 `Copy-Item build\\vivado\\w1_auto\\w1_readings.csv data\\w1_readings\\board1.csv`；:289 `100/262144 = 3.8e-4`；Test-Path 实测 docs\\w1_evidence、data\\w1_readings 均 EXISTS。",
+    "verdict": "PASS"
+  },
+  {
+    "severity": "info",
+    "file": "docs/project_status.html,docs/project_flow.html,+教程",
+    "line": "263,143,32,291,486,496",
+    "category": "verified-fix",
+    "description": "过时事实修正复核：project_status.html『13 态协议』；project_flow.html tb_gap『7/7 ✅』且用例数确为 7（GA/GD1/GD2/GE1/GE2/GF/GH，含码 4 拒绝 GH）；security_threat.json 在 build/reviews/a1p4/；AI 日志在 report/llm_log/w1_session.md（docs/llm_log/ 仅留 '# Moved' 指针 README）；GitHub 清单换成 docs/opensource_analysis.md 实际分析的四仓库（external/ 恰为 c_library_v2、fpga_puf、puf-esp32-auth、PUF-lab 四个目录）；build_w3.tcl 确含 write_bitstream（已无『停在 route_design』旧说法）。",
+    "evidence": "project_status.html:263 `<b>terminal_fsm.v</b> — 13 态协议`；project_flow.html:143 `tb_gap_regression 7/7 ✅`；tb_gap_regression.v 用例：GA/GD1/GD2/GE1/GE2/GF/GH（:156,:191,:199,:213,:249,:262,:276 各带 PASS 打印，:280 汇总）；Test-Path build/reviews/a1p4/security_threat.json = EXISTS；report/llm_log/w1_session.md = EXISTS（2471 B）；docs/opensource_analysis.md 六节含 eriksargent/PUF-lab、stnolting/fpga_puf、mavlink/c_library_v2、xtncl/esp32-sram-puf-authentication；Get-ChildItem external -Directory 返回恰好这 4 个仓名目录；build_w3.tcl:32 `write_bitstream -force $OD/w3_top.bit`。",
+    "verdict": "PASS"
+  },
+  {
+    "severity": "info",
+    "file": "全仓 BOM / xvlog 复验",
+    "line": "-",
+    "category": "verified-fix",
+    "description": "BOM 清理在主仓范围内已复验通过：D:\\puf-drone-auth 全文件递归扫描（排除 .git、无扩展名过滤）首字节 EF BB BF 命中 0 个；xvlog 实测编译 wrapper+w3_top+terminal_fsm EXIT=0。工作区旧副本残留 1 个 BOM 文件见独立 low 项。",
+    "evidence": "扫描输出 `TOTAL_SCANNED_DONE` → `NO_BOM_FILES`；xvlog: `INFO: [VRFC 10-311] analyzing module w3_top_zc702` … `analyzing module w3_top` … EXIT=0（stderr 空）。",
+    "verdict": "PASS"
+  }
+]
