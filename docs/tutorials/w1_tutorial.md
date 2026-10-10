@@ -107,15 +107,13 @@ tb_speck 1175 组全量回放、tb_gap 8 用例含码 4 拒绝）+ 44 Python 单
 
 ## 二、新建工程（每一下点击）
 
-### 源文件准备（从仓库拷到构建区，一次性）
+### 源文件就在仓库里（无需暂存拷贝）
 
-源文件在仓库内，先拷一份到构建区（让 Vivado 工程自包含）：
-```powershell
-$stage = "D:\puf-drone-auth\build\vivado\w1_stage"
-New-Item -ItemType Directory -Force $stage | Out-Null
-Copy-Item "D:\puf-drone-auth\src\rtl\w1_ratio\*" $stage -Force
-```
-> 源文件唯一来源：仓库 `D:\puf-drone-auth\src\rtl\w1_ratio\`（工作区已合并至此；旧 `D:\文件\...\w1_project\` 目录弃用）。
+源目录：`D:\puf-drone-auth\src\rtl\w1_ratio\`（纯 ASCII 路径，Vivado **直接添加**，不要拷贝副本——仓库就是唯一真相源）：
+- `ro_ring.v` — 环振本体
+- `ro_div.v` — 分频/计数
+- `ro_ratio_top.v` — 顶层（内含 `vio_0`）
+- `w1_ro_waiver.xdc` — 组合环豁免（必须与 .v 一起加入）
 
 ### 开始建工程
 
@@ -139,7 +137,7 @@ Copy-Item "D:\puf-drone-auth\src\rtl\w1_ratio\*" $stage -Force
    - 点 **Next**
 
 6. **"Add Sources"** 页：
-   - 点右上 **Add Files** → 浏览 `D:\puf-drone-auth\build\vivado\w1_stage\`
+   - 点右上 **Add Files** → 浏览 `D:\puf-drone-auth\src\rtl\w1_ratio\`
    - **Ctrl 多选** 3 个：`ro_ring.v`、`ro_div.v`、`ro_ratio_top.v` → OK
    - 点 **Next**
 
@@ -153,11 +151,15 @@ Copy-Item "D:\puf-drone-auth\src\rtl\w1_ratio\*" $stage -Force
 
 9. **"New Project Summary"** 页 → 核对信息 → 点 **Finish**
 
-> ⚡ **快车道（第二次起可跳过 GUI）**：仓库自带一键构建脚本，产物含比特流+资源/时序报告：
+> ⚡ **快车道（第二次起可跳过 GUI——推荐）**：仓库自带一键脚本，建工程→综合→实现→比特流全自动：
 > ```powershell
-> vivado -mode batch -source D:\puf-drone-auth\build\tcl\build_w1.tcl -tclargs xc7z020clg484-1 D:\puf-drone-auth\build\vivado\w1_auto D:\puf-drone-auth\src\rtl\w1_ratio
+> cd D:\puf-drone-auth
+> .\build\ps1\run_build.ps1            # 一键构建
+> .\build\ps1\run_build.ps1 -Measure   # 构建 + 自动烧板 + 自动采 10 次 VIO 读数存 CSV
 > ```
-> 产物：`D:\puf-drone-auth\build\vivado\w1_auto\w1_auto.runs\impl_1\ro_ratio_top.bit`。第一次仍建议走上面的 GUI 流程学习界面。
+> `-Measure` 调用 `build\tcl\measure_w1.tcl`：连 JTAG → 烧录 → 每 15 秒读一次 `probe_in0` → 写 `w1_readings.csv`
+> （**验证点①可全自动完成**；第七节的手动读数流程只用于理解界面）。
+> 产物：`D:\puf-drone-auth\build\vivado\w1_auto\w1_auto.runs\impl_1\ro_ratio_top.bit`
 
 ---
 
@@ -272,6 +274,8 @@ Copy-Item "D:\puf-drone-auth\src\rtl\w1_ratio\*" $stage -Force
 | 1~10 | ... | ... |
 
 **验收**：10 次极差 < 100 ⇒ 全链路稳定 ✓
+
+> 🤖 **想省事**：`.\build\ps1\run_build.ps1 -Measure` 自动烧板并采集 10 次读数到 `w1_readings.csv`（等效于本节手动操作；手动流程的价值在于理解界面与排障）。
 
 > 📸 **记录模板**：截图（VIO 面板 + 硬件窗口）存 `docs/w1_evidence/`，读数表填上表；`docs/llm_log_w1.md` 记三行 AI 协作日志（原第⑨章「收尾」内容已并入）。
 > 这个"验证点①达成"的证据在竞赛报告里就是"上板验证第一章"。
