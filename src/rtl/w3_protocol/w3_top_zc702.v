@@ -31,7 +31,7 @@ module w3_top_zc702 # (
     clk_wiz_0 u_mmcm (
         .clk_in1_p (clk_p),
         .clk_in1_n (clk_n),
-        .reset     (1'b0),          // IP reset 高有效；复位统一交给下面的组合逻辑
+        .reset     (~sys_rst_btn_n), // IP reset 高有效 <- 按键低有效取反；配合 locked 双保险
         .clk_out1  (clk_100m),
         .locked    (mmcm_locked)
     );

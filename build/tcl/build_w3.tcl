@@ -1,4 +1,5 @@
-# build_w3.tcl -- W3 build (no pin constraints, dev mode)
+# build_w3.tcl -- W3 设计构建（dev 模式：top=w3_top、无引脚约束、DRC 豁免）
+# 上板请用 build_w3_board.tcl（wrapper 顶层 + clk_wiz_0 + w3_top.xdc，无豁免）
 set PART xc7z020clg484-1
 set OD D:/puf-drone-auth/build/vivado/w3_bitstream
 set SRC D:/puf-drone-auth/src
@@ -17,7 +18,6 @@ add_files [list \
     $SRC/rtl/w3_protocol/w3_top.v \
 ]
 
-add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top.xdc
 set_property top w3_top [current_fileset]
 synth_design -top w3_top -part $PART
 opt_design

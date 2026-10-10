@@ -322,12 +322,15 @@ tb_speck 1175 组全量回放、tb_gap 7 用例含码 4 拒绝）+ 44 Python 单
 > 而且 Clk Wizard IP 在仓库里没有仿真源（`ci_regression.ps1` 只编译纯 `.v`，全仓 0 个 `.xci`），
 > IBUFDS/MMCM 也无法进仿真。**结论：把时钟适配放进一个独立的板级 wrapper，w3_top 保持原样 → 12/12 TB 继续全绿。**
 
-1. 仓库**已提供** wrapper：`src\rtl\w3_protocol\w3_top_zc702.v`（内容：clk_p/clk_n 差分输入 + `clk_wiz_0` → 100MHz + `rst_n = sys_rst_btn_n & mmcm_locked` + 例化 w3_top）。看一遍它的端口名，下面 XDC 用这些名字。
+1. **把 wrapper 加入工程并设为顶层**（这一步不做，后面所有约束都会 get_ports 失败）：
+   - **Add Sources** → Add Files → 选 `D:\puf-drone-auth\src\rtl\w3_protocol\w3_top_zc702.v`（同时确认 `w3_top.v` 也在工程里）
+   - Sources 窗口 **右键 `w3_top_zc702` → Set as Top**（变粗体且带 (top) 才算）
+   - wrapper 内容：clk_p/clk_n 差分输入 + `clk_wiz_0` → 100MHz + `rst_n = sys_rst_btn_n & mmcm_locked` + 例化 w3_top（参数与端口一一对应）
 
 2. IP Catalog → 搜索 **Clocking Wizard** → 双击（工程里生成 IP，名字必须 `clk_wiz_0`）：
    - *Input Clock Information* → PRIMARY 选 **Differential clock capable pin**，输入频率 `200` MHz
    - *Output Clocks* → CLK_OUT1 = `100` MHz
-   - *Optional Inputs* → 勾选 **locked**；**不要**勾 reset（wrapper 里已用 `locked` 做复位组合，且 IP 的 reset 是高有效、板载按键是低有效，混用容易接反）
+   - *Optional Inputs* → 勾选 **locked** 与 **reset**（wrapper 里写成 `.reset(~sys_rst_btn_n)`：IP 高有效 ⇐ 按键低有效取反，你不用另接；**必须勾 reset**，否则生成的 IP 没有该端口、wrapper 例化会报错）
    - OK → Generate
 
 3. 时钟约束（加进 `w3_top.xdc` 或工程自己的 XDC；**w3_top 本身不需要约束**）：
@@ -354,7 +357,7 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
 | `auth_btn` | PL 按键（GPIO_SW_*） | **XDC 里原本没有这一行**——已在 `w3_top.xdc` 补了注释占位，按 UG850 查具体引脚后取消注释并加 IOSTANDARD；不接则 2.5 测 3 跳过 |
 
 > ⚠ 每核对一个引脚就在 XDC 里取消一行注释；**不认识的引脚宁可不接**。
-> `term_id_sw[7:2]` 注意：w3_top 里**没有**常量绑定（8 位端口直连 terminal_fsm），上板前必须自行把高 6 位 tie 成常量（如 8'h01）或外接 DIP，否则会留下 6 个未约束输入。
+> 顶层是 wrapper 时不需要你改 RTL：`term_id_dip[1:0]` 只占 W6/W7 两颗拨码，**wrapper 内已 tie 高 6 位为 0**（`.term_id_sw({6'h00, term_id_dip})`，故 terminal_id 只有 0~3）。
 
 ### 2.4 收尾（**严格按此顺序**，顺序错了 write_bitstream 会被 DRC 阻断）
 
@@ -362,12 +365,13 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
    - 每个已用端口都要有 `PACKAGE_PIN` **和** `IOSTANDARD`（LED 四行原来缺电平）
    - `term_id_dip[1:0]` → 板上 W6/W7；**wrapper 已 tie 高 6 位为 0**，不用改代码（terminal_id 只有 0~3）
    - `radio_txd/radio_rxd`：验证点③ 之前无引脚——**必须先选定 FMC/PMOD 引脚**，否则本步无法完成（届时可临时保留 UCIO-1 豁免，但要记在案）
-2. **确认约束文件真的被加载**：脚本路线下 `build_w3.tcl` 已含 `add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top.xdc`（本仓库已补上）；GUI 路线则在 Constraints 里确认 `w3_top.xdc` 已启用。
-3. **然后**才把 `build_w3.tcl` 里**两条**豁免命令删除（`set_property SEVERITY {Warning} [get_drc_checks UCIO-1]` 与 `... [get_drc_checks NSTD-1]`，各自独立一行）——豁免一删，任何未约束端口都会立刻变成 ERROR。
+2. **确认约束文件真的被加载**：上板脚本 `build_w3_board.tcl` 已含 `add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top.xdc`；GUI 路线则在 Constraints 里确认 `w3_top.xdc` 已启用。（注意区分：`build_w3.tcl` 是 **dev 模式**设计构建——top=w3_top、无 IP、无引脚约束、带 DRC 豁免，**不要**用它上板。）
+3. **然后才是删豁免**：两条豁免只存在于 dev 脚本 `build_w3.tcl`（`set_property SEVERITY {Warning} [get_drc_checks UCIO-1]` 与 `... NSTD-1]`，各自独立一行）。上板脚本 `build_w3_board.tcl` **本来就没有豁免**——所以「删豁免」= 以后不再用 dev 脚本出比特流，而不是去改上板脚本。
 4. **CI 回归**：`w3_top` 本体未改动（时钟在 wrapper 里），**12/12 TB 应保持全绿**——`xsim`/`xvlog` 编译清单不含 wrapper，也不需要 IP 仿真源。
-   如果你确实改了 `w3_top` 本身（例如加端口），必须先同步改 `sim/tb/tb_w3_top.v` 再跑 `.scriptsci_regression.ps1`，否则 CI 必红。
-5. **生成比特流**：GUI（Generate Bitstream）或脚本 `vivado -mode batch -source build/tcl/build_w3.tcl`
-   （脚本末尾已含 `write_bitstream -force $OD/w3_top.bit` 与 `puts "BITSTREAM_SUCCESS"`，直接跑即可）
+   如果你确实改了 `w3_top` 本身（例如加端口），必须先同步改 `sim/tb/tb_w3_top.v` 再跑 `.\scripts\ci_regression.ps1`，否则 CI 必红。
+5. **生成比特流**：GUI（把 `w3_top_zc702` 设为顶层后 Generate Bitstream）或上板脚本
+   `vivado -mode batch -source build/tcl/build_w3_board.tcl -tclargs xc7z020clg484-1 D:/puf-drone-auth/build/vivado/w3_board D:/puf-drone-auth/src`
+   （上板脚本会自动：top=`w3_top_zc702` + 生成 `clk_wiz_0` + 加载 `w3_top.xdc` + 全程无 DRC 豁免；产物 `w3_board/w3_top_zc702.bit`）
 
 ### 2.5 验收（无电台也能做的三连测）
 
