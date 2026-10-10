@@ -22,8 +22,8 @@
     "file": "build/tcl/build_w3.tcl",
     "line": "9-22,32",
     "category": "脚本路线与 wrapper 方案不匹配（2.4 第5步照抄必失败）",
-    "description": "教程 2.4 第 5 步（L369-370）把 `vivado -mode batch -source build/tcl/build_w3.tcl` 列为生成比特流的脚本路线，但该脚本 add_files 只有 8 个 .v、顶层仍是 `set_property top w3_top` / `synth_design -top w3_top`，既没有把新增的板级 wrapper w3_top_zc702.v 加入，也没有任何 create_ip/read_ip 来生成 clk_wiz_0（全仓 0 个 .xci，唯一的 create_ip 在 build_w1.tcl 里给 vio）。照脚本跑出来的是『w3_top + 无时钟约束的单端 sys_clk』设计：2.2 要求的 200MHz 差分→100MHz 适配完全不生效，2.5 的 DS10 心跳不可能出现；若读者又按 2.2 第 3 步把 clk_p/clk_n 约束写进 w3_top.xdc（脚本确实加载它），脚本里 get_ports 又找不到这些端口，约束落在空集合上。",
-    "evidence": "build_w3.tcl:9-18 add_files 仅 crc16_mcrf4xx/mavlink_frame/frame_parser/byte_fifo/uart_tx/uart_rx/terminal_fsm/w3_top；:20 `add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top.xdc`；:21 `set_property top w3_top [current_fileset]`；:22 `synth_design -top w3_top`；:32 `write_bitstream -force $OD/w3_top.bit`。全仓 grep `create_ip|read_ip|clk_wiz|w3_top_zc702`：build/tcl、build/ps1、scripts 下仅 build_w1.tcl:14 `create_ip -name vio … -module_name vio_0`。Get-ChildItem -Recurse -Filter *.xci → 0。教程:369-370 给出该脚本路线。",
+    "description": "教程 2.4 第 5 步（L369-370）把 \\vivado -mode batch -source build/tcl/build_w3.tcl\\ 列为生成比特流的脚本路线，但该脚本 add_files 只有 8 个 .v、顶层仍是 \\set_property top w3_top\\ / \\synth_design -top w3_top\\，既没有把新增的板级 wrapper w3_top_zc702.v 加入，也没有任何 create_ip/read_ip 来生成 clk_wiz_0（全仓 0 个 .xci，唯一的 create_ip 在 build_w1.tcl 里给 vio）。照脚本跑出来的是『w3_top + 无时钟约束的单端 sys_clk』设计：2.2 要求的 200MHz 差分→100MHz 适配完全不生效，2.5 的 DS10 心跳不可能出现；若读者又按 2.2 第 3 步把 clk_p/clk_n 约束写进 w3_top.xdc（脚本确实加载它），脚本里 get_ports 又找不到这些端口，约束落在空集合上。",
+    "evidence": "build_w3.tcl:9-18 add_files 仅 crc16_mcrf4xx/mavlink_frame/frame_parser/byte_fifo/uart_tx/uart_rx/terminal_fsm/w3_top；:20 `add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top.xdc`；:21 `set_property top w3_top [current_fileset]`；:22 `synth_design -top w3_top`；:32 `write_bitstream -force $OD/w3_top.bit`。全仓 grep \\create_ip|read_ip|clk_wiz|w3_top_zc702\\：build/tcl、build/ps1、scripts 下仅 build_w1.tcl:14 `create_ip -name vio … -module_name vio_0`。Get-ChildItem -Recurse -Filter *.xci → 0。教程:369-370 给出该脚本路线。",
     "verdict": "FAIL"
   },
   {
@@ -32,7 +32,7 @@
     "line": "325-331,369",
     "category": "缺步骤（GUI 路线无 W3 工程、无顶层设置）",
     "description": "2.2 第 2 步让读者『IP Catalog → 搜索 Clocking Wizard → 双击（工程里生成 IP，名字必须 clk_wiz_0）』，隐含了一个已包含 wrapper 且顶层已切到 wrapper 的 Vivado 工程；但全教程只教过 W1 工程的建立（L140 Add Files → L153 Finish、L174 把 ro_ratio_top 设为 top），从头到尾没有任何一步把 src/rtl/w3_protocol/w3_top_zc702.v 加入 sources 并把顶层设为 w3_top_zc702。结果是 2.4 第 5 步的『GUI（Generate Bitstream）』无工程可用：顶层若仍是 w3_top，2.2/2.3 的 clk_p/clk_n、sys_rst_btn_n、term_id_dip 这些端口在工程里不存在。（本轮同目录 fix_verify.json 的 missing-step 项已就同一事实给 FAIL，这里补其在 GUI 路线上的具体后果与受影响行号。）",
-    "evidence": "教程:325 `仓库已提供 wrapper：src\\rtl\\w3_protocol\\w3_top_zc702.v…看一遍它的端口名，下面 XDC 用这些名字`；:327 IP Catalog 生成 clk_wiz_0；:369 `生成比特流：GUI（Generate Bitstream）或脚本 …`。全文 grep `Add Files|Add Sources|Set as Top` 仅命中 :140（W1 的 Add Sources 页）、:172-174（Design Sources / 右键 ro_ratio_top → Set as Top），没有任何 W3 工程与顶层设置步骤。",
+    "evidence": "教程:325 `仓库已提供 wrapper：src\\rtl\\w3_protocol\\w3_top_zc702.v…看一遍它的端口名，下面 XDC 用这些名字`；:327 IP Catalog 生成 clk_wiz_0；:369 `生成比特流：GUI（Generate Bitstream）或脚本 …`。全文 grep \\Add Files|Add Sources|Set as Top\\ 仅命中 :140（W1 的 Add Sources 页）、:172-174（Design Sources / 右键 ro_ratio_top → Set as Top），没有任何 W3 工程与顶层设置步骤。",
     "verdict": "FAIL"
   },
   {
@@ -49,7 +49,7 @@
     "file": "docs/tutorials/w1_tutorial.md",
     "line": "285-289",
     "category": "对工具行为的错误断言",
-    "description": "L285 写『compare_devices.py 默认读 data/w1_readings/，不归档会接不上第八节的换板对比』——该脚本的目录参数 `-d/--directory` 是 required=True、没有任何默认值，也没有位置参数，所以『默认读 data/w1_readings/』不成立：读者归档完 board1.csv 直接跑脚本会 argparse 报错退出。教程同时没给出脚本路径（仓库里有两份同名 compare_devices.py：src/python/evaluation/compare_devices.py 与 external/puf-esp32-auth/tools/analysis/compare_devices.py），新手无法照做。",
+    "description": "L285 写『compare_devices.py 默认读 data/w1_readings/，不归档会接不上第八节的换板对比』——该脚本的目录参数 -d/--directory 是 required=True、没有任何默认值，也没有位置参数，所以『默认读 data/w1_readings/』不成立：读者归档完 board1.csv 直接跑脚本会 argparse 报错退出。教程同时没给出脚本路径（仓库里有两份同名 compare_devices.py：src/python/evaluation/compare_devices.py 与 external/puf-esp32-auth/tools/analysis/compare_devices.py），新手无法照做。",
     "evidence": "src/python/evaluation/compare_devices.py:111-112 `parser.add_argument(\"-d\", \"--directory\", required=True, help=\"directory containing one measurement CSV per device\")`；:21-22 文档用法为 `python compare_devices.py -d data/w1_readings/`；:16-17 说明输入格式 timestamp/hex_value/decimal_value（measure_w1.tcl:24 写的表头是 timestamp,probe_in0_hex,probe_in0_dec，按列号解析可通）。教程:285-288 `归档到证据链（compare_devices.py 默认读 data/w1_readings/…）` / `Copy-Item build\\vivado\\w1_auto\\w1_readings.csv data\\w1_readings\\board1.csv`。另 Get-ChildItem -Recurse -Filter compare_devices.py 命中 external/ 与 src/ 两个同名文件。",
     "verdict": "FAIL"
   },
@@ -58,7 +58,7 @@
     "file": "docs/tutorials/w1_tutorial.md",
     "line": "283-284",
     "category": "路线分叉残留串线",
-    "description": "第七节是『路线一 · 全 GUI』的读数章节，却用『🤖 想省事』引导读者改跑脚本 `.\buildps1\run_build.ps1 -Measure`（会另建工程 w1_auto、再烧一次板）。这与第二节的路线约束冲突：L161-162 明确『只选一条路线…两条都走等于白等一次 5~15 分钟构建；跑脚本前先关掉 GUI 的 Hardware Manager（否则会抢同一个 hw_server）』，而 L283-284 没有带任何限定，读者很可能在 GUI Hardware Manager 已连接的状态下再跑脚本，正是 L162 警告的抢 hw_server 场景。",
+    "description": "第七节是『路线一 · 全 GUI』的读数章节，却用『🤖 想省事』引导读者改跑脚本 \\.\\build\\ps1\\run_build.ps1 -Measure\\（会另建工程 w1_auto、再烧一次板）。这与第二节的路线约束冲突：L161-162 明确『只选一条路线…两条都走等于白等一次 5~15 分钟构建；跑脚本前先关掉 GUI 的 Hardware Manager（否则会抢同一个 hw_server）』，而 L283-284 没有带任何限定，读者很可能在 GUI Hardware Manager 已连接的状态下再跑脚本，正是 L162 警告的抢 hw_server 场景。",
     "evidence": "教程:109 `## 二、新建工程（路线一 · 全 GUI）`；:155-162 路线二说明与『只选一条路线』『抢同一个 hw_server，跑脚本前先关掉 GUI 的 Hardware Manager』；:283-284 `🤖 想省事：.\\build\\ps1\\run_build.ps1 -Measure 自动烧板并采集 10 次读数到 build\\vivado\\w1_auto\\w1_readings.csv（等效于本节手动操作…）`。run_build.ps1:13,34 产物为 build/vivado/w1_auto 与 w1_readings.csv；measure_w1.tcl:9 `connect_hw_server -url localhost:3121`。",
     "verdict": "FAIL"
   },
@@ -77,7 +77,7 @@
     "line": "357",
     "category": "修复引入的残留矛盾（term_id_sw[7:2]）",
     "description": "2.3 同一张表里，L353 与 L363 说『wrapper 已把高 6 位 tie 0（.term_id_sw({6'h00, term_id_dip})），无需手工改代码』，紧接的 L357 却说『w3_top 里没有常量绑定…上板前必须自行把高 6 位 tie 成常量（如 8'h01）或外接 DIP，否则会留下 6 个未约束输入』。按本轮确定的 wrapper 顶层方案，顶层根本不存在未 tie 的 term_id_sw[7:2]，该断言只对『拿 w3_top 当顶层』这一本轮已禁止的方案成立，会诱导读者去改 RTL 或做重复绑定（且与 L363 的『terminal_id 只有 0~3』自相矛盾）。",
-    "evidence": "教程:353 `…**wrapper 已把高 6 位 tie 0**（.term_id_sw({6'h00, term_id_dip})），无需手工改代码`；:357 上述旧口径；:363 `wrapper 已 tie 高 6 位为 0，不用改代码（terminal_id 只有 0~3）`。src/rtl/w3_protocol/w3_top_zc702.v:52 `.term_id_sw ({6'h00, term_id_dip})`；xdc:36 残留同一旧说法。git diff fc27345 9ff5299 显示 L357 这句是本轮修复新写入的（`+> term_id_sw[7:2] 注意：…`）。（本轮同目录 fix_verify.json 的 self-contradiction 项亦为 FAIL。）",
+    "evidence": "教程:353 `…**wrapper 已把高 6 位 tie 0**（.term_id_sw({6'h00, term_id_dip})），无需手工改代码`；:357 上述旧口径；:363 `wrapper 已 tie 高 6 位为 0，不用改代码（terminal_id 只有 0~3）`。src/rtl/w3_protocol/w3_top_zc702.v:52 `.term_id_sw ({6'h00, term_id_dip})`；xdc:36 残留同一旧说法。git diff fc27345 9ff5299 显示 L357 这句是本轮修复新写入的。本轮同目录 fix_verify.json 的 self-contradiction 项亦为 FAIL。",
     "verdict": "FAIL"
   },
   {
@@ -85,8 +85,8 @@
     "file": "docs/tutorials/w1_tutorial.md",
     "line": "368",
     "category": "路径笔误（修复引入，脚本不可执行）",
-    "description": "第 4 步括号里写作 `.scriptsci_regression.ps1`（少了一个反斜杠），按此执行找不到命令；仓库实际脚本是 scripts\\ci_regression.ps1（其自述用法为 .\\scripts\\ci_regression.ps1）。git diff 显示修复前该处本来是 `\\.\\scripts\\ci_regression.ps1`，本轮改写时把路径打坏，属于修复引入的新错误。",
-    "evidence": "教程:368 `如果你确实改了 w3_top 本身（例如加端口），必须先同步改 sim/tb/tb_w3_top.v 再跑 \\`.scriptsci_regression.ps1\\`，否则 CI 必红。`（原始文本实测为 『.scriptsci_regression.ps1』，无反斜杠）；D:\\puf-drone-auth\\scripts\\ci_regression.ps1 存在（自述 Usage: .\\scripts\\ci_regression.ps1）。git diff fc27345 9ff5299：`-…必须全量回归（\\`.\\scripts\\ci_regression.ps1\\`）` → `+…再跑 \\`.scriptsci_regression.ps1\\``。（fix_verify.json 的 typo-wrong-path 项同结论。）",
+    "description": "第 4 步括号里写作 \\.scriptsci_regression.ps1\\（少了一个反斜杠），按此执行找不到命令；仓库实际脚本是 scripts\\ci_regression.ps1（其自述用法为 .\\scripts\\ci_regression.ps1）。git diff 显示修复前该处本来是 .\\scripts\\ci_regression.ps1，本轮改写时把路径打坏，属于修复引入的新错误。",
+    "evidence": "教程:368 `如果你确实改了 w3_top 本身（例如加端口），必须先同步改 sim/tb/tb_w3_top.v 再跑 \\.scriptsci_regression.ps1\\，否则 CI 必红。`（原始文本实测为 『.scriptsci_regression.ps1』，无反斜杠）；D:\\puf-drone-auth\\scripts\\ci_regression.ps1 存在（自述 Usage: .\\scripts\\ci_regression.ps1）。git diff fc27345 9ff5299：`-.\\scripts\\ci_regression.ps1` → `+.scriptsci_regression.ps1`（fix_verify.json 的 typo-wrong-path 项同结论）。",
     "verdict": "FAIL"
   },
   {
@@ -122,7 +122,7 @@
     "line": "246",
     "category": "描述与设计不符",
     "description": "第六节烧录验证点①的比特流后写『等 5~10 秒——板子不会有明显灯变（心跳在 VIO 里看）』。W1 的顶层 ro_ratio_top 是 `module ro_ratio_top ();` 的无端口设计，既没有 LED 也没有任何心跳信号（心跳 led_heartbeat/DS10 属于验证点②的 w3_top）；而且第七节自己说读数『约 14~43 秒一跳』、首窗结束前恒为 0，所以『等 5~10 秒看心跳』同样什么都看不到。新手会去找并不存在的『心跳』。",
-    "evidence": "教程:246 上述原文；:271-273 `公式…` / `更新周期：约 14~43 秒一跳` / `⚠️ 上电后首窗结束前，读数一直是 0——正常`；src/rtl/w1_ratio/ro_ratio_top.v:18 `module ro_ratio_top ();`（无端口、全文无 LED/心跳，:16 注明读数经 VIO 读回）；对照 w3_top.v:39,106 才有 led_heartbeat/hb_cnt[26]。",
+    "evidence": "教程:246 上述原文；:271-273 `更新周期：约 14~43 秒一跳` / `⚠️ 上电后首窗结束前，读数一直是 0——正常`；src/rtl/w1_ratio/ro_ratio_top.v:18 `module ro_ratio_top ();`（无端口、全文无 LED/心跳，:16 注明读数经 VIO 读回）；对照 w3_top.v:39,106 才有 led_heartbeat/hb_cnt[26]。",
     "verdict": "FAIL"
   },
   {
@@ -140,7 +140,7 @@
     "line": "120",
     "category": "修复不完整（跨文档矛盾）",
     "description": "修复清单称 dashboard 的『12 态』已修为『13 态』，但实测只有 docs/project_status.html 改了；docs/project_flow.html:120 仍写『12 态协议』、docs/architecture.html:154 与 :261 仍写『12态协议控制器』『12态FSM』，共 3 处残留。terminal_fsm.v 实际有 13 个状态（S_IDLE=4'd0 … S_CALC_R2=4'd12），所以残留的 12 态是过时事实，并与已改的 project_status.html『13 态』互相矛盾。同一卡片 project_flow.html:120 的『302 行』也已过时（terminal_fsm.v 现 395 行）。注意：这不是教程正文问题——教程正文通篇没有出现 12/13 态（已 grep 确认）。",
-    "evidence": "docs/project_status.html:263 `terminal_fsm.v — 13 态协议`；docs/project_flow.html:120 `<p>12 态协议 · C2 重放保护 · 动态 R2</p>…<span>302 行</span>`；docs/architecture.html:154 `terminal_fsm.v…12态协议控制器`、:261 `12态FSM：空闲→发请求→…`；src/rtl/w3_protocol/terminal_fsm.v:54-66 共 13 个 localparam（4'd0~4'd12），文件行数 395（Get-Content .Count）。教程 grep `12 态|13 态` → 0 命中。",
+    "evidence": "docs/project_status.html:263 `terminal_fsm.v — 13 态协议`；docs/project_flow.html:120 `<p>12 态协议 · C2 重放保护 · 动态 R2</p>…<span>302 行</span>`；docs/architecture.html:154 `terminal_fsm.v…12态协议控制器`、:261 `12态FSM：空闲→发请求→…`；src/rtl/w3_protocol/terminal_fsm.v:54-66 共 13 个 localparam（4'd0~4'd12），文件行数 395。教程 grep 12 态|13 态 → 0 命中。",
     "verdict": "FAIL"
   },
   {
@@ -149,7 +149,7 @@
     "line": "496-497",
     "category": "资源清单自相矛盾（修复不完整）",
     "description": "GitHub 资源段写『仓库 external/ 有四份源码，逐行分析见 docs/opensource_analysis.md』，随后却一口气列了 6 个名字：eriksargent/PUF-lab、stnolting/fpga_puf、mavlink/c_library_v2、xtncl/esp32-sram-puf-authentication、pymavlink、rithan2001/Xilinx-Zynq-7000-SoC-ZC702。其中 pymavlink 是 pip 依赖、rithan2001 是外部 XDC 底稿，两者都不在 external/（实测 external/ 恰为 c_library_v2、fpga_puf、puf-esp32-auth、PUF-lab 四个目录）。而且『逐行分析见 docs/opensource_analysis.md』对 rithan2001/master_constraints.xdc 不成立：该文档对 rithan2001/master_constraints 命中 0 次，仓库里也没有 vendored 这份底稿，读者无法按教程的说法本地核对引脚来源。",
-    "evidence": "教程:496-497 原文（『external/ 有四份源码』+ 6 个仓名）；Get-ChildItem D:\\puf-drone-auth\\external -Directory → c_library_v2、fpga_puf、puf-esp32-auth、PUF-lab（恰 4 个）；Grep rithan2001|master_constraints ：docs/opensource_analysis.md 0 命中，仅 w3_top.xdc:5 与教程:497 提到；Get-ChildItem -Recurse -Filter master_constraints* → 无结果；docs/opensource_analysis.md 章节为 一~五（PUF-lab / fpga_puf / c_library_v2 / esp32-sram-puf-authentication / pymavlink）。",
+    "evidence": "教程:496-497 原文（『external/ 有四份源码』+ 6 个仓名）；Get-ChildItem D:\\puf-drone-auth\\external -Directory → c_library_v2、fpga_puf、puf-esp32-auth、PUF-lab（恰 4 个）；Grep rithan2001|master_constraints：docs/opensource_analysis.md 0 命中，仅 w3_top.xdc:5 与教程:497 提到；Get-ChildItem -Recurse -Filter master_constraints* → 无结果；docs/opensource_analysis.md 章节为 一~五（PUF-lab / fpga_puf / c_library_v2 / esp32-sram-puf-authentication / pymavlink）。",
     "verdict": "FAIL"
   },
   {
@@ -184,8 +184,8 @@
     "file": "docs/tutorials/w1_tutorial.md",
     "line": "109,155-166,263-266,285-289,403-411,486,291,370",
     "category": "已修项复核",
-    "description": "【清单第9、10项除下列 FAIL 外】路线分叉已显著（第二节标『路线一 · 全 GUI』、快车道标『路线二 · 全脚本（推荐，与路线一互斥）』并含 ExecutionPolicy Bypass 兜底）；VIO 刷新率已写 Refresh Rate=1000 且注明 0=停止自动刷新；验证点③含 FMC 先断电警告且 radio 引脚明确『待选…未选定引脚前本步暂缓』；阈值换算 100/262144=3.8e-4 正确；docs/w1_evidence 与 data/w1_readings 目录均存在；security_threat.json 在 build/reviews/a1p4/；AI 日志在 report/llm_log/w1_session.md（docs/llm_log 仅留 'Moved' README）；build_w3.tcl 确含 write_bitstream（『停在 route_design』旧说法已删）；tb_gap 7 用例与 project_flow.html tb_gap 7/7 一致。",
-    "evidence": "教程:109、:155、:163、:264、:289、:403-406、:410-411、:486、:291、:370；Test-Path docs\\w1_evidence / data\\w1_readings = True；Test-Path build/reviews/a1p4/security_threat.json = True；report/llm_log/w1_session.md 存在；docs/llm_log/README.md 内容 `# Moved - AI logs now in report/llm_log/`；build_w3.tcl:32-33 write_bitstream + BITSTREAM_SUCCESS；project_flow.html:143 `tb_gap_regression 7/7 ✅`。（『compare_devices 默认读 data/w1_readings/』这一句为假，见 FAIL 项。）",
+    "description": "【清单第9、10项除下列 FAIL 外】路线分叉已显著（第二节标『路线一 · 全 GUI』、快车道标『路线二 · 全脚本（推荐，与路线一互斥）』并含 ExecutionPolicy Bypass 兜底）；VIO 刷新率已写 Refresh Rate=1000 且注明 0=停止自动刷新；验证点③含 FMC 先断电警告且 radio 引脚明确『待选…未选定引脚前本步暂缓』；阈值换算 100/262144=3.8e-4 正确；docs/w1_evidence 与 data/w1_readings 目录均存在；security_threat.json 在 build/reviews/a1p4/；AI 日志在 report/llm_log/w1_session.md（docs/llm_log 仅留 Moved README）；build_w3.tcl 确含 write_bitstream（『停在 route_design』旧说法已删）；tb_gap 7 用例与 project_flow.html tb_gap 7/7 一致。",
+    "evidence": "教程:109、:155、:163、:264、:289、:403-406、:410-411、:486、:291、:370；Test-Path docs\\w1_evidence / data\\w1_readings = True；Test-Path build/reviews/a1p4/security_threat.json = True；report/llm_log/w1_session.md 存在；docs/llm_log/README.md 内容 `# Moved - AI logs now in report/llm_log/`；build_w3.tcl:32-33 write_bitstream + BITSTREAM_SUCCESS；project_flow.html:143 `tb_gap_regression 7/7 ✅`。『compare_devices 默认读 data/w1_readings/』这一句为假，见 FAIL 项。",
     "verdict": "PASS"
   },
   {
