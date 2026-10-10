@@ -150,13 +150,20 @@ Git：57 commits（截至 A1 收官提交 a678274）· 144 files · tag w3-compl
 - ⬜ W5 冻结周（报告 + Skill + 视频）
 - ⬜ W6 交付周（11-03 提交）
 
-### 上板前必做清单
-1. 填入 ZC702 真实引脚（查 UG850 + 主 XDC）
-2. 时钟适配（200MHz 差分→100MHz：IBUFDS+MMCM）
-3. 复位源改用 GPIO_SW_N（G19, LVCMOS25）
-4. 购买 433MHz 电台一对
-5. PC 串口通信循环
-6. 拨码开关不够 8 位（用常量）
+### 上板前必做清单（保姆教程三轮审查后的状态，2026-10-10）
+1. **填入 ZC702 真实引脚**（查 UG850 + 主 XDC）——⬜ 待做：`w3_top.xdc` 仍全部注释；
+   LED 四行原本只有 PACKAGE_PIN、缺 IOSTANDARD（不补会被 DRC NSTD-1 拦）；`auth_btn` 原本没有对应行，已补注释占位（无引脚则 2.5 测 3 跳过）
+2. **时钟适配**——✅ 方案已落地：新增板级 wrapper `src/rtl/w3_protocol/w3_top_zc702.v`（clk_p/clk_n 差分 → `clk_wiz_0` → 100MHz；xelab 已验通过，见下）
+   **w3_top 端口一行不改**（改端口会破坏 `tb_w3_top`，且 Clk Wizard IP 无仿真源）→ 12/12 CI 不受影响
+   上板时须在 Vivado 工程内生成 `clk_wiz_0`（200MHz 差分 → 100MHz + locked），wrapper 不参与仿真/CI
+3. **复位源**——✅ wrapper 已组合：`rst_n = sys_rst_btn_n & mmcm_locked`（按键低有效 + MMCM 未锁持续复位，两者不冲突）
+4. **购买 433MHz 电台一对**——⬜ 待做
+5. **PC 串口通信循环**——⬜ 待做（前置：选定 FMC/PMOD 的 UART 引脚；**插 FMC 前必须断电**，官方禁止带电插拔）
+6. **拨码开关不够 8 位**——✅ 已在 wrapper 内解决：`term_id_dip[1:0]`（W6/W7）+ 内部 `{6'h00, term_id_dip}` tie 高位，无需手工改代码
+
+> 支撑改动：`build_w3.tcl` 原先**完全不加载** `w3_top.xdc`（引脚约束在批处理流里静默失效）——已补 `add_files -fileset constrs_1`。
+> 教程：`docs/tutorials/w1_tutorial.md` 经三轮独立审查（仓库事实 / ZC702 硬件 / 端到端走查）修正 20+ 处，
+> 证据 `build/reviews/tutorial/{repo_facts,walkthrough,fix_verify,new_angle}.json`；新增 wrapper 以 xvlog+xelab 实证可编译可 elaborate（clk_wiz 用临时 stub）。
 
 ### 纯电脑端可做的 21 项任务
 详见对话中的盘点，优先级最高的剩余项：
