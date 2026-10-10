@@ -5,7 +5,7 @@
 - Power switch ON after connecting adapter
 
 ## USB Connection
-- Two micro-USB ports: **only use the JTAG port** (not UART)
+- Two USB ports with different roles: **J17 = USB-UART (CP210x serial, used by the factory BIST/Tera Term)**, the other = **JTAG (used by Vivado Hardware Manager for programming + VIO)**. For Vivado, plug the JTAG port; the connector type per port varies between docs, so go by the silkscreen. + IOSTANDARD
 - Use a **data cable** (not charge-only)
 
 ## Boot Mode (SW16)

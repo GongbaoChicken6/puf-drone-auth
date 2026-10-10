@@ -18,9 +18,9 @@
 | 验证点 | 内容 | 要改什么 | 验收标准 | 预计 |
 |---|---|---|---|---|
 | **⓪** | **出厂 BIST 自检**（板健康自证，官方 XTP310 流程） | 装 CP210x 驱动 + Tera Term；SW16=00010；连线 J17 | BIST 菜单出现且 LED/DDR3 等项通过 | 半小时 |
-| **①** | **W1 环振比值**（本教程主体，零引脚设计） | 不改任何 RTL/XDC | VIO 读数 10 次极差 < 100 | 半天 |
-| ② | **w3_top 心跳 + 按键**（时钟/复位/LED 三大板级适配） | 时钟端口 + IBUFDS/MMCM + XDC 引脚 | 心跳 LED 0.75Hz 闪烁；按键→busy 亮 2s | 1 天 |
-| ③ | **PC 串口环路**（协议帧互通） | FMC/PMOD USB-UART 桥（ZC702 板载 UART 在 PS 域，PL 够不着） | PC 发 CHALLENGE → 终端回 RESPONSE_R1 → parse 成功 | 1 天 |
+| **①** | **W1 环振比值**（本教程主体，零引脚设计） | 不改任何 RTL；只需加入现成的 `w1_ro_waiver.xdc`（缺它 write_bitstream 被 DRC LUTLP-1 阻断） | VIO 读数 10 次极差 < 100 | 半天 |
+| ② | **w3_top 心跳 + 按键**（时钟/复位/LED 三大板级适配） | 新增板级 wrapper（IBUFDS+MMCM，**w3_top 一行不改**）+ wrapper 端口 XDC | 心跳 LED 0.75Hz 闪烁；按键→busy 亮 2s | 1 天 |
+| ③ | **PC 串口环路**（协议帧互通） | FMC LPC 转 USB-UART 桥（板载 UART 在 PS 域，PL 够不着；先确认板上有无 PMOD） | PC 发 CHALLENGE → 终端回 RESPONSE_R1 → parse 成功 | 1 天 |
 | ④ | **PUF 真实测量**（替换种子直通） | terminal_fsm 接 challenge_decode + ro_array | 上板实测 16 环频率，模板注册后认证 PASS | W4 |
 | ⑤ | **完整互认证 + W4 安全包** | P1-5 重放修复 / 熵混合 / 真密钥 | 互认证端到端 + 安全声明如实 | W4 |
 
@@ -55,11 +55,11 @@ tb_speck 1175 组全量回放、tb_gap 7 用例含码 4 拒绝）+ 44 Python 单
 | **SW15-1/2 ≈ SW13/SW14** | 并联信号（BIST 的 Switch Test 用） | 任选一种 |
 | **FMC 连接器** | 扩展接口 | 验证点①不碰（验证点③的 USB-UART 桥/电台会用到） |
 | **GPIO_SW_N 按键**（G19） | PL 域复位（验证点②用） | 先认识位置，本课暂不按 |
-| **DS9~DS12 LED**（Y11/T22/W21/U21，待核对） | 状态灯（验证点②用） | 先认识位置 |
+| **DS9~DS12 LED**（**P17/P18/W10/V7**，已对照 AMD 官方板卡定义核验） | 状态灯（验证点②用） | 先认识位置 |
 
 > ⚠ **两个 board 认知提前打预防针**（验证点②会展开）：
 > ① ZC702 的 PL 时钟是 **200MHz 差分**（D18/C19, LVDS_25），而 w3_top 期待 100MHz 单端；
-> ② 板载 **CPU_RESET 按键在 PS 域**，PL 逻辑够不着——复位要用 **GPIO_SW_N（G19, LVCMOS25）**。
+> ② 板载 **PS 域复位键（POR_B，即 SW1）PL 逻辑够不着**——按它是整片复位/重新配置（PL 也会被清），只是不能当 PL 逻辑输入用；PL 复位要用 **GPIO_SW_N（G19, LVCMOS25）**。
 
 ---
 
@@ -75,7 +75,7 @@ tb_speck 1175 组全量回放、tb_gap 7 用例含码 4 拒绝）+ 44 Python 单
 2. 装终端软件 **Tera Term**：www.xilinx.com/kits/teraterm（PuTTY 也可）
 3. 盒内物品核对：**SD 卡（出厂 BIST 镜像，插回板上别弄丢）**、USB Hub、HDMI 线、以太网线、两种 USB 线
 
-### 0.5.2 开箱流程（官方 STEP 1~9）
+### 0.5.2 开箱流程（官方 STEP 1~11）
 
 | 步 | 操作 | 关键点 |
 |---|---|---|
@@ -128,7 +128,7 @@ tb_speck 1175 组全量回放、tb_gap 7 用例含码 4 拒绝）+ 44 Python 单
 
 4. **"Project Name"** 页（标题栏标有 "Project Name"，底部按钮 Cancel / Back / Next）：
    - *Project name*：改为 `w1_ratio`（默认是 project_1，**必须改**）
-   - *Project location*：改为 `D:\puf-drone-auth\build\vivado`（默认在 C:/Users/你的用户名/ 下——**必须改**：Vivado 对非 ASCII 路径敏感，仓库路径是纯 ASCII，安全）
+   - *Project location*：改为 `D:\puf-drone-auth\build\vivado`（默认在 C:/Users/你的用户名/ 下——**必须改**：经验做法——工程放纯 ASCII 路径可规避中文/空格引发的工具链与脚本编码问题（非官方明示），仓库路径正好是纯 ASCII）
    - ✅ Create project subdirectory（默认已勾选，不动）
    - 点 **Next**
 
@@ -223,7 +223,7 @@ tb_speck 1175 组全量回放、tb_gap 7 用例含码 4 拒绝）+ 44 Python 单
 ### 连板
 
 1. 6 针电源插头（J60）→ SW11 拨到 ON（板上电源指示灯亮）
-2. 烧录/读 VIO 要用 **JTAG 口**：板上**另一个** USB 口（套件附的 **Micro-B** 线）↔ 电脑。
+2. 烧录/读 VIO 要用 **JTAG 口**：板上**另一个** USB 口 ↔ 电脑（用套件里**能插进 JTAG 口的那根线**；别写死 Mini/Micro-B——以实物丝印为准）。
    ⚠ **别把 JTAG 和串口搞混**：J17（Mini-B）是**串口**（CP210x，验证点⓪ 的 BIST/Tera Term 用它）；
    JTAG 是**另一个口**。只插 J17 的话，Hardware Manager 永远 Auto Connect 不到芯片。
    自查：设备管理器出现 "Silicon Labs CP210x ... (COMx)" ⇒ 插的是串口；Vivado Auto Connect 看到 `xc7z020` ⇒ 插的是 JTAG。
@@ -243,7 +243,7 @@ tb_speck 1175 组全量回放、tb_gap 7 用例含码 4 拒绝）+ 44 Python 单
 4. **右键** `xc7z020` → **Program Device...**
    Bitstream 路径已自动填好 → 点 **Program**
 
-5. 等 5~10 秒——板子不会有明显灯变（心跳在 VIO 里看）
+5. 等 5~10 秒——板子不会有明显灯变（W1 设计没有 LED，读数在 VIO 里看）
 
 ---
 
@@ -280,9 +280,9 @@ tb_speck 1175 组全量回放、tb_gap 7 用例含码 4 拒绝）+ 44 Python 单
 
 **验收**：10 次极差 < 100 ⇒ 全链路稳定 ✓
 
-> 🤖 **想省事**：`.\build\ps1\run_build.ps1 -Measure` 自动烧板并采集 10 次读数到
+> 🤖 **路线二用户（脚本）**：`-Measure` 已自动完成本节的烧板+读数，直接看 CSV 即可（GUI 路线一才需要按上面手动操作；不要两条路线交叉跑）。`.\build\ps1\run_build.ps1 -Measure` 把 10 次读数写到
 > `build\vivado\w1_auto\w1_readings.csv`（等效于本节手动操作；手动流程的价值在于理解界面与排障）。
-> **归档到证据链**（`compare_devices.py` 默认读 `data/w1_readings/`，不归档会接不上第八节的换板对比）：
+> **归档到证据链**（`compare_devices.py` 的 `-d` 是**必填**参数、无默认值，所以要显式传 `data/w1_readings/`；不归档就接不上第八节的换板对比）：
 > ```powershell
 > Copy-Item build\vivado\w1_auto\w1_readings.csv data\w1_readings\board1.csv
 > ```
@@ -296,9 +296,15 @@ tb_speck 1175 组全量回放、tb_gap 7 用例含码 4 拒绝）+ 44 Python 单
 ## 八、换板对比（板 2 到位后）
 
 1. Flow → **Settings** → **General** → 改 Project device 为板 2 型号
-2. 重新 **Generate Bitstream**
-3. 烧板 2 → 记 10 次
-4. 两板中心差 > 数千 ⇒ "同一份代码、两颗芯片、两个身份"实锤
+2. 重新 **Generate Bitstream**（或对板 2 跑一次 `run_build.ps1 -Measure`）
+3. 记 10 次读数，**归档**：`Copy-Item build\vivado\w1_auto\w1_readings.csv data\w1_readings\board2.csv`
+4. 跑对比工具（`-d` 必填）：
+   ```powershell
+   python src\python\evaluation\compare_devices.py -d data\w1_readings\
+   ```
+   **看什么**：工具输出的是两板间的 **HD%（汉明距离占比）**——同一颗芯片极低、不同芯片接近 50%。
+   教程早期说的"中心差 > 数千"是同一件事的原始计数口径（262144 满量程下，数千 ≈ 百分之几），
+   以工具的 HD% 为准；若两板 HD% 明显偏高（>~40%）即"两颗芯片两个身份"成立。
 
 ---
 
@@ -313,7 +319,7 @@ tb_speck 1175 组全量回放、tb_gap 7 用例含码 4 拒绝）+ 44 Python 单
 | 适配 | 问题 | 方案 |
 |---|---|---|
 | **时钟** | ZC702 PL 时钟 = 200MHz **差分**（D18=SYSCLK_P / C19=SYSCLK_N，LVDS_25），w3_top 期待 100MHz 单端 `sys_clk` | **板级 wrapper（推荐，见 2.2）**：新建 `w3_top_zc702.v` 放 IBUFDS + MMCM，**w3_top 一行不改**（否则 `tb_w3_top` 与 12/12 CI 会挂）；**备选**：换 FMC 底板的 100MHz 单端时钟源 |
-| **复位** | 板上 CPU_RESET 在 **PS 域**，PL 逻辑够不着 | 用 **GPIO_SW_N 按键（G19, LVCMOS25）**接 `sys_rst_n`（低有效，w3_top 已带 2FF 同步器 + 按键消抖） |
+| **复位** | PS 域复位键（POR_B/SW1）按下去是整片复位/重配，**不能当 PL 逻辑输入** | 用 **GPIO_SW_N 按键（G19, LVCMOS25）**接 wrapper 的 `sys_rst_btn_n`（低有效；w3_top 自带 2FF 同步器；消抖只作用于 `auth_btn`） |
 | **引脚** | w3_top.xdc 全部引脚被注释（占位） | 按 2.3 的清单逐行取消注释 + UG850 核对 |
 
 ### 2.2 时钟适配：板级 wrapper（**不要改 w3_top.v**）
@@ -350,11 +356,11 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
 | 行 | 内容 | 核对来源 |
 |---|---|---|
 | `set_property PACKAGE_PIN G19 [get_ports sys_rst_btn_n]` + `IOSTANDARD LVCMOS25` | 复位 = GPIO_SW_N（**端口名用 wrapper 的 `sys_rst_btn_n`**） | UG850 表 "GPIO SW N" |
-| `Y11` → led_busy（DS9） | 认证进行灯 | 每行都要配 `set_property IOSTANDARD LVCMOS25`（XDC 里原来**只有 PACKAGE_PIN、没写电平**，不补会被 DRC NSTD-1 拦） |
-| `T22` → led_heartbeat（DS10） | 心跳灯 | 同上 |
-| `W21` / `U21` → led_result[1:0]（DS11/DS12） | 结果码灯 | 同上 |
+| `P17` → led_busy（LED0） | 认证进行灯 | **官方板卡定义: leds_4bits = P17/P18/W10/V7**；⚠ ``Y11/T22/U21`` 是 FMC2 LPC 脚、**不是 LED**（旧底稿错）。每行都要配 `IOSTANDARD LVCMOS25` |
+| `P18` → led_heartbeat（LED1） | 心跳灯 | 同上；DS9~DS12 与 LED0~3 的对应请以 UG850/原理图核实 |
+| `W10` / `V7` → led_result[1:0]（LED2/LED3） | 结果码灯 | 同上 |
 | `W6` / `W7` → term_id_dip[1:0]（wrapper 端口） | 仅 2 位拨码在 PL | 同上 + IOSTANDARD；**wrapper 已把高 6 位 tie 0**（`.term_id_sw({6'h00, term_id_dip})`），无需手工改代码 |
-| `auth_btn` | PL 按键（GPIO_SW_*） | **XDC 里原本没有这一行**——已在 `w3_top.xdc` 补了注释占位，按 UG850 查具体引脚后取消注释并加 IOSTANDARD；不接则 2.5 测 3 跳过 |
+| `auth_btn` → **F19** | PL 按键（GPIO_SW_S，官方板卡定义核验） | 已在 `w3_top.xdc` 补好注释行；不接则 2.5 测 3 跳过 |
 
 > ⚠ 每核对一个引脚就在 XDC 里取消一行注释；**不认识的引脚宁可不接**。
 > 顶层是 wrapper 时不需要你改 RTL：`term_id_dip[1:0]` 只占 W6/W7 两颗拨码，**wrapper 内已 tie 高 6 位为 0**（`.term_id_sw({6'h00, term_id_dip})`，故 terminal_id 只有 0~3）。
@@ -364,7 +370,9 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
 1. **先把所有端口落定**（这一步做完才能动 DRC）：
    - 每个已用端口都要有 `PACKAGE_PIN` **和** `IOSTANDARD`（LED 四行原来缺电平）
    - `term_id_dip[1:0]` → 板上 W6/W7；**wrapper 已 tie 高 6 位为 0**，不用改代码（terminal_id 只有 0~3）
-   - `radio_txd/radio_rxd`：验证点③ 之前无引脚——**必须先选定 FMC/PMOD 引脚**，否则本步无法完成（届时可临时保留 UCIO-1 豁免，但要记在案）
+   - `radio_txd/radio_rxd`：**上板脚本没有豁免，缺约束会直接 UCIO-1 ERROR**，所以必须给它们引脚：
+     ① 推荐——按 UG850 选 FMC LPC 的一组 LA 脚对（`LVCMOS25`）填进 `w3_top.xdc`；
+     ② 若这一轮（验证点②）暂时还不想定，就在 `build_w3_board.tcl` 里**临时**加一行 `set_property SEVERITY {Warning} [get_drc_checks UCIO-1]` 并在注释里标明「临时期，验证点③ 落定引脚后删除」——不要默认以为脚本已有豁免（只有 dev 脚本 `build_w3.tcl` 有）。
 2. **确认约束文件真的被加载**：上板脚本 `build_w3_board.tcl` 已含 `add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top.xdc`；GUI 路线则在 Constraints 里确认 `w3_top.xdc` 已启用。（注意区分：`build_w3.tcl` 是 **dev 模式**设计构建——top=w3_top、无 IP、无引脚约束、带 DRC 豁免，**不要**用它上板。）
 3. **然后才是删豁免**：两条豁免只存在于 dev 脚本 `build_w3.tcl`（`set_property SEVERITY {Warning} [get_drc_checks UCIO-1]` 与 `... NSTD-1]`，各自独立一行）。上板脚本 `build_w3_board.tcl` **本来就没有豁免**——所以「删豁免」= 以后不再用 dev 脚本出比特流，而不是去改上板脚本。
 4. **CI 回归**：`w3_top` 本体未改动（时钟在 wrapper 里），**12/12 TB 应保持全绿**——`xsim`/`xvlog` 编译清单不含 wrapper，也不需要 IP 仿真源。
@@ -398,13 +406,13 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
 
 | 方案 | 需要什么 | 适合 |
 |---|---|---|
-| **USB-UART 桥**（推荐先行） | FMC/PMOD 转 USB-UART 模块（CH340/FT232，**3.3V 电平**） | 验证点③纯协议互通 |
+| **USB-UART 桥**（推荐先行） | **FMC LPC** 转 USB-UART 模块（CH340/FT232，**3.3V 电平**） | 验证点③纯协议互通 |
 | 433MHz 电台一对 | SiK 兼容 ×2 + USB-TTL ×2 | 验证点⑤无线演示 |
 | 逻辑分析仪/示波器 | 任意 | 只看波形不回环 |
 
 ### 3.2 接线（3.3V！共地！）
 
-> ⚠ **先断电再插 FMC/PMOD**：ZC702 官方禁止带电插拔 FMC（见 `board/zc702/README.md`）。
+> ⚠ **先断电再插 FMC**（或板上 PMOD，若有）：ZC702 官方禁止带电插拔 FMC（见 `board/zc702/README.md`）。
 > 顺序：SW11 断电 → 插 FMC/PMOD 转接板 → 接线 → 上电。
 > **引脚状态**：`w3_top.xdc` 目前**没有** UART 引脚（只有注释段）——必须先从 UG850 选定 FMC LPC 的 LA 脚对
 > （`radio_txd`/`radio_rxd` + `IOSTANDARD LVCMOS25`）填入 XDC，才能做本验证点；**未选定引脚前本步暂缓**。
@@ -457,7 +465,7 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
 
 | 症状 | 原因 | 解决 |
 |---|---|---|
-| Auto Connect 无芯片 | **插的是 J17（串口）而不是 JTAG 口**/充电线/JTAG 驱动缺/没开机 | ①改用 **Micro-B 数据线插 JTAG 口**（J17 是串口，插它必然找不到芯片） ②装 JTAG 驱动：`D:\vivado\2026.1\Vivado\data\xicom\cable_drivers` ③串口 COM 是另一个驱动：CP210x（xilinx.com/kits/cp210x） ④看电源灯（SW11） |
+| Auto Connect 无芯片 | **插的是 J17（串口）而不是 JTAG 口**/充电线/JTAG 驱动缺/没开机 | ①改用**能插进 JTAG 口的那根数据线**（J17 是串口，插它必然找不到芯片） ②装 JTAG 驱动：`D:\vivado\2026.1\Vivado\data\xicom\cable_drivers` ③串口 COM 是另一个驱动：CP210x（xilinx.com/kits/cp210x） ④看电源灯（SW11） |
 | vio_0 not defined | IP 没生成或改名 | 回第四节重做，名必须 `vio_0` |
 | LUTLP-1 ERROR | XDC 豁免没加 | 回第二节第 7 步补加 |
 | VIO 数字恒 0 | ①首窗未满（14~43s，最常见！） ②Refresh Rate = 0（自动刷新被关） ③KEEP 属性被删 | 等满 43s → 把 Refresh Rate 设为 1000 → 查 ro_ring.v 的 KEEP 行 |
@@ -473,7 +481,7 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
 | 心跳太快/太慢 | 实际时钟 ≠ FREQ_HZ 假设 | 数频率反推实际时钟，修正 MMCM 或 FREQ_HZ |
 | UART 全乱码/无输出 | **时钟差 2 倍**（200 vs 100M 经典错）或波特率参数错 | 示波器测位宽（868 拍 @100M=8.68us） |
 | 按 auth_btn 无反应 | 按键接在 PS 域 / 消抖参数 / 极性反 | 核对引脚域；w3_top 消抖 10ms；auth_btn 接按键常开 |
-| DRC NSTD-1 / UCIO-1 报 ERROR | 验证点②起不再允许豁免 | 补 create_clock / 补引脚约束（这是升级，不是退步） |
+| DRC NSTD-1 报 ERROR | 已用端口缺 IOSTANDARD（LED 四行原来就没写电平） | 按 2.3 给每个已用端口补 `IOSTANDARD LVCMOS25`，然后删 NSTD-1 豁免 |
 | 时序违例 WNS<0 | 约束后真实路径暴露 | 看 report_timing_summary 定位；MMCM 出口时钟确认有 generated_clock |
 | Program 成功但全板无反应 | 复位极性 / 时钟未锁定 | JTAG 配置 PL **与 SW16 启动模式无关**（保持 00010 即可）；查 sys_rst_n 是否恒低、mmcm_locked 是否为 1 |
 | 收 RESULT 后终端 BLOCKED | ① result 码非零（含码 4 重放拒止，正常）② R2 字节错 ③ 断电后未 c2reset | 对照 tb_gap GH/GF 用例逐项排查；联调期先 c2reset |
@@ -497,8 +505,8 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
 
 **官方**：UG850（ZC702 板卡手册+引脚）、UG865（Zynq-7000 SoC）、UG908（Vivado Debug/VIO）、
 ZC702 原理图 PDF（引脚最终核对）；UG949（UltraFast 方法论，时钟约束章节）
-**GitHub**（仓库 external/ 有四份源码，逐行分析见 docs/opensource_analysis.md）：eriksargent/PUF-lab；stnolting/fpga_puf；mavlink/c_library_v2；xtncl/esp32-sram-puf-authentication；pymavlink；
-rithan2001/Xilinx-Zynq-7000-SoC-ZC702（master_constraints.xdc——w3_top.xdc 引脚的核对底稿）
+**GitHub**（仓库 `external/` 有四份**源码**：PUF-lab、fpga_puf、c_library_v2、puf-esp32-auth；`pymavlink` 是 pip 安装、不在 external/；逐行分析见 docs/opensource_analysis.md）：
+**参考底稿（非源码）**：rithan2001/Xilinx-Zynq-7000-SoC-ZC702 的 master_constraints.xdc —— 注意其 LED 引脚与 AMD 官方板卡定义不符（Y11/T22/U21 实为 FMC2 LPC），已按官方定义为 P17/P18/W10/V7
 **中文**：清华《Vivado 使用入门》（最接近本课流程）；CSDN ZYNQ 启动方式/点灯系列
 **练习**：HDLBits
 **套件官方**：XTP310 快速入门指南（翻译解读版：同目录《ZC702快速入门指南-翻译与解读.md》）；

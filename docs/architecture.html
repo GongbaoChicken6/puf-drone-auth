@@ -151,7 +151,7 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 
 <div style="border:1px solid var(--auth-b);border-radius:10px;padding:8px;margin-bottom:6px">
 <div style="font-size:11px;font-weight:600;color:var(--auth);margin-bottom:4px">🧠 认证大脑</div>
-<div class="afbox"><span class="fi">🎯</span><div class="ft"><b>terminal_fsm.v</b><span>12态协议控制器 · 含防重放（服务器侧；终端侧跨断电重放待W4，见HANDOFF P1-5）</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
+<div class="afbox"><span class="fi">🎯</span><div class="ft"><b>terminal_fsm.v</b><span>13态协议控制器 · 含防重放（服务器侧；终端侧跨断电重放待W4，见HANDOFF P1-5）</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
 </div>
 
 <div style="border:1px solid var(--comm-b);border-radius:10px;padding:8px;margin-bottom:6px">
@@ -258,7 +258,7 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <div class="domain dm-auth">
 <div class="dhead"><span class="di">🧠</span><div><h2>功能域 3：认证流程控制器</h2><p class="dd">整个系统的"大脑"，按严格协议完成双向身份认证。含多重安全防护。</p></div></div>
 <div class="dbody"><div class="nodes">
-<div class="node"><div class="nh"><span class="ni">🎯</span><span class="nn">terminal_fsm.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>12态FSM：空闲→发请求→等题→答题→发答案→等判定→验基站→确认→会话。含C2防重放（服务器侧有效；终端侧跨断电重放待W4修复，见HANDOFF P1-5）、动态R2、载荷校验、超时保护。</div><div class="nf"><b>真实状态：</b>仿真验证了通过流/拒绝流/超时流/灰区。<b>但PUF答题用的是种子直通占位——真实指纹测量还没接入。</b>R2期望值已统一为Speck64/96重算（A1阶段3），与PC端SpeckHSM黄金向量逐位一致。</div></div>
+<div class="node"><div class="nh"><span class="ni">🎯</span><span class="nn">terminal_fsm.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>13态FSM：空闲→发请求→等题→答题→发答案→等判定→验基站→确认→会话。含C2防重放（服务器侧有效；终端侧跨断电重放待W4修复，见HANDOFF P1-5）、动态R2、载荷校验、超时保护。</div><div class="nf"><b>真实状态：</b>仿真验证了通过流/拒绝流/超时流/灰区。<b>但PUF答题用的是种子直通占位——真实指纹测量还没接入。</b>R2期望值已统一为Speck64/96重算（A1阶段3），与PC端SpeckHSM黄金向量逐位一致。</div></div>
 </div></div>
 <p class="dnote">⚠ <b>三个未闭环的关键点：</b><br>
 ① <b>PUF占位</b>：terminal_fsm 收到挑战后直接把种子当响应发回。真实场景需要调用环振阵列测量频率再生成响应。<b>需要写"接入层"代码。</b><br>

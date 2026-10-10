@@ -22,15 +22,20 @@
 # set_property -dict {PACKAGE_PIN <FMC/PMOD 引脚> IOSTANDARD LVCMOS25} [get_ports radio_txd]
 # set_property -dict {PACKAGE_PIN <FMC/PMOD 引脚> IOSTANDARD LVCMOS25} [get_ports radio_rxd]
 
-# === LEDs (DS9~DS12) —— 每行都要 PACKAGE_PIN + IOSTANDARD ===
-# set_property -dict {PACKAGE_PIN Y11 IOSTANDARD LVCMOS25} [get_ports led_busy]         ;# DS9
-# set_property -dict {PACKAGE_PIN T22 IOSTANDARD LVCMOS25} [get_ports led_heartbeat]    ;# DS10
-# set_property -dict {PACKAGE_PIN W21 IOSTANDARD LVCMOS25} [get_ports {led_result[0]}]  ;# DS11
-# set_property -dict {PACKAGE_PIN U21 IOSTANDARD LVCMOS25} [get_ports {led_result[1]}]  ;# DS12
+# === LEDs (DS9~DS12) —— 引脚号已对照 AMD 官方 ZC702 板卡定义核验 ===
+# 官方板卡文件 xilinx.com:zc702:part0:1.4 (part0_pins.xml):
+#   leds_4bits_tri_o_0..3 = P17 / P18 / W10 / V7  (LVCMOS25)
+#   ⚠ Y11 / T22 / U21 是 FMC2_LPC 的 la33_p / la14_p / la07_n —— **不是 LED**（旧底稿写错）。
+#   DS9~DS12 与 bit0..3 的对应关系仍请以 UG850/原理图核实。
+# set_property -dict {PACKAGE_PIN P17 IOSTANDARD LVCMOS25} [get_ports led_busy]         ;# LED0
+# set_property -dict {PACKAGE_PIN P18 IOSTANDARD LVCMOS25} [get_ports led_heartbeat]    ;# LED1
+# set_property -dict {PACKAGE_PIN W10 IOSTANDARD LVCMOS25} [get_ports {led_result[0]}]  ;# LED2
+# set_property -dict {PACKAGE_PIN V7  IOSTANDARD LVCMOS25} [get_ports {led_result[1]}]  ;# LED3
 
 # === Auth button (wrapper 端口: auth_btn) ===
+# 官方板卡定义里 PL 侧只有两颗按键：GPIO_SW_N=G19（已给复位）、**GPIO_SW_S=F19**。
 # 不接则端口悬空 -> UCIO-1 ERROR；不打算接就跳过保姆教程 2.5 的测 3。
-# set_property -dict {PACKAGE_PIN <GPIO_SW_x> IOSTANDARD LVCMOS25} [get_ports auth_btn]
+# set_property -dict {PACKAGE_PIN F19 IOSTANDARD LVCMOS25} [get_ports auth_btn]   ;# GPIO_SW_S
 
 # === DIP switches (wrapper 端口: term_id_dip[1:0]) ===
 # ZC702 PL 侧只有 W6/W7 两颗拨码；wrapper 已把 terminal_id 高 6 位 tie 0
