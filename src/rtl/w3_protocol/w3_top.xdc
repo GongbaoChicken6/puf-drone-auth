@@ -24,6 +24,10 @@
 # set_property PACKAGE_PIN W21 [get_ports {led_result[0]}] ;# DS11
 # set_property PACKAGE_PIN U21 [get_ports {led_result[1]}] ;# DS12
 
+# === Auth button (currently NOT in this XDC -- w3_top.v:33 input wire auth_btn) ===
+# Without a pin, auth_btn floats and 2.5 test-3 cannot run. Pick a PL push button from UG850:
+# set_property PACKAGE_PIN <GPIO_SW_x> [get_ports auth_btn]   ;# LVCMOS25
+
 # === DIP Switches (only 2 available on PL!) ===
 # ZC702 has only GPIO_DIP_SW0(W6) and GPIO_DIP_SW1(W7) on PL.
 # For 8-bit terminal_id: use constants, FMC pins, or PMOD.

@@ -1,4 +1,4 @@
-﻿# build_w3.tcl -- W3 build (no pin constraints, dev mode)
+# build_w3.tcl -- W3 build (no pin constraints, dev mode)
 set PART xc7z020clg484-1
 set OD D:/puf-drone-auth/build/vivado/w3_bitstream
 set SRC D:/puf-drone-auth/src
@@ -17,6 +17,7 @@ add_files [list \
     $SRC/rtl/w3_protocol/w3_top.v \
 ]
 
+add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top.xdc
 set_property top w3_top [current_fileset]
 synth_design -top w3_top -part $PART
 opt_design

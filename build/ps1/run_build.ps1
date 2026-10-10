@@ -1,4 +1,4 @@
-﻿# One-click build + (optionally) program board & measure VIO
+# One-click build + (optionally) program board & measure VIO
 # Usage: .\build\ps1\run_build.ps1 [-Measure]
 # All paths are now in the project repo (D:\puf-drone-auth) - no Chinese path staging needed.
 param(

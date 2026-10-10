@@ -1,4 +1,4 @@
-﻿# PUF Hardware Fingerprint Authentication System
+# PUF Hardware Fingerprint Authentication System
 
 Chip-intrinsic identity for drone swarm access control — no pre-shared keys, no key storage.
 
