@@ -1,0 +1,200 @@
+[
+  {
+    "severity": "P1",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "361-364,366,472",
+    "category": "步骤顺序自相矛盾/照做卡死（验证点②）",
+    "description": "2.4 要求『先把所有端口落定引脚+电平 → 再删两条 DRC 豁免』，但验证点②跑到这一步时 radio_txd/radio_rxd 明确是『待选、未选定引脚前本步暂缓』（L405-406、L410-411），auth_btn 也只有注释占位（L354），所以第 1 步『每个已用端口都要有 PACKAGE_PIN 和 IOSTANDARD』在本步不可能完成。更严重的是同一小节存在三种互相冲突的口径：L364 括号说『届时可临时保留 UCIO-1 豁免』，L366 却说要『把两条豁免命令删除』（UCIO-1 正在其中），L472 排障表又写『验证点②起不再允许豁免』。读者照任何一条做都会与另一条冲突：删掉两条 → write_bitstream 被 UCIO-1（radio_txd/rxd、auth_btn 未约束）以 ERROR 阻断，走不到 2.4 第 5 步；保留 UCIO-1 → 违背 L366 与 L472。",
+    "evidence": "教程:364 `radio_txd/radio_rxd：验证点③ 之前无引脚——必须先选定 FMC/PMOD 引脚，否则本步无法完成（届时可临时保留 UCIO-1 豁免，但要记在案）`；:366 `3. 然后把 build_w3.tcl 里两条豁免命令删除（…UCIO-1… 与 …NSTD-1…）——豁免一删，任何未约束端口都会立刻变成 ERROR`；:472 `| DRC NSTD-1 / UCIO-1 报 ERROR | 验证点②起不再允许豁免 |`；:405-406 `w3_top.xdc 目前没有 UART 引脚（只有注释段）…未选定引脚前本步暂缓`；:410-411 `radio_txd | 待选`；:354 auth_btn `XDC 里原本没有这一行——已在 w3_top.xdc 补了注释占位…不接则 2.5 测 3 跳过`。对照 build/tcl/build_w3.tcl:28-29 正是这两行豁免；src/rtl/w3_protocol/w3_top_zc702.v:20,22-23 说明 auth_btn/radio_txd/radio_rxd 都是板级顶层端口，顶层未约束即 UCIO-1。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P1",
+    "file": "src/rtl/w3_protocol/w3_top.xdc",
+    "line": "7-9,15,34-36,40-41",
+    "category": "约束底稿与 wrapper 口径不一致（读者逐行取消注释必失效）",
+    "description": "教程 2.2/2.3（L335-337、L349、L353）要求约束写成 wrapper 的端口名 clk_p/clk_n、sys_rst_btn_n、term_id_dip[1:0]，但读者被要求『每核对一个引脚就在 XDC 里取消一行注释』（L356）的那份 XDC 里，占位行仍是被 wrapper 隐藏的 w3_top 旧端口名 sys_rst_n / term_id_sw[0] / term_id_sw[1] / sys_clk，false_path 还指向 w3_top 内部寄存器 rst_ff1_reg；文件头注释更写着『Option A (recommended): change w3_top to have clk_p/clk_n ports + IBUFDS + MMCM』，与本轮新结论（不要改 w3_top、改端口会拖挂 tb_w3_top 与 12/12 CI）正面冲突。顶层为 w3_top_zc702 时照抄这些行 → get_ports 匹配不到任何对象（约束静默失效/报 no objects）、sys_rst_btn_n 与 term_id_dip[1:0] 反而悬空，2.4 第 3 步一删豁免立刻 NSTD-1/UCIO-1 ERROR。",
+    "evidence": "w3_top.xdc:7-9 `# Design expects 100MHz single-ended → …` / `# Option A (recommended): change w3_top to have clk_p/clk_n ports + IBUFDS + MMCM`；:15 `# set_property PACKAGE_PIN G19 [get_ports sys_rst_n]`；:34-35 `# … [get_ports {term_id_sw[0]}]` / `{term_id_sw[1]}`；:36 `# term_id_sw[7:2] = tie to constants in w3_top`；:40 `# create_clock -period 10.000 -name sys_clk [get_ports sys_clk]`；:41 `# set_false_path -from [get_ports sys_rst_n] -to [get_pins … rst_ff1_reg/PRE]`。对照 wrapper 端口 w3_top_zc702.v:17-26 与教程:349 `[get_ports sys_rst_btn_n]`、:353 `term_id_dip[1:0]（wrapper 端口）`、:335-337 clk_p/clk_n。git diff fc27345 9ff5299 显示本轮只给该 XDC 加了 auth_btn 注释段（:27-29），端口名一行未改。（本轮同目录 fix_verify.json 已对同一事实给出 FAIL，此处补：这正是教程 2.3『逐行取消注释』所指向的底稿。）",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P1",
+    "file": "build/tcl/build_w3.tcl",
+    "line": "9-22,32",
+    "category": "脚本路线与 wrapper 方案不匹配（2.4 第5步照抄必失败）",
+    "description": "教程 2.4 第 5 步（L369-370）把 `vivado -mode batch -source build/tcl/build_w3.tcl` 列为生成比特流的脚本路线，但该脚本 add_files 只有 8 个 .v、顶层仍是 `set_property top w3_top` / `synth_design -top w3_top`，既没有把新增的板级 wrapper w3_top_zc702.v 加入，也没有任何 create_ip/read_ip 来生成 clk_wiz_0（全仓 0 个 .xci，唯一的 create_ip 在 build_w1.tcl 里给 vio）。照脚本跑出来的是『w3_top + 无时钟约束的单端 sys_clk』设计：2.2 要求的 200MHz 差分→100MHz 适配完全不生效，2.5 的 DS10 心跳不可能出现；若读者又按 2.2 第 3 步把 clk_p/clk_n 约束写进 w3_top.xdc（脚本确实加载它），脚本里 get_ports 又找不到这些端口，约束落在空集合上。",
+    "evidence": "build_w3.tcl:9-18 add_files 仅 crc16_mcrf4xx/mavlink_frame/frame_parser/byte_fifo/uart_tx/uart_rx/terminal_fsm/w3_top；:20 `add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top.xdc`；:21 `set_property top w3_top [current_fileset]`；:22 `synth_design -top w3_top`；:32 `write_bitstream -force $OD/w3_top.bit`。全仓 grep `create_ip|read_ip|clk_wiz|w3_top_zc702`：build/tcl、build/ps1、scripts 下仅 build_w1.tcl:14 `create_ip -name vio … -module_name vio_0`。Get-ChildItem -Recurse -Filter *.xci → 0。教程:369-370 给出该脚本路线。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P2",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "325-331,369",
+    "category": "缺步骤（GUI 路线无 W3 工程、无顶层设置）",
+    "description": "2.2 第 2 步让读者『IP Catalog → 搜索 Clocking Wizard → 双击（工程里生成 IP，名字必须 clk_wiz_0）』，隐含了一个已包含 wrapper 且顶层已切到 wrapper 的 Vivado 工程；但全教程只教过 W1 工程的建立（L140 Add Files → L153 Finish、L174 把 ro_ratio_top 设为 top），从头到尾没有任何一步把 src/rtl/w3_protocol/w3_top_zc702.v 加入 sources 并把顶层设为 w3_top_zc702。结果是 2.4 第 5 步的『GUI（Generate Bitstream）』无工程可用：顶层若仍是 w3_top，2.2/2.3 的 clk_p/clk_n、sys_rst_btn_n、term_id_dip 这些端口在工程里不存在。（本轮同目录 fix_verify.json 的 missing-step 项已就同一事实给 FAIL，这里补其在 GUI 路线上的具体后果与受影响行号。）",
+    "evidence": "教程:325 `仓库已提供 wrapper：src\\rtl\\w3_protocol\\w3_top_zc702.v…看一遍它的端口名，下面 XDC 用这些名字`；:327 IP Catalog 生成 clk_wiz_0；:369 `生成比特流：GUI（Generate Bitstream）或脚本 …`。全文 grep `Add Files|Add Sources|Set as Top` 仅命中 :140（W1 的 Add Sources 页）、:172-174（Design Sources / 右键 ro_ratio_top → Set as Top），没有任何 W3 工程与顶层设置步骤。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P2",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "22",
+    "category": "总览表与正文矛盾",
+    "description": "『上板阶梯总览』里验证点②的『要改什么』仍写着『时钟端口 + IBUFDS/MMCM + XDC 引脚』，读起来就是要给 w3_top 加时钟端口；这与本轮改写后的 2.1/2.2（L315、L319、L321-325）『w3_top 一行不改，时钟适配放进独立板级 wrapper w3_top_zc702.v，改端口会让 tb_w3_top elaborate 失败、拖挂 12/12 CI』直接矛盾。只看总览表就开始动手的读者正好会踩 L321-323 明确禁止的那条路。",
+    "evidence": "教程:22 `| ② | **w3_top 心跳 + 按键**（时钟/复位/LED 三大板级适配） | 时钟端口 + IBUFDS/MMCM + XDC 引脚 |`；:315 `**板级 wrapper（推荐，见 2.2）**…**w3_top 一行不改**（否则 tb_w3_top 与 12/12 CI 会挂）`；:319 标题 `### 2.2 时钟适配：板级 wrapper（不要改 w3_top.v）`；:321-323 理由；:325 wrapper 路径。该行文字在 git blame 中来自修复前提交 e7060a9，本轮修复未同步。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P2",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "285-289",
+    "category": "对工具行为的错误断言",
+    "description": "L285 写『compare_devices.py 默认读 data/w1_readings/，不归档会接不上第八节的换板对比』——该脚本的目录参数 `-d/--directory` 是 required=True、没有任何默认值，也没有位置参数，所以『默认读 data/w1_readings/』不成立：读者归档完 board1.csv 直接跑脚本会 argparse 报错退出。教程同时没给出脚本路径（仓库里有两份同名 compare_devices.py：src/python/evaluation/compare_devices.py 与 external/puf-esp32-auth/tools/analysis/compare_devices.py），新手无法照做。",
+    "evidence": "src/python/evaluation/compare_devices.py:111-112 `parser.add_argument(\"-d\", \"--directory\", required=True, help=\"directory containing one measurement CSV per device\")`；:21-22 文档用法为 `python compare_devices.py -d data/w1_readings/`；:16-17 说明输入格式 timestamp/hex_value/decimal_value（measure_w1.tcl:24 写的表头是 timestamp,probe_in0_hex,probe_in0_dec，按列号解析可通）。教程:285-288 `归档到证据链（compare_devices.py 默认读 data/w1_readings/…）` / `Copy-Item build\\vivado\\w1_auto\\w1_readings.csv data\\w1_readings\\board1.csv`。另 Get-ChildItem -Recurse -Filter compare_devices.py 命中 external/ 与 src/ 两个同名文件。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P2",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "283-284",
+    "category": "路线分叉残留串线",
+    "description": "第七节是『路线一 · 全 GUI』的读数章节，却用『🤖 想省事』引导读者改跑脚本 `.\buildps1\run_build.ps1 -Measure`（会另建工程 w1_auto、再烧一次板）。这与第二节的路线约束冲突：L161-162 明确『只选一条路线…两条都走等于白等一次 5~15 分钟构建；跑脚本前先关掉 GUI 的 Hardware Manager（否则会抢同一个 hw_server）』，而 L283-284 没有带任何限定，读者很可能在 GUI Hardware Manager 已连接的状态下再跑脚本，正是 L162 警告的抢 hw_server 场景。",
+    "evidence": "教程:109 `## 二、新建工程（路线一 · 全 GUI）`；:155-162 路线二说明与『只选一条路线』『抢同一个 hw_server，跑脚本前先关掉 GUI 的 Hardware Manager』；:283-284 `🤖 想省事：.\\build\\ps1\\run_build.ps1 -Measure 自动烧板并采集 10 次读数到 build\\vivado\\w1_auto\\w1_readings.csv（等效于本节手动操作…）`。run_build.ps1:13,34 产物为 build/vivado/w1_auto 与 w1_readings.csv；measure_w1.tcl:9 `connect_hw_server -url localhost:3121`。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "296-301",
+    "category": "第七→第八节证据链未闭合",
+    "description": "L285 声称归档 CSV 是为了『接上第八节的换板对比』，但第八节（L296-301）既没有归档板 2 的读数（data/w1_readings/board2.csv），也没有给出 compare_devices.py 的运行命令；其判定标准『两板中心差 > 数千』用的是原始读数中心值，而 compare_devices.py 输出的是设备间/设备内 Hamming 距离的 %（均值±std）矩阵，两者不是同一个指标，读者拿不到『中心差』这个数。另外第八节只写 GUI 的 Flow → Settings → General 改器件，走脚本路线（第七节又推荐了 -Measure）的读者实际要改的是 run_build.ps1 的 -Part 参数或 build_w1.tcl 的 argv，教程没有分叉。",
+    "evidence": "教程:296-301 `## 八、换板对比（板 2 到位后）` / `1. Flow → **Settings** → **General** → 改 Project device 为板 2 型号` / `3. 烧板 2 → 记 10 次` / `4. 两板中心差 > 数千 ⇒ …`；:285 归档主张。src/python/evaluation/compare_devices.py:1-22 文档（输出为 HD% 与『mean% +/- std%』单元）与 :84-92 矩阵打印；run_build.ps1:5 `[string]$Part = \"xc7z020clg484-1\"`、:22 `-tclargs $Part $outDir $srcDir`。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "357",
+    "category": "修复引入的残留矛盾（term_id_sw[7:2]）",
+    "description": "2.3 同一张表里，L353 与 L363 说『wrapper 已把高 6 位 tie 0（.term_id_sw({6'h00, term_id_dip})），无需手工改代码』，紧接的 L357 却说『w3_top 里没有常量绑定…上板前必须自行把高 6 位 tie 成常量（如 8'h01）或外接 DIP，否则会留下 6 个未约束输入』。按本轮确定的 wrapper 顶层方案，顶层根本不存在未 tie 的 term_id_sw[7:2]，该断言只对『拿 w3_top 当顶层』这一本轮已禁止的方案成立，会诱导读者去改 RTL 或做重复绑定（且与 L363 的『terminal_id 只有 0~3』自相矛盾）。",
+    "evidence": "教程:353 `…**wrapper 已把高 6 位 tie 0**（.term_id_sw({6'h00, term_id_dip})），无需手工改代码`；:357 上述旧口径；:363 `wrapper 已 tie 高 6 位为 0，不用改代码（terminal_id 只有 0~3）`。src/rtl/w3_protocol/w3_top_zc702.v:52 `.term_id_sw ({6'h00, term_id_dip})`；xdc:36 残留同一旧说法。git diff fc27345 9ff5299 显示 L357 这句是本轮修复新写入的（`+> term_id_sw[7:2] 注意：…`）。（本轮同目录 fix_verify.json 的 self-contradiction 项亦为 FAIL。）",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "368",
+    "category": "路径笔误（修复引入，脚本不可执行）",
+    "description": "第 4 步括号里写作 `.scriptsci_regression.ps1`（少了一个反斜杠），按此执行找不到命令；仓库实际脚本是 scripts\\ci_regression.ps1（其自述用法为 .\\scripts\\ci_regression.ps1）。git diff 显示修复前该处本来是 `\\.\\scripts\\ci_regression.ps1`，本轮改写时把路径打坏，属于修复引入的新错误。",
+    "evidence": "教程:368 `如果你确实改了 w3_top 本身（例如加端口），必须先同步改 sim/tb/tb_w3_top.v 再跑 \\`.scriptsci_regression.ps1\\`，否则 CI 必红。`（原始文本实测为 『.scriptsci_regression.ps1』，无反斜杠）；D:\\puf-drone-auth\\scripts\\ci_regression.ps1 存在（自述 Usage: .\\scripts\\ci_regression.ps1）。git diff fc27345 9ff5299：`-…必须全量回归（\\`.\\scripts\\ci_regression.ps1\\`）` → `+…再跑 \\`.scriptsci_regression.ps1\\``。（fix_verify.json 的 typo-wrong-path 项同结论。）",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "78-91",
+    "category": "编号不自洽（验证点⓪ 步骤表）",
+    "description": "0.5.2 表标题写『开箱流程（官方 STEP 1~9）』，表内却一直排到第 10~11 行（Vivado 授权兑换/安装）。官方 XTP310 一页速查表本身就是 11 步（1~9 为硬件/BIST，10~11 为授权与安装），教程抄了 1~11 却把标题限制成 1~9，读者会以为第 10~11 行不属于该流程。",
+    "evidence": "教程:78 `### 0.5.2 开箱流程（官方 STEP 1~9）`；:91 `| 10~11 | Vivado 授权兑换/安装 | 2026.1 标准版对 Zynq-7000 免费…`；:68 `依据：套件附带官方快速入门指南 XTP310 (v1.3) 的 STEP 1~9`。《ZC702快速入门指南-翻译与解读.md》:191-203 的一页速查表为 1~11 步（第 10 步授权兑换、第 11 步安装加载）。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "21",
+    "category": "总览表与正文矛盾",
+    "description": "总览说验证点①『不改任何 RTL/XDC』，但第二节第 7 步要求把仓库自带的 w1_ro_waiver.xdc 作为约束加进工程，而且第八节异常表与排障表都写明缺了它会被 『ERROR [DRC LUTLP-1] Bitgen not run』 直接阻断。字面理解『不改 XDC』的新手很可能跳过第 7 步，卡在比特流生成。",
+    "evidence": "教程:21 `| **①** | **W1 环振比值**（本教程主体，零引脚设计） | 不改任何 RTL/XDC |`；:117 `w1_ro_waiver.xdc — 组合环豁免（必须与 .v 一起加入）`；:145-147 第 7 步 Add Constraints 只选 w1_ro_waiver.xdc；:217 `**ERROR [DRC LUTLP-1] Bitgen not run** | XDC 豁免没加 | ❌ 回第 7 步补 w1_ro_waiver.xdc`；:458 同。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "316",
+    "category": "对 RTL 行为的错误描述",
+    "description": "复位行括号写『w3_top 已带 2FF 同步器 + 按键消抖』，把消抖也算在复位上；实际 w3_top.v 里 sys_rst_n 只经过 2FF 异步断言/同步释放同步器，完全没有任何消抖，10ms 消抖计数器（DEBOUNCE_CYC）只接到 auth_btn。按字面预期『复位也会消抖』的读者，在按下 GPIO_SW_N 时可能看到多次复位/抖动，误以为复位电路坏了或去查错方向。",
+    "evidence": "教程:316 `用 **GPIO_SW_N 按键（G19, LVCMOS25）**接 sys_rst_n（低有效，w3_top 已带 2FF 同步器 + 按键消抖）`；src/rtl/w3_protocol/w3_top.v:54-65 只有 rst_ff1/rst_ff2（always @(posedge sys_clk or negedge sys_rst_n)）；:70-96 消抖计数器 btn_cnt 只服务 auth_btn（:83 `if (auth_btn != btn_state)`），:96 auth_start_pulse 用消抖结果；sys_rst_n 在全文仅出现在 :26、:57-58。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "246",
+    "category": "描述与设计不符",
+    "description": "第六节烧录验证点①的比特流后写『等 5~10 秒——板子不会有明显灯变（心跳在 VIO 里看）』。W1 的顶层 ro_ratio_top 是 `module ro_ratio_top ();` 的无端口设计，既没有 LED 也没有任何心跳信号（心跳 led_heartbeat/DS10 属于验证点②的 w3_top）；而且第七节自己说读数『约 14~43 秒一跳』、首窗结束前恒为 0，所以『等 5~10 秒看心跳』同样什么都看不到。新手会去找并不存在的『心跳』。",
+    "evidence": "教程:246 上述原文；:271-273 `公式…` / `更新周期：约 14~43 秒一跳` / `⚠️ 上电后首窗结束前，读数一直是 0——正常`；src/rtl/w1_ratio/ro_ratio_top.v:18 `module ro_ratio_top ();`（无端口、全文无 LED/心跳，:16 注明读数经 VIO 读回）；对照 w3_top.v:39,106 才有 led_heartbeat/hb_cnt[26]。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "51-52",
+    "category": "跨文档口径冲突（可能插错线）",
+    "description": "教程把两个 USB 口命名为『USB 口 A：串口（J17，Mini-B）』与『USB 口 B：JTAG（板上另一个 USB 口…以实物丝印为准）』，但仓库自带的板卡文档给出的是第三种口径：board/zc702/README.md:8 『Two micro-USB ports: only use the JTAG port (not UART)』，README.md:18 『micro-USB data cable (JTAG port)』。教程又引用 board/zc702/README.md 作为官方依据（L403 的 FMC 断电规则），却没有给出另一个口的丝印名，只留『以实物丝印为准』；按板卡文档『两个都是 micro-USB』理解的读者拿套件的 Micro-B 线去插 J17 会插不进去（Mini-B/Micro-B 物理不兼容），恰好卡在验证点⓪。",
+    "evidence": "教程:51 `**USB 口 A：串口**（J17，用套件的 Mini-B 线）`；:52 `**USB 口 B：JTAG**（板上另一个 USB 口；套件同时配了 Mini-B 与 Micro-B 两根线，**以实物丝印为准**）`；:226-229 同口径 + 自查法；:403 引用 board/zc702/README.md。D:\\puf-drone-auth\\board\\zc702\\README.md:8 `Two micro-USB ports: **only use the JTAG port** (not UART)`；D:\\puf-drone-auth\\README.md:18 `micro-USB data cable (JTAG port)`。《ZC702快速入门指南-翻译与解读.md》:51 套件含 Type-A 转 Mini-B 与 Micro-B 两根线、:195 J17 用 Type-A 转 Mini-B。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/project_flow.html",
+    "line": "120",
+    "category": "修复不完整（跨文档矛盾）",
+    "description": "修复清单称 dashboard 的『12 态』已修为『13 态』，但实测只有 docs/project_status.html 改了；docs/project_flow.html:120 仍写『12 态协议』、docs/architecture.html:154 与 :261 仍写『12态协议控制器』『12态FSM』，共 3 处残留。terminal_fsm.v 实际有 13 个状态（S_IDLE=4'd0 … S_CALC_R2=4'd12），所以残留的 12 态是过时事实，并与已改的 project_status.html『13 态』互相矛盾。同一卡片 project_flow.html:120 的『302 行』也已过时（terminal_fsm.v 现 395 行）。注意：这不是教程正文问题——教程正文通篇没有出现 12/13 态（已 grep 确认）。",
+    "evidence": "docs/project_status.html:263 `terminal_fsm.v — 13 态协议`；docs/project_flow.html:120 `<p>12 态协议 · C2 重放保护 · 动态 R2</p>…<span>302 行</span>`；docs/architecture.html:154 `terminal_fsm.v…12态协议控制器`、:261 `12态FSM：空闲→发请求→…`；src/rtl/w3_protocol/terminal_fsm.v:54-66 共 13 个 localparam（4'd0~4'd12），文件行数 395（Get-Content .Count）。教程 grep `12 态|13 态` → 0 命中。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "496-497",
+    "category": "资源清单自相矛盾（修复不完整）",
+    "description": "GitHub 资源段写『仓库 external/ 有四份源码，逐行分析见 docs/opensource_analysis.md』，随后却一口气列了 6 个名字：eriksargent/PUF-lab、stnolting/fpga_puf、mavlink/c_library_v2、xtncl/esp32-sram-puf-authentication、pymavlink、rithan2001/Xilinx-Zynq-7000-SoC-ZC702。其中 pymavlink 是 pip 依赖、rithan2001 是外部 XDC 底稿，两者都不在 external/（实测 external/ 恰为 c_library_v2、fpga_puf、puf-esp32-auth、PUF-lab 四个目录）。而且『逐行分析见 docs/opensource_analysis.md』对 rithan2001/master_constraints.xdc 不成立：该文档对 rithan2001/master_constraints 命中 0 次，仓库里也没有 vendored 这份底稿，读者无法按教程的说法本地核对引脚来源。",
+    "evidence": "教程:496-497 原文（『external/ 有四份源码』+ 6 个仓名）；Get-ChildItem D:\\puf-drone-auth\\external -Directory → c_library_v2、fpga_puf、puf-esp32-auth、PUF-lab（恰 4 个）；Grep rithan2001|master_constraints ：docs/opensource_analysis.md 0 命中，仅 w3_top.xdc:5 与教程:497 提到；Get-ChildItem -Recurse -Filter master_constraints* → 无结果；docs/opensource_analysis.md 章节为 一~五（PUF-lab / fpga_puf / c_library_v2 / esp32-sram-puf-authentication / pymavlink）。",
+    "verdict": "FAIL"
+  },
+  {
+    "severity": "info",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "51,52,84,226-229,456",
+    "category": "已修项复核",
+    "description": "【清单第1项】J17 被拆分为串口口（Mini-B）与另一个 JTAG 口，排障行改为『插的是 J17（串口）而不是 JTAG 口』并给出『设备管理器 CP210x COMx = 串口 / Auto Connect 看到 xc7z020 = JTAG』自查法——逐行复核内容齐备，BIST 与烧录各自该插哪个口在全篇能读出唯一答案（BIST/Tera Term→J17 串口；烧录/VIO→另一个口）。唯一遗留问题是与仓库板卡文档的口径冲突（见上文 FAIL 项）。",
+    "evidence": "教程:51、:52（两行拆分）、:84 `J17 是**串口**口（CP210x）——BIST 只走串口，本步不需要 JTAG`、:226-229（JTAG 口 + 别搞混 + 自查）、:456（排障首行）；两份教程副本哈希一致（SHA256 9638E68D29AA37DCC772CCDC2D280D19E1103CB0299306A6126BE1C6876D53BF）。",
+    "verdict": "PASS"
+  },
+  {
+    "severity": "info",
+    "file": "src/rtl/w3_protocol/w3_top_zc702.v",
+    "line": "13-56",
+    "category": "已修项复核",
+    "description": "【清单第2、3项】2.2 标题/正文已改为『板级 wrapper（不要改 w3_top.v）』并引用仓库新文件；wrapper 本体与清单描述逐条吻合：clk_p/clk_n 差分输入 → clk_wiz_0 → clk_100m；`wire rst_n = sys_rst_btn_n & mmcm_locked;`；term_id_dip[1:0] 经 `{6'h00, term_id_dip}` tie 到 w3_top 的 8 位 term_id_sw；例化 w3_top 的 9 个端口与参数与 w3_top.v:20-40 声明逐一匹配。『改 w3_top 端口会破坏 sim/tb/tb_w3_top.v、全仓 0 个 .xci』两项断言也复核为真。本机 xvlog 实编译 wrapper+w3_top EXIT=0。",
+    "evidence": "教程:319 标题、:321-323 理由、:325 路径；wrapper:13-27 端口、:31-37 clk_wiz_0、:40 rst_n 组合、:42-56 例化；w3_top.v:20-40；sim/tb/tb_w3_top.v:30-44 `.sys_clk(sys_clk)`；Get-ChildItem -Recurse -Filter *.xci → 0；实测 `xvlog.bat w3_top_zc702.v w3_top.v` → `INFO: [VRFC 10-311] analyzing module w3_top_zc702` / `analyzing module w3_top`，EXIT=0、stderr 空。",
+    "verdict": "PASS"
+  },
+  {
+    "severity": "info",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "349-354,376-377",
+    "category": "已修项复核",
+    "description": "【清单第4、8项】2.3 引脚表四项均已落地：复位端口名写 sys_rst_btn_n；LED 行补『每行都要配 IOSTANDARD（XDC 里原来只有 PACKAGE_PIN、没写电平，不补会被 NSTD-1 拦）』；auth_btn 行写『XDC 里原本没有这一行——已在 w3_top.xdc 补了注释占位』；term_id_dip 行说明 wrapper 已 tie 高位。2.5 验收口径与 RTL 实数吻合：hb_cnt[26] → 2^27/100MHz=1.342s，10 秒≈7.45 个完整周期≈15 次跳变；按住 GPIO_SW_N 时 rst_n=0 使 hb_cnt 归零 → DS10 停在固定电平。",
+    "evidence": "教程:349-354；xdc:22-25（LED 行确实只有 PACKAGE_PIN 无 IOSTANDARD）、:27-29（auth_btn 注释占位段，本轮 git diff 新增）；教程:376-377；w3_top.v:101-106 `assign led_heartbeat = hb_cnt[26]`。",
+    "verdict": "PASS"
+  },
+  {
+    "severity": "info",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "109,155-166,263-266,285-289,403-411,486,291,370",
+    "category": "已修项复核",
+    "description": "【清单第9、10项除下列 FAIL 外】路线分叉已显著（第二节标『路线一 · 全 GUI』、快车道标『路线二 · 全脚本（推荐，与路线一互斥）』并含 ExecutionPolicy Bypass 兜底）；VIO 刷新率已写 Refresh Rate=1000 且注明 0=停止自动刷新；验证点③含 FMC 先断电警告且 radio 引脚明确『待选…未选定引脚前本步暂缓』；阈值换算 100/262144=3.8e-4 正确；docs/w1_evidence 与 data/w1_readings 目录均存在；security_threat.json 在 build/reviews/a1p4/；AI 日志在 report/llm_log/w1_session.md（docs/llm_log 仅留 'Moved' README）；build_w3.tcl 确含 write_bitstream（『停在 route_design』旧说法已删）；tb_gap 7 用例与 project_flow.html tb_gap 7/7 一致。",
+    "evidence": "教程:109、:155、:163、:264、:289、:403-406、:410-411、:486、:291、:370；Test-Path docs\\w1_evidence / data\\w1_readings = True；Test-Path build/reviews/a1p4/security_threat.json = True；report/llm_log/w1_session.md 存在；docs/llm_log/README.md 内容 `# Moved - AI logs now in report/llm_log/`；build_w3.tcl:32-33 write_bitstream + BITSTREAM_SUCCESS；project_flow.html:143 `tb_gap_regression 7/7 ✅`。（『compare_devices 默认读 data/w1_readings/』这一句为假，见 FAIL 项。）",
+    "verdict": "PASS"
+  },
+  {
+    "severity": "info",
+    "file": "全仓 BOM 复验",
+    "line": "-",
+    "category": "已修项复核",
+    "description": "【清单 BOM 项】主仓 D:\\puf-drone-auth 全量递归（排除 .git、external 第三方目录与 build 产物）扫描首字节 EF BB BF 命中 0 个，含本轮新增的 w3_top_zc702.v 与被改的 w3_top.xdc / build_w3.tcl；本机 xvlog 实编译 wrapper+w3_top EXIT=0，与清单『已改为无 BOM 并复验 xvlog 通过』一致。",
+    "evidence": "PowerShell 扫描 .v/.xdc/.tcl/.ps1/.md/.py/.json/.html → 无输出（0 命中 EF BB BF）；xvlog 输出 `analyzing module w3_top_zc702` / `analyzing module w3_top`，EXIT=0。",
+    "verdict": "PASS"
+  }
+]

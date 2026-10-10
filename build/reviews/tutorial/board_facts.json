@@ -1,0 +1,161 @@
+[
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": 1,
+    "category": "review-baseline",
+    "description": "【审查基线·务必先读】本次 ZC702 硬件事实核查未能联网：web_search/web_fetch 全部 429（见 evidence 的工具状态），因此 UG850/XTP310/UG1165 官方在线原文**本轮没有打开核对**。核查改用本机可得的官方 AMD 制品 + 仓库文档：①Vivado 2026.1 随装 ZC702 官方板卡文件（board part xilinx.com:zc702:part0:1.4）；②ZC702 官方固定硬件平台 zc702.xsa 的 design_1.hwh；③AMD ZC702 设备树 zc702.dtsi；④仓库 w3_top.xdc；⑤仓库《ZC702快速入门指南-翻译与解读.md》（随箱 XTP310 v1.3 纸质指南的转述，非独立源）。审查快照：docs/tutorials/w1_tutorial.md MD5=E09AEC5FF2A11A35D4501EED5DE93ACE（与 保姆教程_W1_从零到一号验证点.md 字节一致，同 MD5）；src/rtl/w3_protocol/w3_top.xdc MD5=BFE4A99BE0759CE1E692B8C7793B9D75。审查期间该教程被并发修改（本会话内至少 3 个不同 MD5），故每条发现都附了行首原文，行号漂移时以原文定位。**本轮未发现 P0**；唯一 P1 是 LED 引脚表。",
+    "evidence": "工具状态：analyze_image 返回 \"HTTP 429 … Weekly/Monthly Limit Exhausted. Your limit will reset at 2026-10-10 21:57:59\"；web_search/web_fetch 返回 \"[ZHIPU_PROVIDER_ERROR] … upstream HTTP -429, code 1310\"；pwsh: Test-NetConnection 1.1.1.1:443 = False、curl raw.githubusercontent.com = \"curl: (35) Recv failure: Connection was reset\"。",
+    "sources": [
+      "本轮不可达、待人工核对的官方在线源：https://docs.amd.com/r/en-US/ug850-zc702-eval-board ; https://www.xilinx.com/support/documentation/boards_and_kits/zc702/ug850-zc702-eval-bd.pdf ; XTP310 v1.3 ; https://github.com/rithan2001/Xilinx-Zynq-7000-SoC-ZC702 (master_constraints.xdc)",
+      "D:\\vivado\\2026.1\\data\\xhub\\boards\\XilinxBoardStore\\boards\\Xilinx\\zc702\\1.4\\ (part0_pins.xml / board.xml, board part xilinx.com:zc702:part0:1.4, xc7z020clg484-1)",
+      "D:\\vivado\\2026.1\\data\\embeddedsw\\lib\\fixed_hwplatforms\\zc702.xsa -> design_1.hwh",
+      "D:\\vivado\\2026.1\\data\\system-device-tree-xlnx\\device_tree\\data\\kernel_dtsi\\2026.1\\BOARD\\zc702.dtsi",
+      "ZC702快速入门指南-翻译与解读.md（随箱 XTP310 v1.3 纸质快速入门指南 4 页的转述）"
+    ]
+  },
+  {
+    "severity": "P1",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": 353,
+    "category": "board-facts-pin",
+    "description": "【P1·照做卡住】四个 PL 用户 LED 的引脚写成 Y11/T22/W21/U21（DS9~DS12），与 AMD 官方 ZC702 板卡定义不符：官方板卡文件把 4 位用户 LED 接口 leds_4bits（\"LEDs, 3 to 0, Active High\"，LVCMOS25）接在 **P17 / P18 / W10 / V7**；同文件里 Y11、T22、U21 是 FMC(2)_LPC 的 la33_p / la14_p / la07_n，W21 根本没有作为 LED 出现。教程第 58 行表格、第 353~355 行 §2.3「逐行取消注释清单」照抄了仓库 XDC 的注释底稿（XDC 第 25~29 行），照做后验证点② 的验收铁证「DS10 心跳灯闪」必然不亮，用户会按教程自己的排障表（第 472 行「LED 引脚错」列在最后）先去怀疑 MMCM/复位而卡住。附带风险：验证点③ 要往 FMC 上插适配板，此时 PL 若仍驱动 Y11/T22/U21（FMC 同脚）可能与该卡争用。建议：LED 四行改为 P17/P18/W10/V7 + IOSTANDARD LVCMOS25；DS9~DS12 与 bit0..bit3 的对应关系仍建议按 UG850/原理图核实（本轮未确认哪颗是 DS9）；src/rtl/w3_protocol/w3_top.xdc 第 25~29 行同步改。",
+    "evidence": "part0_pins.xml: <pin index=\"4\" name=\"leds_4bits_tri_o_0\" iostandard=\"LVCMOS25\" loc=\"P17\"/> / index5 loc=\"P18\" / index6 loc=\"W10\" / index7 loc=\"V7\"；board.xml: <component name=\"leds_4bits\" display_name=\"LED\" ...><description>LEDs, 3 to 0, Active High</description>，且 <connection_map name=\"part0_leds_4bits_1\" c1_st_index=\"4\" c1_end_index=\"7\" c2_st_index=\"0\" c2_end_index=\"3\"/>。同文件：index119=\"fmc2_lpc_la07_n\" loc=\"U21\"、index120=\"fmc2_lpc_la14_p\" loc=\"T22\"、index94=\"fmc2_lpc_la33_p\" loc=\"Y11\"；全目录 grep \"W21\" 无命中。教程原文：L58「| **DS9~DS12 LED**（Y11/T22/W21/U21，待核对） | 状态灯（验证点②用） | 先认识位置 |」；L353「| `Y11` → led_busy（DS9） | 认证进行灯 |…」；L354 T22→led_heartbeat（DS10）；L355「| `W21` / `U21` → led_result[1:0]（DS11/DS12）…」；XDC L26-29 同内容注释。",
+    "sources": [
+      "D:\\vivado\\2026.1\\data\\xhub\\boards\\XilinxBoardStore\\boards\\Xilinx\\zc702\\1.4\\ (part0_pins.xml / board.xml, board part xilinx.com:zc702:part0:1.4, xc7z020clg484-1)（XSA 内 xsa.xml 声明 BoardPart=xilinx.com:zc702:part0:1.4、Part=xc7z020clg484-1，与上表同源）",
+      "本轮不可达、待人工核对的官方在线源：https://docs.amd.com/r/en-US/ug850-zc702-eval-board ; https://www.xilinx.com/support/documentation/boards_and_kits/zc702/ug850-zc702-eval-bd.pdf ; XTP310 v1.3 ; https://github.com/rithan2001/Xilinx-Zynq-7000-SoC-ZC702 (master_constraints.xdc)"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": 226,
+    "category": "board-facts-unverified",
+    "description": "【P2·未确证/建议改口径】当前修订把 JTAG 口的线写成确定的 **Micro-B**（L226「烧录/读 VIO 要用 **JTAG 口**：板上**另一个** USB 口（套件附的 **Micro-B** 线）」；L460 排障「①改用 **Micro-B** 数据线插 JTAG 口」）。可得证据互相矛盾、本轮无法定论：①随箱 XTP310 盒内清单是「Type-A 转 Mini-B」+「Type-A 转 Micro-B」两根（Micro-B 那根也可能对应 PS 的 USB-OTG Micro-AB 口，而非 JTAG）；②仓库 board/zc702/README.md L8 写「Two micro-USB ports」；③上一轮 UI 审查引 UG850 称 JTAG 口（Digilent 模块）用 Micro-B。若 JTAG 实为 Mini-B，用户会按教程认错线/以为线坏而卡住。建议改为「用套件里能插进 JTAG 口的那根线（对照 UG850 板卡图/实物丝印，别写死 Mini-B/Micro-B）」。",
+    "evidence": "教程 L52 已自加免责「套件同时配了 Mini-B 与 Micro-B 两根线，**以实物丝印为准**」，但 L226、L460 写死 Micro-B；ZC702快速入门指南-翻译与解读.md（随箱 XTP310 v1.3 纸质快速入门指南 4 页的转述） L51「2 根 USB 线（Type-A 转 Mini-B、Type-A 转 Micro-B）」；board/zc702/README.md L8「Two micro-USB ports: **only use the JTAG port** (not UART)」。",
+    "sources": [
+      "本轮不可达、待人工核对的官方在线源：https://docs.amd.com/r/en-US/ug850-zc702-eval-board ; https://www.xilinx.com/support/documentation/boards_and_kits/zc702/ug850-zc702-eval-bd.pdf ; XTP310 v1.3 ; https://github.com/rithan2001/Xilinx-Zynq-7000-SoC-ZC702 (master_constraints.xdc)",
+      "ZC702快速入门指南-翻译与解读.md（随箱 XTP310 v1.3 纸质快速入门指南 4 页的转述）",
+      "board/zc702/README.md"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": 51,
+    "category": "board-facts-ok",
+    "description": "【P3·核对无误（留痕）】USB 两口分工正确：J17 = USB-UART（CP210x 串口），JTAG = 板上另一个口。**上一版**教程曾写「J17 是 Mini-B，一个口同时提供 JTAG 和 CP210x USB-UART COM」（属于 P1 级错误：只插 J17 必然 Auto Connect 不到芯片），当前快照已修正为「USB 口 A：串口（J17，Mini-B）／USB 口 B：JTAG（另一个口）」，并在 L227-229、L460 明确「只插 J17 的话 Hardware Manager 永远 Auto Connect 不到芯片」。核对方向正确，无需再改（线型问题见上一条）。",
+    "evidence": "教程 L51-52、L84（「J17 是**串口**口（CP210x）——BIST 只走串口，本步不需要 JTAG」）、L227-229、L460；ZC702快速入门指南-翻译与解读.md（随箱 XTP310 v1.3 纸质快速入门指南 4 页的转述） L73「STEP 3 用 Type-A 转 Mini-B 的 USB 线，把电脑连接到 ZC702 板上的 J17」+ L81「STEP 5 选中与 Silicon Labs CP210x USB-UART 桥对应的 COM 口」⇒ J17 承担的是串口而非 JTAG。",
+    "sources": [
+      "ZC702快速入门指南-翻译与解读.md（随箱 XTP310 v1.3 纸质快速入门指南 4 页的转述）",
+      "本轮不可达、待人工核对的官方在线源：https://docs.amd.com/r/en-US/ug850-zc702-eval-board ; https://www.xilinx.com/support/documentation/boards_and_kits/zc702/ug850-zc702-eval-bd.pdf ; XTP310 v1.3 ; https://github.com/rithan2001/Xilinx-Zynq-7000-SoC-ZC702 (master_constraints.xdc)"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": 315,
+    "category": "board-facts-ok",
+    "description": "【P3·核对无误】PL 系统时钟 = 200MHz 差分、D18(SYSCLK_P)/C19(SYSCLK_N)、LVDS_25、±200MHz 决定 create_clock -period 5.000 —— 全部与 AMD 官方 ZC702 板卡定义一致（板载 2.5V LVDS 200MHz 差分振荡器）。教程第 61、315、338-340 行及 src/rtl/w3_protocol/w3_top.xdc 第 8-13 行口径正确；「w3_top 期待 100MHz 单端 → wrapper 里 IBUFDS + clk_wiz_0 出 100MHz」的方案也成立。",
+    "evidence": "board.xml: <component name=\"sys_diff_clock\" ...> <parameter name=\"frequency\" value=\"200000000\"/> 与 <description>2.5V LVDS differential 200 MHz oscillator used as system differential clock on the board</description>；part0_pins.xml: index8 sys_clk_n loc=\"C19\" LVDS_25、index9 sys_clk_p loc=\"D18\" LVDS_25。",
+    "sources": [
+      "D:\\vivado\\2026.1\\data\\xhub\\boards\\XilinxBoardStore\\boards\\Xilinx\\zc702\\1.4\\ (part0_pins.xml / board.xml, board part xilinx.com:zc702:part0:1.4, xc7z020clg484-1)"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": 352,
+    "category": "board-facts-ok",
+    "description": "【P3·核对无误 + 可补一个具体引脚】G19 = GPIO_SW_N（LVCMOS25）正确；且 AMD 官方 ZC702 板卡定义里 PL 侧只有两颗按键：GPIO_SW_N(G19)、GPIO_SW_S(F19) ⇒ 第 357 行「auth_btn：按 UG850 查具体引脚」可直接填 **F19（GPIO_SW_S, LVCMOS25）**（XDC 第 33 行的占位同理）。另：XTP310 的「SW15-1/SW15-2 与 SW13/SW14 并联」（教程 L55）与 AMD ZC702 设备树把 sw13/sw14 接在 PS MIO（gpio0 12/14）相容——即 SW15 属 PS 域，与 PL 的 W6/W7 拨码不是同一个开关。",
+    "evidence": "part0_pins.xml: index200 name=\"GPIO_SW_N\" loc=\"G19\"、index201 name=\"GPIO_SW_S\" loc=\"F19\"（均 LVCMOS25）；board.xml: <component name=\"push_buttons\" display_name=\"Push buttons\" ...> 与 <connection_map name=\"part0_push_buttons_1\" c1_st_index=\"200\" c1_end_index=\"201\" c2_st_index=\"0\" c2_end_index=\"1\"/>；D:\\vivado\\2026.1\\data\\system-device-tree-xlnx\\device_tree\\data\\kernel_dtsi\\2026.1\\BOARD\\zc702.dtsi L30-47: gpio-keys sw14=gpio0 12(MIO12)、sw13=gpio0 14(MIO14)；教程 L55、L357。",
+    "sources": [
+      "D:\\vivado\\2026.1\\data\\xhub\\boards\\XilinxBoardStore\\boards\\Xilinx\\zc702\\1.4\\ (part0_pins.xml / board.xml, board part xilinx.com:zc702:part0:1.4, xc7z020clg484-1)",
+      "D:\\vivado\\2026.1\\data\\system-device-tree-xlnx\\device_tree\\data\\kernel_dtsi\\2026.1\\BOARD\\zc702.dtsi",
+      "ZC702快速入门指南-翻译与解读.md（随箱 XTP310 v1.3 纸质快速入门指南 4 页的转述）"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": 356,
+    "category": "board-facts-ok",
+    "description": "【P3·核对无误】「ZC702 PL 侧只有 W6/W7 两颗拨码」「PL I/O 用 LVCMOS25（不是 LVCMOS15）」两条都对：官方板卡定义里 PL 侧拨码是 2 位 DIP（器件 SDA02H1SBD），接 W6/W7；该板 LED/拨码/按键/FMC LPC 引脚在官方板卡文件里全部标 LVCMOS25。教程 L356、L366、L367 与 src/rtl/w3_protocol/w3_top.xdc L36-39 无需修改（FMC 具体 LA 脚另见 §3.2 的处理，本轮未核）。",
+    "evidence": "part0_pins.xml: index0 gpio_sw_tri_i_0 loc=\"W6\" LVCMOS25、index1 gpio_sw_tri_i_1 loc=\"W7\" LVCMOS25；board.xml: <component name=\"gpio_sw\" display_name=\"DIP switches\" part_name=\"SDA02H1SBD\" ...>；全文非 FMC 引脚 iostandard 均为 LVCMOS25。",
+    "sources": [
+      "D:\\vivado\\2026.1\\data\\xhub\\boards\\XilinxBoardStore\\boards\\Xilinx\\zc702\\1.4\\ (part0_pins.xml / board.xml, board part xilinx.com:zc702:part0:1.4, xc7z020clg484-1)"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": 95,
+    "category": "board-facts-ok",
+    "description": "【P3·核对无误】BIST 菜单编号与串口参数正确：1=UART / 2=LED / 3=Timer / 4=IIC / 5=SCUGIC / 6=DCFG / 7=DDR3 / 8=Interrupt / 9=Watchdog，e/q 退出；**BIST 里 LED Test = 输入 2**（教程 L90「2=LED、7=DDR3」、L95-96 正确）；串口 115200-8-N-1、无流控（L88、L104）正确，并有一条独立佐证：AMD 官方 ZC702 设备树把控制台写成 stdout-path=\"serial0:115200n8\"。注意证据强度：菜单表来自随箱 XTP310 纸质指南的低分辨率终端截图转述（转述者自己标注「个别字词可能有差异」），若菜单项名称与实物不同，以板上终端实际显示为准。",
+    "evidence": "ZC702快速入门指南-翻译与解读.md（随箱 XTP310 v1.3 纸质快速入门指南 4 页的转述） L94-104（串口参数 115200/8/none/1/none）、L112（「输入 2 运行 LED Test」）、L121-132（菜单表 1~9 + e/q）；D:\\vivado\\2026.1\\data\\system-device-tree-xlnx\\device_tree\\data\\kernel_dtsi\\2026.1\\BOARD\\zc702.dtsi L16「serial0 = &uart1;」、L27「stdout-path = \"serial0:115200n8\";」。",
+    "sources": [
+      "ZC702快速入门指南-翻译与解读.md（随箱 XTP310 v1.3 纸质快速入门指南 4 页的转述）",
+      "D:\\vivado\\2026.1\\data\\system-device-tree-xlnx\\device_tree\\data\\kernel_dtsi\\2026.1\\BOARD\\zc702.dtsi"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": 49,
+    "category": "board-facts-unverified",
+    "description": "【P3·与随箱指南一致但未获在线官方原文（未确证）】电源与开箱位号一套：6 针电源插头 → J60、电源开关 SW11、启动模式拨码 SW16=00010（出厂 SD 卡 BIST 镜像）、复位键 SW1(POR_B)、SW15-1/2 与 SW13/SW14 并联，以及 115200-8-N-1 —— 与随箱 XTP310 v1.3 的 STEP 2/3/4/7/8/9 及 Note 逐条一致；但本轮无法访问官方在线原文复核该转述。建议：以 UG850 的板卡图/实物丝印再确认一次位号与手中板子一致（尤其 SW16 的 1/0 与 ON/OFF 方向，按丝印读「(00010)」），并把「官方原文出处」标在教程里（现仅标 XTP310 v1.3）。",
+    "evidence": "ZC702快速入门指南-翻译与解读.md（随箱 XTP310 v1.3 纸质快速入门指南 4 页的转述） L69（SW16=(00010)）、L77（6 针插头接 J60 + SW11 开机）、L108（按 SW1(POR_B) 重新初始化）、L114（SW15-1/2 与 SW13/SW14 并联）；教程 L49-55、L83-89、L225。",
+    "sources": [
+      "ZC702快速入门指南-翻译与解读.md（随箱 XTP310 v1.3 纸质快速入门指南 4 页的转述）",
+      "本轮不可达、待人工核对的官方在线源：https://docs.amd.com/r/en-US/ug850-zc702-eval-board ; https://www.xilinx.com/support/documentation/boards_and_kits/zc702/ug850-zc702-eval-bd.pdf ; XTP310 v1.3 ; https://github.com/rithan2001/Xilinx-Zynq-7000-SoC-ZC702 (master_constraints.xdc)"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": 316,
+    "category": "board-facts-wording",
+    "description": "【P3·结论方向对，措辞需精确】「CPU_RESET 在 PS 域，PL 逻辑够不着 → 用 GPIO_SW_N(G19) 作 PL 复位」方向正确：PS_POR_B/PS_SRST_B 之类复位是 PS 专用引脚，不接入 PL fabric（AMD 板卡定义里 PL 可见的按键只有 G19/F19，第 6/7 条已列）。但「PL 逻辑够不着」需补一句精确化：按 POR_B 会把整片重新复位/重新配置（PL 逻辑也会被清掉，因此它并不是「只复位 PL」的按钮），只是**不能作为 PL 逻辑输入**使用；教程 L231 已提醒「烧录过程中不要按 SW1」。另「CPU_RESET」这个丝印名在本轮可得的官方材料里未见（未确证；XTP310 只写 SW1/POR_B），建议按实物丝印写或直接写「PS 域复位键（POR_B）」。",
+    "evidence": "教程 L62、L316；src/rtl/w3_protocol/w3_top.xdc L15-17（同口径）；part0_pins.xml 仅 GPIO_SW_N/G19、GPIO_SW_S/F19 属 PL，D:\\vivado\\2026.1\\data\\system-device-tree-xlnx\\device_tree\\data\\kernel_dtsi\\2026.1\\BOARD\\zc702.dtsi 显示 SW13/SW14 走 MIO12/14（PS 域）。",
+    "sources": [
+      "D:\\vivado\\2026.1\\data\\xhub\\boards\\XilinxBoardStore\\boards\\Xilinx\\zc702\\1.4\\ (part0_pins.xml / board.xml, board part xilinx.com:zc702:part0:1.4, xc7z020clg484-1)",
+      "D:\\vivado\\2026.1\\data\\system-device-tree-xlnx\\device_tree\\data\\kernel_dtsi\\2026.1\\BOARD\\zc702.dtsi",
+      "本轮不可达、待人工核对的官方在线源：https://docs.amd.com/r/en-US/ug850-zc702-eval-board ; https://www.xilinx.com/support/documentation/boards_and_kits/zc702/ug850-zc702-eval-bd.pdf ; XTP310 v1.3 ; https://github.com/rithan2001/Xilinx-Zynq-7000-SoC-ZC702 (master_constraints.xdc)"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": 396,
+    "category": "board-facts-ok",
+    "description": "【P3·核对无误】「ZC702 板载 USB-UART 接在 PS 域（MIO），PL 的 radio_txd 物理上到不了它」正确，且可把 MIO 号写实：板载 USB-UART 桥接的是 **PS UART1，走 MIO48(TX)/MIO49(RX)**，EMIO 未启用，因此 PL fabric 没有到该口的通路（原理上 PS UART 可经 EMIO 引出到 PL 脚，但板上这颗 CP210x 是固定接 MIO48/49，与 PL 无关）。⇒ 教程验证点③ 的结论「必须外接 USB-UART 桥/电台」成立，第 401 行 3.3V 电平与共地要求在 PL 银行 LVCMOS25 语境下也合理（建议连同 FMC 侧 VADJ 一并核对，见 §3.2 待填引脚）。",
+    "evidence": "D:\\vivado\\2026.1\\data\\embeddedsw\\lib\\fixed_hwplatforms\\zc702.xsa -> design_1.hwh: <PARAMETER NAME=\"PCW_EN_UART1\" VALUE=\"1\"/>、<PARAMETER NAME=\"PCW_EN_EMIO_UART1\" VALUE=\"0\"/>、MIO 树 \"…CAN 0#CAN 0#UART 1#UART 1#I2C 0#I2C 0…\"（第 48/49 位 = UART1）；D:\\vivado\\2026.1\\data\\system-device-tree-xlnx\\device_tree\\data\\kernel_dtsi\\2026.1\\BOARD\\zc702.dtsi L346-364「pinctrl_uart1_default: groups = \"uart1_10_grp\"; pins = \"MIO48\"/\"MIO49\"」、L16 serial0=&uart1。",
+    "sources": [
+      "D:\\vivado\\2026.1\\data\\embeddedsw\\lib\\fixed_hwplatforms\\zc702.xsa -> design_1.hwh",
+      "D:\\vivado\\2026.1\\data\\system-device-tree-xlnx\\device_tree\\data\\kernel_dtsi\\2026.1\\BOARD\\zc702.dtsi"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": 131,
+    "category": "claim-support",
+    "description": "【P3·经验建议，缺官方依据（未确证）】「Vivado 对非 ASCII 路径敏感，仓库路径是纯 ASCII，安全」（L131）作为**保守做法**合理（把工程放在 ASCII 路径下不会有坏处，仓库本身也在 D:\\puf-drone-auth），但「会导致综合失败」这一因果断言本轮没有找到官方出处，也不在本轮可核对的 AMD 材料范围内。建议改写成「经验做法：把工程/源文件放在纯 ASCII 路径下可规避中文/空格引发的工具链与脚本编码问题（非官方明示）」；不必删掉该步骤。",
+    "evidence": "教程 L131 原文；本轮 web 不可达，未能检索 UG973/安装文档中的路径字符说明。",
+    "sources": [
+      "本轮不可达、待人工核对的官方在线源：https://docs.amd.com/r/en-US/ug850-zc702-eval-board ; https://www.xilinx.com/support/documentation/boards_and_kits/zc702/ug850-zc702-eval-bd.pdf ; XTP310 v1.3 ; https://github.com/rithan2001/Xilinx-Zynq-7000-SoC-ZC702 (master_constraints.xdc)"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": 401,
+    "category": "board-facts-unverified",
+    "description": "【P2·未确证/可能买错件】教程在验证点③ 反复给「FMC/PMOD 转 USB-UART 模块」「FMC/PMOD 引脚」（L23、L367、L401、L407-415）。ZC702 是否有 PMOD 排针请先目视确认（5 秒可判）：AMD 官方 ZC702 板卡定义里只有 FMC1_LPC / FMC2_LPC 两个连接器组件，没有 PMOD 组件（但该文件同样不含 HDMI/以太网等，故只能算弱证据，不足以断言「无 PMOD」）；若板上没有 PMOD，用户会按教程买/找错模块。建议把「PMOD」改成「FMC LPC（或板上实际存在的引出口）」，或加一句「先确认板上有无 PMOD 排针」。",
+    "evidence": "board.xml 组件清单：fmc2_lpc_connector(FMC2_LPC)、fmc1_lpc_connector(FMC1_LPC)、part0、gpio_sw、push_buttons、iic_main、leds_4bits、ps7_fixedio、sys_diff_clock —— 无 PMOD；教程 L23/L367/L401/L407-415 原文。",
+    "sources": [
+      "D:\\vivado\\2026.1\\data\\xhub\\boards\\XilinxBoardStore\\boards\\Xilinx\\zc702\\1.4\\ (part0_pins.xml / board.xml, board part xilinx.com:zc702:part0:1.4, xc7z020clg484-1)",
+      "本轮不可达、待人工核对的官方在线源：https://docs.amd.com/r/en-US/ug850-zc702-eval-board ; https://www.xilinx.com/support/documentation/boards_and_kits/zc702/ug850-zc702-eval-bd.pdf ; XTP310 v1.3 ; https://github.com/rithan2001/Xilinx-Zynq-7000-SoC-ZC702 (master_constraints.xdc)"
+    ]
+  }
+]
