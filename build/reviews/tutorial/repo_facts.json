@@ -1,0 +1,65 @@
+[
+  {
+    "severity": "P2",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "368-370",
+    "category": "构建脚本断言",
+    "description": "教程称“当前 build_w3.tcl 停在 route_design，需在末尾加一行 write_bitstream -force $OD/w3_top.bit”；实际脚本早已包含 write_bitstream，不存在“停在 route_design”的状态。",
+    "evidence": "教程 369-370：“（注意：当前 build_w3.tcl 停在 route_design，需在末尾加一行 `write_bitstream -force $OD/w3_top.bit`）”；build/tcl/build_w3.tcl:24 `route_design` → :27-28 DRC SEVERITY 豁免 → :30 report_utilization → :31 `write_bitstream -force $OD/w3_top.bit` → :32 `puts \"BITSTREAM_SUCCESS\"`（脚本末尾即比特流生成，教程结论与仓库不符）",
+    "verdict": "错误"
+  },
+  {
+    "severity": "P2",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "491",
+    "category": "资源引用/开源仓库名",
+    "description": "教程资源章节列的 GitHub 仓库名“InterPUF”“SiMRA-PUF”在仓库中不存在，与仓库既有开源分析文档记录的四个真实仓库名完全不对应。",
+    "evidence": "教程 491：“**GitHub**：InterPUF；SiMRA-PUF；mavlink/c_library_v2；pymavlink；”；仓库实际引用：docs/opensource_analysis.md:9 `eriksargent/PUF-lab`、:82 `stnolting/fpga_puf`、:105 `mavlink/c_library_v2`、:144 `xtncl/esp32-sram-puf-authentication`、:184 `pymavlink（pip 安装，v2.4.50）`；对应目录 external/PUF-lab、external/fpga_puf、external/c_library_v2、external/puf-esp32-auth 均在仓；全仓 grep `InterPUF|SiMRA` 仅命中教程自身（1 处）",
+    "verdict": "错误"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "481",
+    "category": "证据路径",
+    "description": "教程 W4 安全包对照表把 P1-5 的依据写成 build/reviews/a1full/security_threat.json；该文件不在 a1full 目录，实际只存在于 a1p4。",
+    "evidence": "教程 481：“| P1-5 | 终端断电重放 | 三选一（nonce 回显 / C2 非易失 / 会话随机数） | build/reviews/a1full/security_threat.json |”；实际 a1full 目录仅含 trace_matrix.json / e2e_trace.json / interop_run.json / ci_final_run.log（无 security_threat.json），该文件实际路径为 build/reviews/a1p4/security_threat.json（存在）；docs/HANDOFF_SUMMARY.md:98 同样标注“证据：build/reviews/a1p4/security_threat.json”",
+    "verdict": "错误"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "32",
+    "category": "CI/仿真基线数量",
+    "description": "教程称 tb_gap 是“8 用例”，实际 tb_gap_regression.v 只有 7 个用例标签（GA/GD1/GD2/GE1/GE2/GF/GH）。",
+    "evidence": "教程 32：“tb_gap 8 用例含码 4 拒绝）”；sim/tb/tb_gap_regression.v 头部仅列 7 项（:5 GA、:6 GD1、:7 GD2、:8 GE1、:9 GE2、:10 GF、:11 GH），用例起始 $display 行亦为 7 处（:157/:187/:200/:214/:236/:254/:268，其中 GH=码 4）；build/reviews/a1full/e2e_trace.json:37 亦记“tb_gap_regression 全部 7 次 load_result 调用（L176/193/206/228/244/247/259）”；docs/HANDOFF_SUMMARY.md:37“6 安全测试” + :113“tb_gap 新增 GH 用例” ⇒ 6+1=7",
+    "verdict": "错误"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "280",
+    "category": "路径/仓库既有约定",
+    "description": "教程要求把 AI 协作日志写到 docs/llm_log_w1.md；仓库 docs/llm_log/ 下已明确声明日志已迁走，实际日志目录是 report/llm_log/。",
+    "evidence": "教程 280：“截图（VIO 面板 + 硬件窗口）存 `docs/w1_evidence/`，读数表填上表；`docs/llm_log_w1.md` 记三行 AI 协作日志”；仓库实际：docs/llm_log/README.md:1 全文仅一句“# Moved - AI logs now in report/llm_log/”，且 report/llm_log/w1_session.md 存在；docs/llm_log_w1.md 不存在（Test-Path=False）",
+    "verdict": "过时"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "354（并见 358）",
+    "category": "RTL 端口/常量绑定",
+    "description": "教程 2.3 表格称“term_id_sw[7:2] 在 w3_top 里接常量”，实际 w3_top.v 没有任何常量绑定——该信号是 8 位顶层输入端口并直接接到 terminal_fsm.terminal_id，未绑定的高 6 位会留下未约束端口；358 行才以“若无物理开关”的条件句给出改常量的做法，与 354 行的既有事实陈述自相矛盾。",
+    "evidence": "教程 354：“`W6` / `W7` → term_id_sw[1:0] | 仅 2 位拨码在 PL | 同上；term_id_sw[7:2] 在 w3_top 里接常量”（358 行则要求“在 w3_top 中改接常量”）；src/rtl/w3_protocol/w3_top.v:34 `input wire [7:0] term_id_sw` → :152 `.terminal_id (term_id_sw)`（无任何 `8'h01`/常量绑定，grep 全文件无 term_id_sw 常量赋值）；src/rtl/w3_protocol/w3_top.xdc:30-32 亦只注释 W6/W7 两颗并在 :32 注明“[7:2] = tie to constants in w3_top or use external DIP”（即“需自行处理”而非“已接常量”）",
+    "verdict": "错误"
+  },
+  {
+    "severity": "P3",
+    "file": "docs/tutorials/w1_tutorial.md",
+    "line": "51（并见 223）",
+    "category": "板卡描述一致性",
+    "description": "教程称 J17 是“Mini-B 且 JTAG 与 USB-UART 二合一”的一个口，仓库板级文档却写成两个 micro-USB 口、只用一个 JTAG 口；两处描述互相矛盾（按 ZC702 实物，教程的“J17 二合一 Mini-B/CP210x”为准，仓库 README 属简化/失准表述）。",
+    "evidence": "教程 51：“**USB 口 J17**（Mini-B）… **JTAG + USB-UART COM 二合一**：烧录、VIO、BIST 串口全走它”；:223 同义；仓库：board/zc702/README.md:8 “Two micro-USB ports: **only use the JTAG port** (not UART)”、README.md:18 “micro-USB data cable (JTAG port)”。同为 USB 连接器却给出“二合一 Mini-B”与“两个 micro-USB 口、仅用 JTAG 口”两种互斥描述",
+    "verdict": "不一致"
+  }
+]
