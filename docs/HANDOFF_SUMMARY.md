@@ -1,4 +1,56 @@
 # PUF 无人机认证项目 · 交接摘要
+
+## 会话交接记录（2026-10-10）
+
+> 本节由「A1 整体复审 → 看板刷新 → 保姆教程五轮审查 → 板卡调试」会话写入。
+> 板卡硬件调试继续在原对话进行；软件侧工作在新对话继续，以下为交接内容。
+
+### 一、仓库当前状态
+
+- HEAD：`a771f91`（工作区干净，无未提交变更）
+- A1 六阶段 + 十轮审查全部完成（详见 §二～§五及 build/reviews/）
+- 最近提交链（本会话新增 9 个）：
+  - `fc27345` 教程去除冗余暂存步骤
+  - `9ff5299` 教程三轮审查修复 + 新增 ZC702 板级 wrapper
+  - `312f5de` 审查产物入库
+  - `895b4fb` HANDOFF 登记板卡适配状态
+  - `d17b038` 复验轮 9 项修复（build_w3_board.tcl、XDC 重写、IP reset 对齐等）
+  - `3071840` 复验产物入库
+  - `e26c9cc` 板卡事实修正（LED 引脚 P1）+ 新角度走查修复
+  - `e62953a` 板卡事实审查产物入库
+  - `a771f91` 最终审查产物（字节校验）
+
+### 二、保姆教程最终状态（五轮审查后）
+
+- 文件：`docs/tutorials/w1_tutorial.md`（= 用户的 `D:\文件\ssssssss\FPGA\保姆教程_W1_从零到一号验证点.md`，两份字节一致）
+- 审查产物：`build/reviews/tutorial/`（repo_facts / walkthrough / board_facts / fix_verify / new_angle 五份 JSON）
+- 验证：CI 12/12 TB + 44 单测 + 金丝雀 + 契约同步 = CI-EXIT 0；wrapper xvlog+xelab 通过；clk_wiz IP 配置 Vivado 实测 IP_CHECK_OK；全仓 0 BOM
+
+### 三、板卡调试会话的硬件结论（UG850 官方依据）
+
+- **三个 USB 口**：
+  - **J17**（U36，**Mini-B**）= USB-UART 桥 CP2103GM，**由电脑 USB 5V 供电**（板子关机也能枚举出 COM 口）
+  - **U23**（**Micro-B**，集成在 Digilent 模块上）= PL JTAG（Vivado Hardware Manager 用）
+  - **J1**（U9，**Mini-B**）= PS USB 2.0 ULPI（OTG；无 PS 程序时**零枚举**，容易误插）
+- **LED 定义**（UG850 Table）：
+  - DS14 = `VCC12_P_IN`（12V 电源开）
+  - DS13 = `PWRCTL_PWRGOOD`（板载各路电源正常）
+  - **用户 LED**：P17=**DS15**、P18=**DS16**、W10=**DS17**、V7=**DS18**（即 w3_top_zc702 的 led_busy/heartbeat/result[1:0] 对应 DS15/16/17/18）
+  - DS12 = PS_MIO8_LED0、DS23 = PS_LED1（PS 侧，勿混用）
+- **电源**：J60 = 6 针 mini-fit（Molex 39-30-1060）；套件适配器 LTE65ES-S2.1（12V/5A/60W，Pin1=+V、Pin3=GND）；**严禁 ATX 6 针**（引脚不同会烧板，UG850 CAUTION 原文）
+- **当前故障**：DS14 亮（12V 到位）但 **DS13 不亮（PWRGOOD 未建立）**→ 板内电源未起来 → JTAG/USB 全部无法工作
+- 已排除：适配器规格/引脚（已核对为套件原装）、USB 线材（手机对照测试枚举成功）、驱动（Digilent/FTDI/CP210x 均已安装且在驱动库中）
+- 下一步（板卡会话继续）：重新插紧 J60 → 断电重启 → 拔 FMC/PMOD/SD 清空负载 → 若 DS13 仍不亮则判硬件故障报告老师；同时可用 Mini-B 线插 J17 验证 CP2103（主机供电，不依赖板内电源）
+- UG850 PDF 位置：`D:\文件\ssssssss\FPGA\ug850-zc702-eval-bd.pdf`（pdftotext 已提取到 %TEMP%\ug850.txt）
+
+### 四、遗留待办（新对话需要知道的）
+
+1. **教程 LED 位号未改完**：验收节仍写"数 DS10"，应改为 **DS16**（P18=心跳）；板卡表行"DS9~DS12"应改为 **DS15~DS18**。引脚 P17/P18/W10/V7 已正确，只是位号文字未同步。
+2. **board/zc702/README.md** 仍写"Two micro-USB ports: only use the JTAG port"，应按 UG850 修正为 J17(Mini-B UART)/U23(Micro-B JTAG)/J1(Mini-B PS USB)。
+3. **旧克隆待清理**：`D:\文件\ssssssss\FPGA\puf-drone-auth\`（16MB/920 文件、HEAD 5a3ec3c 旧提交、含 1 个 BOM 文件与过时教程副本）——用户尚未确认是否删除。
+4. **外部复核待做**（智谱配额 10-10 21:57 重置后）：DS9~DS11 的含义（LED 表中未见）、板上 USB 口丝印实测、JTAG 口线型确认。
+5. W4 backlog 不变：P1-5 终端重放修复、44-bit 熵混合、P1-1 真密钥、CI 超时作业化、SimulatedHSM 决策、互操作 harness 固化、注册语义配对（详见 §五 W4 备忘）。
+
 生成时间：2026-10-08（**A1 全部六个阶段完成**；上版为阶段 3 后/阶段 4 后两版）
 项目路径：D:\puf-drone-auth
 Git：57 commits（截至 A1 收官提交 a678274）· 144 files · tag w3-complete（阶段 4/5/6 三笔提交 + 各阶段审查证据入库）
