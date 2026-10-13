@@ -50,6 +50,8 @@ module tb_puf_path;
     integer     guard;
     integer     win_count = 0;     // D-P2/B-P2：ra_measure_en 上升沿计数（热窗可观测性）
     reg         ra_measure_en_prev = 1'b0;
+    reg         t3_entered_decode;  // A-P1：T3 看门狗路径断言（须进过 S_PUF_DECODE）
+    reg         t4_entered_measure; // A-P1：T4 看门狗路径断言（须进过 S_PUF_MEASURE）
 
     // 黄金 R1（scripts/gen_puf_fixtures.py --tb-resp，puf_model × fixture 频率）
     localparam [63:0] R1_SEED_A = 64'h6677FEA45A09061F;
@@ -279,35 +281,59 @@ module tb_puf_path;
         while (auth_busy && guard < 10000) begin @(posedge clk); guard = guard + 1; end
 
         //==================== T3：解码看门狗（force cd_done=0）====================
-        @(negedge clk); auth_start = 1'b1;
+        // A-P1 修复：tx_byte_count 跨轮泄漏致假覆盖——必须清零后真实等待
+        @(negedge clk); tx_byte_count = 0; auth_start = 1'b1;
         @(negedge clk); auth_start = 1'b0;
         guard = 0;
         while (tx_byte_count < 16 && guard < 10000) begin @(posedge clk); guard = guard + 1; end
-        repeat (2) @(negedge clk);
+        if (guard >= 10000) begin errors = errors + 1; $display("[T3] ACCESS TX 超时"); end
         tx_byte_count = 0;
+        // 等 FSM 到 S_WAIT_CHALL（state=2）再注帧（盲注会被 CALC_R2 吞掉）
+        guard = 0;
+        while (dut.state !== 4'd2 && guard < 10000) begin @(posedge clk); guard = guard + 1; end
+        if (guard >= 10000) begin errors = errors + 1; $display("[T3] 未到达 WAIT_CHALL"); end
+        @(negedge clk);
         force cd_done = 1'b0;
         feed_frame(24'h0091, 8'd32);
+        // 断言曾进入 S_PUF_DECODE（state=13）：force 卡死后看门狗在 PUF 态触发
+        t3_entered_decode = 1'b0;
         guard = 0;
-        while (auth_result !== 2'd3 && guard < 10000) begin @(posedge clk); guard = guard + 1; end
+        while (dut.state !== 4'd11 && guard < 20000) begin
+            @(posedge clk);
+            if (dut.state === 4'd13) t3_entered_decode = 1'b1;
+            guard = guard + 1;
+        end
         release cd_done;
-        if (auth_result === 2'd3) $display("[T3 PASS] 解码看门狗：cd_done 卡死 → BLOCKED（%0d 拍内）", guard);
-        else begin errors = errors + 1; $display("[T3 FAIL] 解码看门狗未触发 result=%0d", auth_result); end
-        while (auth_busy) @(posedge clk);   // 等 BLOCKED→IDLE
+        if (t3_entered_decode && guard > 500)
+            $display("[T3 PASS] cd_done 卡死→S_PUF_DECODE 确认进入→PUF_WD(%0d 拍)→BLOCKED", guard);
+        else begin errors = errors + 1; $display("[T3 FAIL] entered_decode=%b guard=%0d", t3_entered_decode, guard); end
+        while (auth_busy) @(posedge clk);
 
         //==================== T4：测量看门狗（force ra_done=0）====================
-        @(negedge clk); auth_start = 1'b1;
+        @(negedge clk); tx_byte_count = 0; auth_start = 1'b1;
         @(negedge clk); auth_start = 1'b0;
         guard = 0;
         while (tx_byte_count < 16 && guard < 10000) begin @(posedge clk); guard = guard + 1; end
-        repeat (2) @(negedge clk);
+        if (guard >= 10000) begin errors = errors + 1; $display("[T4] ACCESS TX 超时"); end
         tx_byte_count = 0;
+        guard = 0;
+        while (dut.state !== 4'd2 && guard < 10000) begin @(posedge clk); guard = guard + 1; end
+        if (guard >= 10000) begin errors = errors + 1; $display("[T4] 未到达 WAIT_CHALL"); end
+        @(negedge clk);
         force ra_done = 1'b0;
         feed_frame(24'h0091, 8'd32);
+        // 断言曾进入 S_PUF_MEASURE（state=14）
+        t4_entered_measure = 1'b0;
         guard = 0;
-        while (auth_result !== 2'd3 && guard < 10000) begin @(posedge clk); guard = guard + 1; end
+        while (dut.state !== 4'd11 && guard < 20000) begin
+            @(posedge clk);
+            if (dut.state === 4'd14) t4_entered_measure = 1'b1;
+            guard = guard + 1;
+        end
         release ra_done;
-        if (auth_result === 2'd3) $display("[T4 PASS] 测量看门狗：ra_done 卡死 → BLOCKED（%0d 拍内）", guard);
-        else begin errors = errors + 1; $display("[T4 FAIL] 测量看门狗未触发 result=%0d", auth_result); end
+        if (t4_entered_measure && guard > 500)
+            $display("[T4 PASS] ra_done 卡死→S_PUF_MEASURE 确认进入→PUF_WD(%0d 拍)→BLOCKED", guard);
+        else begin errors = errors + 1; $display("[T4 FAIL] entered_measure=%b guard=%0d", t4_entered_measure, guard); end
 
         //==================== 汇总 ====================
         if (errors == 0)
