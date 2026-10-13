@@ -11,12 +11,18 @@
 //   SEQ: frame_done 后自增（§6.1-3）
 //   超时: 每个等待态独立计时（§5 的 2s）
 //
-// W3 简化（PUF 桩）：种子处理 = 种子直通做响应（协议闭环优先）。
-//   W3+ 升级路径：替换 compute_response() 为 challenge_decode + ro_array。
+// W4 B5a：PUF 真实接入。S_PROC_SEEDS/S_PROC_EXTRA（种子直通桩）已由
+//   S_PUF_DECODE → S_PUF_MEASURE → S_PUF_PACK 三态取代（契约 §8 语义）：
+//   读种子→challenge_decode 配对表→热稳定 7 窗+测量 1 窗（W2 冻结口径）
+//   →64 对比较位打包为 R1。时延 ≈ 4×2058 + 8×MEASURE_CYCLES 拍。
 //============================================================================
 
 module terminal_fsm # (
-    parameter TIMEOUT_CYCLES = 32'd50_000_000     // 0.5s @ 100MHz（板上用 200M=2s）
+    parameter TIMEOUT_CYCLES   = 32'd50_000_000,  // 0.5s @ 100MHz（板上用 200M=2s）
+    parameter [4:0] WARMUP_WINS = 5'd7,            // W2 冻结：7 轮热稳定窗（逐窗丢弃）
+    parameter MEASURE_CYCLES   = 32'd100_000,     // 1ms 测量窗 @100MHz（TB 缩小加速）
+    // S_PUF_* 三态共享看门狗预算：热窗+测量 + 4 种子解码（4×~2058）+ 裕量
+    parameter PUF_WD_CYCLES    = (WARMUP_WINS + 1) * MEASURE_CYCLES + 32'd32768
 ) (
     input  wire        clk       ,
     input  wire        rst       ,
@@ -32,6 +38,16 @@ module terminal_fsm # (
     input  wire [63:0] c2_boot_seed,               // 字节 j = bits[8j+:8]
     input  wire [95:0] device_key_in,              // 运行时密钥（use_ext_key=0 时忽略）
     input  wire        use_ext_key,                // 0=DEVICE_KEY 参数（TB/演示），1=运行时密钥
+    // -- PUF 子系统（W4 B5a：challenge_decode + ro_array 由上层例化互连）---
+    output wire        cd_start,                   // 解码启动（单拍）
+    output wire [63:0] cd_seed,
+    input  wire [511:0] cd_pair_table,             // 8 轮 × 8 对 × 8bit（契约 §8 格式）
+    input  wire        cd_done,
+    output wire        ra_measure_en,              // 测量窗使能（热窗+末窗）
+    output wire        ra_ring_en,                 // 环振使能（功耗管理）
+    input  wire        ra_busy,
+    input  wire        ra_done,
+    input  wire [255:0] ra_ring_freq,              // 16 × 16bit 频率锁存
     // -- RX 接口（frame_parser）----------------------------------------------
     input  wire [23:0] fp_msg_id ,                 // 消息 ID（fp_frame_ok_pulse 时有效）
     input  wire [7:0]  fp_pay_len,
@@ -61,16 +77,19 @@ module terminal_fsm # (
     localparam [3:0] S_IDLE        = 4'd0 ,   // 空闲等 auth_start
                      S_TX_ACCESS   = 4'd1 ,   // 发 ACCESS_REQUEST
                      S_WAIT_CHALL  = 4'd2 ,   // 等 CHALLENGE 帧
-                     S_PROC_SEEDS  = 4'd3 ,   // 读 4 种子 → 生成 4 响应
+                     // 4'd3 = 原 S_PROC_SEEDS（W3 种子直通桩），W4 B5a 退役
                      S_TX_R1       = 4'd4 ,   // 发 RESPONSE_R1（4×8B）
                      S_WAIT_RESULT = 4'd5 ,   // 等 RESULT 或 EXTRA_CHALLENGE
                      S_VERIFY_R2   = 4'd6 ,   // 验证 R2
                      S_TX_CONFIRM  = 4'd7 ,   // 发 CONFIRM
                      S_SESSION     = 4'd8 ,   // 认证通过
-                     S_PROC_EXTRA  = 4'd9 ,   // 灰区：读 3 种子
+                     // 4'd9 = 原 S_PROC_EXTRA（W3 灰区桩），W4 B5a 退役
                      S_TX_R1_EXTRA = 4'd10,   // 发 RESPONSE_R1（3×8B=24B）
                      S_BLOCKED     = 4'd11,   // 认证失败阻断
-                     S_CALC_R2     = 4'd12;   // 启动 Speck 计算 R2（共享起始状态）
+                     S_CALC_R2     = 4'd12,   // 启动 Speck 计算 R2（共享起始状态）
+                     S_PUF_DECODE  = 4'd13,   // W4：读种子 → 解码配对表 ×4/×3
+                     S_PUF_MEASURE = 4'd14,   // W4：热稳定 7 窗 + 测量 1 窗
+                     S_PUF_PACK    = 4'd15;   // W4：64 对比较位 → resp_buf
 
     reg [3:0] state = S_IDLE;
 
@@ -87,8 +106,84 @@ module terminal_fsm # (
     reg [5:0]  tx_len  = 6'd0;                   // 本次发送载荷长度
     reg [5:0]  tx_idx  = 6'd0;                   // 发送索引
 
-    // PUF 响应缓冲（4 种子 → 4×8B 响应 = 32B，W3 桩 = 种子直通）
+    // PUF 响应缓冲（4 种子 → 4×8B = 32B；W4 B5a = 真实比较位打包）
     reg [7:0]  resp_buf [0:31];
+
+    // -- W4 B5a PUF 子流程寄存器 ------------------------------------------
+    reg [2:0]   puf_seed_idx  = 3'd0;     // 当前种子（0..3 / 灰区 0..2）
+    reg [63:0]  puf_seed_asym = 64'd0;    // 种子逐字节装配暂存
+    reg         puf_dec_busy  = 1'b0;     // challenge_decode 在飞
+    reg         puf_extra     = 1'b0;     // 灰区轮（3 种子 / 24B）
+    reg [511:0] puf_tbl_0 = 512'd0;       // 4 张配对表捕获
+    reg [511:0] puf_tbl_1 = 512'd0;
+    reg [511:0] puf_tbl_2 = 512'd0;
+    reg [511:0] puf_tbl_3 = 512'd0;
+    reg [255:0] puf_freqs = 256'd0;       // 末窗频率锁存
+    reg [4:0]   puf_win_idx  = 5'd0;      // 热稳定窗计数（0..WARMUP_WINS）
+    reg [31:0]  puf_win_cnt  = 32'd0;     // 窗内拍计数
+    reg         puf_win_wait = 1'b0;      // 窗已关，等 ra_done
+    reg [5:0]   puf_pack_idx = 6'd0;      // 打包字节索引（0..31 / 0..23）
+    reg         puf_cd_start_r = 1'b0;    // cd_start 单拍
+    reg [63:0]  puf_cd_seed_r  = 64'd0;
+    reg         puf_measure_r  = 1'b0;    // ra_measure_en 寄存输出
+    reg         puf_ring_en_r  = 1'b0;    // ra_ring_en 寄存输出
+
+    assign cd_start     = puf_cd_start_r;
+    assign cd_seed      = puf_cd_seed_r;
+    assign ra_measure_en= puf_measure_r;
+    assign ra_ring_en   = puf_ring_en_r;
+
+    // 打包组合逻辑：byte = seed s 的 round j 8 个比较位（契约 §8 位映射）
+    // pack_idx[5:3] = 种子 s，pack_idx[2:0] = 轮 j；bit(7-p) = bit(j,p)
+    // = (freq[B] > freq[A])。表选择 + 变基索引部分选择（+: 语法）。
+    reg [511:0] puf_tbl_sel;
+    reg [3:0]   puf_nib_a, puf_nib_b;
+    reg [7:0]   puf_pack_byte;
+    always @* begin
+        case (puf_pack_idx[5:3])
+            3'd0:    puf_tbl_sel = puf_tbl_0;
+            3'd1:    puf_tbl_sel = puf_tbl_1;
+            3'd2:    puf_tbl_sel = puf_tbl_2;
+            default: puf_tbl_sel = puf_tbl_3;
+        endcase
+        puf_pack_byte = 8'd0;
+        puf_nib_a = 4'd0;
+        puf_nib_b = 4'd0;
+        // 轮 j 的配对表基址 = j*64；对 p 的条目 = [j*64 + p*8 +: 8]
+        puf_nib_a = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} +: 4];               // 环 A（低 4bit）
+        puf_nib_b = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 4 +: 4];           // 环 B（高 4bit）
+        if (puf_freqs[{puf_nib_b, 4'd0} +: 16] > puf_freqs[{puf_nib_a, 4'd0} +: 16])
+            puf_pack_byte[7] = 1'b1;   // pair 0 → MSB（R1[63-8j-0]）
+        // 其余 7 对需逐对展开（组合块内不可变址循环——用展开式）
+        puf_nib_a = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 8  +: 4];
+        puf_nib_b = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 12 +: 4];
+        if (puf_freqs[{puf_nib_b, 4'd0} +: 16] > puf_freqs[{puf_nib_a, 4'd0} +: 16])
+            puf_pack_byte[6] = 1'b1;
+        puf_nib_a = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 16 +: 4];
+        puf_nib_b = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 20 +: 4];
+        if (puf_freqs[{puf_nib_b, 4'd0} +: 16] > puf_freqs[{puf_nib_a, 4'd0} +: 16])
+            puf_pack_byte[5] = 1'b1;
+        puf_nib_a = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 24 +: 4];
+        puf_nib_b = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 28 +: 4];
+        if (puf_freqs[{puf_nib_b, 4'd0} +: 16] > puf_freqs[{puf_nib_a, 4'd0} +: 16])
+            puf_pack_byte[4] = 1'b1;
+        puf_nib_a = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 32 +: 4];
+        puf_nib_b = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 36 +: 4];
+        if (puf_freqs[{puf_nib_b, 4'd0} +: 16] > puf_freqs[{puf_nib_a, 4'd0} +: 16])
+            puf_pack_byte[3] = 1'b1;
+        puf_nib_a = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 40 +: 4];
+        puf_nib_b = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 44 +: 4];
+        if (puf_freqs[{puf_nib_b, 4'd0} +: 16] > puf_freqs[{puf_nib_a, 4'd0} +: 16])
+            puf_pack_byte[2] = 1'b1;
+        puf_nib_a = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 48 +: 4];
+        puf_nib_b = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 52 +: 4];
+        if (puf_freqs[{puf_nib_b, 4'd0} +: 16] > puf_freqs[{puf_nib_a, 4'd0} +: 16])
+            puf_pack_byte[1] = 1'b1;
+        puf_nib_a = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 56 +: 4];
+        puf_nib_b = puf_tbl_sel[{puf_pack_idx[2:0], 6'd0} + 60 +: 4];
+        if (puf_freqs[{puf_nib_b, 4'd0} +: 16] > puf_freqs[{puf_nib_a, 4'd0} +: 16])
+            puf_pack_byte[0] = 1'b1;
+    end
 
     // C2 反挑战计数器 + Speck R2（防重放）
     // C2 每次 auth_start 递增 → R2 = Speck(K,C2) 也变 → 旧 R2 无法重放
@@ -163,7 +258,8 @@ module terminal_fsm # (
     assign auth_busy  = (state != S_IDLE) && (state != S_SESSION);
     // 载荷保护：S_PROC_SEEDS/S_PROC_EXTRA/S_VERIFY_R2 期间读 fp 载荷缓冲，
     // 阻止 frame_parser 接收新帧覆盖缓冲（并发竞态修复）
-    assign fp_rx_inhibit = (state == S_CALC_R2) || (state == S_PROC_SEEDS) || (state == S_PROC_EXTRA)
+    assign fp_rx_inhibit = (state == S_CALC_R2) || (state == S_PUF_DECODE)
+                        || (state == S_PUF_MEASURE) || (state == S_PUF_PACK)
                         || (state == S_VERIFY_R2);
     assign auth_result = result_r;
     assign mf_sysid  = 8'h01;
@@ -175,7 +271,7 @@ module terminal_fsm # (
     always @(posedge clk) begin
         if (rst)                       rx_ok_latch <= 1'b0;
         else if (fp_frame_ok)          rx_ok_latch <= 1'b1;
-        else if (state == S_PROC_SEEDS || state == S_PROC_EXTRA ||
+        else if (state == S_PUF_DECODE || state == S_PUF_MEASURE || state == S_PUF_PACK ||
                  state == S_WAIT_CHALL || state == S_WAIT_RESULT)
             ; // 在等待态保持
         else                           rx_ok_latch <= 1'b0;  // 处理完自动清
@@ -221,8 +317,10 @@ module terminal_fsm # (
             mf_start     <= 1'b0;
             mf_pay_valid <= 1'b0;
 
-            // 超时计数（所有非 IDLE/SESSION/TX 态共享）
-            if (state == S_WAIT_CHALL || state == S_WAIT_RESULT) begin
+            // 超时计数：WAIT 态对 TIMEOUT_CYCLES；S_PUF_* 态对 PUF_WD_CYCLES
+            // （W4-P2 审查 P2R-F4：原 2s 只挂等待态，PUF 三态自带看门狗）
+            if (state == S_WAIT_CHALL || state == S_WAIT_RESULT ||
+                state == S_PUF_DECODE || state == S_PUF_MEASURE || state == S_PUF_PACK) begin
                 timeout_cnt <= timeout_cnt + 32'd1;
             end else begin
                 timeout_cnt <= 32'd0;
@@ -299,7 +397,10 @@ module terminal_fsm # (
                         // rx_ok_latch 不在此清零——锁存块的"非等待态清零"已覆盖
                         // （消除多驱动：A-P0-1 修复）
                         fp_rd_addr  <= 5'd0;
-                        state       <= S_PROC_SEEDS;
+                        puf_extra   <= 1'b0;         // W4：首轮 4 种子
+                        puf_seed_idx<= 3'd0;
+                        puf_dec_busy<= 1'b0;
+                        state       <= S_PUF_DECODE;
                     end else if (timeout_cnt >= TIMEOUT_CYCLES) begin
                         state    <= S_BLOCKED;
                         result_r <= 2'd3;
@@ -307,17 +408,104 @@ module terminal_fsm # (
                 end
 
                 //====================================================
-                // 处理 4 个种子（W3 桩：种子直通做响应）
-                // frame_parser 载荷 = 4×8B = 32B，逐字节读
+                // W4 B5a：读种子 → 解码配对表（首轮 4 种子 / 灰区 3 种子）
+                //   阶段 A：逐字节读 fp 载荷装配 64-bit 种子（第 8 字节
+                //           拍触发 cd_start；字节序 = 载荷序，MSB 在前，
+                //           与 puf_model 大端装配一致）
+                //   阶段 B：等 cd_done 捕获 512-bit 配对表（~2058 拍/种子）
                 //====================================================
-                S_PROC_SEEDS: begin
-                    // 逐字节读（fp_rd_addr 是 5-bit，31+1 回绕到 0！
-                    // 因此用"==31 即最后一个"判断，不依赖溢出）
-                    resp_buf[fp_rd_addr] <= fp_rd_data;
-                    if (fp_rd_addr == 5'd31) begin
-                        state <= S_TX_R1;            // 第 32 字节处理完，退出
-                    end else begin
+                S_PUF_DECODE: begin
+                    if (timeout_cnt >= PUF_WD_CYCLES) begin
+                        puf_dec_busy  <= 1'b0;
+                        puf_ring_en_r <= 1'b0;
+                        state    <= S_BLOCKED;
+                        result_r <= 2'd3;
+                    end else if (!puf_dec_busy) begin
+                        // 阶段 A：装配 + 启动解码
+                        puf_seed_asym <= {puf_seed_asym[55:0], fp_rd_data};
+                        if (fp_rd_addr[2:0] == 3'd7) begin
+                            puf_cd_seed_r <= {puf_seed_asym[55:0], fp_rd_data};
+                            puf_cd_start_r<= 1'b1;
+                            puf_dec_busy  <= 1'b1;
+                        end
                         fp_rd_addr <= fp_rd_addr + 5'd1;
+                    end else begin
+                        // 阶段 B：解码在飞，等 done 捕表
+                        puf_cd_start_r <= 1'b0;
+                        if (cd_done) begin
+                            case (puf_seed_idx[1:0])
+                                2'd0:    puf_tbl_0 <= cd_pair_table;
+                                2'd1:    puf_tbl_1 <= cd_pair_table;
+                                2'd2:    puf_tbl_2 <= cd_pair_table;
+                                default: puf_tbl_3 <= cd_pair_table;
+                            endcase
+                            puf_dec_busy <= 1'b0;
+                            puf_seed_idx <= puf_seed_idx + 3'd1;
+                            if (( puf_extra && puf_seed_idx == 3'd2) ||
+                                (!puf_extra && puf_seed_idx == 3'd3)) begin
+                                // 全部配对表就绪 → 热稳定 + 测量
+                                state         <= S_PUF_MEASURE;
+                                puf_win_idx   <= 5'd0;
+                                puf_win_cnt   <= 32'd0;
+                                puf_win_wait  <= 1'b0;
+                                puf_ring_en_r <= 1'b1;
+                                puf_measure_r <= 1'b0;
+                            end
+                        end
+                    end
+                end
+
+                //====================================================
+                // W4 B5a：热稳定 WARMUP_WINS 窗（丢弃）+ 末窗测量
+                // （W2 冻结口径 w2_top.v:17-19；开振即测会威胁 G2 ≥97%）
+                //====================================================
+                S_PUF_MEASURE: begin
+                    if (timeout_cnt >= PUF_WD_CYCLES) begin
+                        puf_measure_r <= 1'b0;
+                        puf_ring_en_r <= 1'b0;
+                        state    <= S_BLOCKED;
+                        result_r <= 2'd3;
+                    end else if (!puf_win_wait) begin
+                        // 窗内计数（ra_measure_en 高）
+                        puf_measure_r <= 1'b1;
+                        if (puf_win_cnt >= MEASURE_CYCLES - 32'd1) begin
+                            puf_measure_r <= 1'b0;      // 关窗：ro_array 窗末锁存
+                            puf_win_cnt   <= 32'd0;
+                            puf_win_wait  <= 1'b1;
+                        end else begin
+                            puf_win_cnt <= puf_win_cnt + 32'd1;
+                        end
+                    end else begin
+                        // 窗已关，等 ra_done 单拍（窗计数=末窗则锁存频率）
+                        if (ra_done) begin
+                            if (puf_win_idx >= WARMUP_WINS) begin
+                                puf_freqs     <= ra_ring_freq;  // 末窗频率
+                                puf_ring_en_r <= 1'b0;           // 功耗：测量完停振
+                                puf_pack_idx  <= 6'd0;
+                                state         <= S_PUF_PACK;
+                            end else begin
+                                puf_win_idx  <= puf_win_idx + 5'd1;
+                                puf_win_wait <= 1'b0;            // 开下一热窗
+                            end
+                        end
+                    end
+                end
+
+                //====================================================
+                // W4 B5a：64 对比较位打包 → resp_buf（契约 §8 位映射）
+                //   首轮 32B → S_TX_R1；灰区 24B → S_TX_R1_EXTRA
+                //====================================================
+                S_PUF_PACK: begin
+                    if (timeout_cnt >= PUF_WD_CYCLES) begin
+                        state    <= S_BLOCKED;
+                        result_r <= 2'd3;
+                    end else begin
+                        resp_buf[puf_pack_idx[4:0]] <= puf_pack_byte;
+                        if (puf_extra ? (puf_pack_idx == 6'd23) : (puf_pack_idx == 6'd31)) begin
+                            state <= puf_extra ? S_TX_R1_EXTRA : S_TX_R1;
+                        end else begin
+                            puf_pack_idx <= puf_pack_idx + 6'd1;
+                        end
                     end
                 end
 
@@ -329,9 +517,12 @@ module terminal_fsm # (
                         fp_rd_addr  <= 5'd0;
                         state       <= S_VERIFY_R2;
                     end else if (rx_ok_latch && fp_msg_id == 24'h0095 && fp_pay_len == 8'd24) begin
-                        // EXTRA_CHALLENGE：灰区加测
+                        // EXTRA_CHALLENGE：灰区加测（W4：3 种子同 PUF 管线）
                         fp_rd_addr  <= 5'd0;
-                        state       <= S_PROC_EXTRA;
+                        puf_extra   <= 1'b1;
+                        puf_seed_idx<= 3'd0;
+                        puf_dec_busy<= 1'b0;
+                        state       <= S_PUF_DECODE;
                     end else if (timeout_cnt >= TIMEOUT_CYCLES) begin
                         state    <= S_BLOCKED;
                         result_r <= 2'd3;
@@ -339,19 +530,12 @@ module terminal_fsm # (
                 end
 
                 //====================================================
-                // 处理 3 个种子（灰区加测，W3 桩）
+                // （原 S_PROC_EXTRA 灰区桩已由 S_PUF_DECODE/MEASURE/PACK
+                //   复用路径取代——puf_extra=1 时 3 种子 24B → S_TX_R1_EXTRA）
                 //====================================================
-                S_PROC_EXTRA: begin
-                    resp_buf[fp_rd_addr] <= fp_rd_data;
-                    if (fp_rd_addr == 5'd23) begin
-                        state <= S_TX_R1_EXTRA;      // 第 24 字节处理完
-                    end else begin
-                        fp_rd_addr <= fp_rd_addr + 5'd1;
-                    end
-                end
 
                 //====================================================
-                // 验证 R2（W3 简化：比较载荷 [2..9] 与期望值）
+                // 验证 R2（比较载荷 [2..9] 与期望值）
                 //====================================================
                 S_VERIFY_R2: begin
                     // 载荷布局：result(1)+hd(1)+r2(8) = 地址 [0]=result, [1]=hd, [2..9]=r2

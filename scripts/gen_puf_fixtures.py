@@ -17,10 +17,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import random
+
 from src.python.evaluation.puf_model import (  # noqa: E402
+    DEFAULT_FREQ_MAX,
+    DEFAULT_FREQ_MIN,
     GOLDEN_SEED_A,
     GOLDEN_SEED_B,
     GOLDEN_SEED_C,
+    N_RINGS,
     pair_table_hex,
 )
 
@@ -39,13 +44,32 @@ def golden() -> int:
     return 0
 
 
+def tb_mem() -> int:
+    """Write the deterministic TB frequency fixture consumed by ro_array_sim.
+
+    Fixed master seed => the same 16 frequencies everywhere (RTL TBs, PC
+    tests, interop harness): reproducibility beats realism in simulation.
+    """
+    rng = random.Random(0x0044_3450)  # "W4PUF" master seed (deterministic)
+    freqs = sorted(rng.sample(range(DEFAULT_FREQ_MIN, DEFAULT_FREQ_MAX + 1), N_RINGS))
+    out = ROOT / "sim" / "testvectors" / "puf_tb_freqs.mem"
+    out.write_text("\n".join(f"{f:04X}" for f in freqs) + "\n", encoding="ascii")
+    print(f"wrote {out} (16 freqs, deterministic master seed)")
+    print("freqs:", " ".join(str(f) for f in freqs))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--golden", action="store_true",
                         help="print frozen pair-table fixtures")
+    parser.add_argument("--tb-mem", action="store_true",
+                        help="write sim/testvectors/puf_tb_freqs.mem (ro_array_sim)")
     args = parser.parse_args()
     if args.golden:
         return golden()
+    if args.tb_mem:
+        return tb_mem()
     parser.print_help()
     return 2
 

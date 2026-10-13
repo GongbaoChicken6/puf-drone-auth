@@ -46,13 +46,49 @@ module tb_gap_regression;
     integer tx_byte_count = 0;
     reg [7:0] tx_captured [0:63];
 
-    terminal_fsm # (.TIMEOUT_CYCLES(1000)) dut (
+
+    //------------------------------------------------------------------------
+    // W4 B5a PUF 子系统（challenge_decode + 行为级 ro_array_sim）
+    //------------------------------------------------------------------------
+    wire        cd_start, cd_done;
+    wire [63:0] cd_seed;
+    wire [511:0] cd_pair_table;
+    wire        ra_measure_en, ra_ring_en, ra_busy, ra_done;
+    wire [255:0] ra_ring_freq;
+
+    challenge_decode # (
+        .N_ROUNDS ( 8 ), .N_RINGS ( 16 ), .IDX_W ( 4 )
+    ) u_cd (
+        .clk         (clk           ),
+        .rst         (rst           ),
+        .start       (cd_start      ),
+        .seed        (cd_seed       ),
+        .pair_table  (cd_pair_table ),
+        .done        (cd_done       )
+    );
+
+    ro_array_sim # (
+        .N_RINGS ( 16 ), .CNT_W ( 16 )
+    ) u_ro_array (
+        .clk         (clk           ),
+        .rst         (rst           ),
+        .measure_en  (ra_measure_en ),
+        .ring_en     (ra_ring_en    ),
+        .busy        (ra_busy       ),
+        .done        (ra_done       ),
+        .ring_freq   (ra_ring_freq  )
+    );
+
+    terminal_fsm # (.TIMEOUT_CYCLES(1000), .MEASURE_CYCLES(32'd64)) dut (
         .clk(clk), .rst(rst), .auth_start(auth_start), .terminal_id(terminal_id),
         .auth_busy(auth_busy), .auth_result(auth_result),
         // W4-T2 可注入端口 tie-off（黄金零改动）
         .c2_boot_seed(64'hA7A6_A5A4_A3A2_A1A0),
         .device_key_in(96'h1312_1110_0B0A_0908_0302_0100),
         .use_ext_key(1'b0),
+        .cd_start(cd_start), .cd_seed(cd_seed), .cd_pair_table(cd_pair_table),
+        .cd_done(cd_done), .ra_measure_en(ra_measure_en), .ra_ring_en(ra_ring_en),
+        .ra_busy(ra_busy), .ra_done(ra_done), .ra_ring_freq(ra_ring_freq),
         .fp_msg_id(fp_msg_id), .fp_pay_len(fp_pay_len),
         .fp_frame_ok(fp_frame_ok), .fp_frame_err(fp_frame_err),
         .fp_rd_addr(fp_rd_addr), .fp_rd_data(fp_rd_data),
@@ -287,7 +323,10 @@ module tb_gap_regression;
     end
 
     initial begin
-        #500_000;
+        // W4 B5a：PUF 真实解码 ~82us/认证（4 种子 × 2058 拍）+ 灰区 62us，
+    // 七轮认证累计 >1ms——原 500us 预算按种子直通桩的即时路径设定，
+    // 提高到 3ms（仅放宽看门狗，不改任何断言语义）
+    #3_000_000;
         $display("[WATCHDOG] TIMEOUT result=%0d busy=%b", auth_result, auth_busy);
         $display("TB_GAP_REGRESSION_FAIL (watchdog)");
         $finish;

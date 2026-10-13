@@ -11,16 +11,18 @@
 //   - LED 心跳：实证时钟频率
 //   - UART 引脚：radio_txd/radio_rxd（XDC 待板级连接确认后填入）
 //
-// PUF：W3 桩（terminal_fsm 内部种子直通）。W4 集成 ro_array 时：
-//   1. 在此例化 ro_array + challenge_decode
-//   2. 替换 terminal_fsm 的 S_PROC_SEEDS 为真实测量调用
-//   3. 添加 w2_waiver.xdc 组合环豁免
+// PUF（W4 B5a 已接入）：本顶层例化 challenge_decode + ro_array 并互连到
+//   terminal_fsm 的 PUF 子接口（decode→热稳定 7 窗→测量→打包，契约 §8）。
+//   仿真（xvlog -d PUF_MODEL_SIM）用 ro_array_sim 行为级替身（真环零延迟
+//   不可仿，板上才验证物理指标）；上板走真 ro_array + w2_waiver.xdc。
 //============================================================================
 
 module w3_top # (
     parameter FREQ_HZ       = 100_000_000 ,  // 系统时钟（ZC702 PL 侧）
     parameter BAUD          = 115_200     ,  // UART 波特率
-    parameter TIMEOUT_S     = 2             // 协议超时（秒，契约 §5 建议 2s）
+    parameter TIMEOUT_S     = 2,            // 协议超时（秒，契约 §5 建议 2s）
+    parameter MEASURE_CYCLES = FREQ_HZ/1000,// W4：PUF 测量窗（1ms；TB 可缩小加速）
+    parameter [4:0] WARMUP_WINS = 5'd7      // W4：热稳定窗（W2 冻结 7 轮）
 ) (
     input  wire        sys_clk      ,   // 系统时钟（100MHz，XDC 约束待填）
     input  wire        sys_rst_n    ,   // 复位按键（低有效，需消抖）
@@ -136,6 +138,13 @@ module w3_top # (
     wire [7:0]  uart_rx_byte;
     wire        uart_rx_valid;
 
+    // terminal_fsm ↔ PUF 子系统（W4 B5a）
+    wire        cd_start, cd_done;
+    wire [63:0] cd_seed;
+    wire [511:0] cd_pair_table;
+    wire        ra_measure_en, ra_ring_en, ra_busy, ra_done;
+    wire [255:0] ra_ring_freq;
+
     //========================================================================
     // 模块例化
     //========================================================================
@@ -144,7 +153,9 @@ module w3_top # (
     // 协议状态机（编排所有模块）
     //------------------------------------------------------------------------
     terminal_fsm # (
-        .TIMEOUT_CYCLES (TIMEOUT_CYCLES)
+        .TIMEOUT_CYCLES (TIMEOUT_CYCLES),
+        .WARMUP_WINS    (WARMUP_WINS),
+        .MEASURE_CYCLES (MEASURE_CYCLES)
     ) u_fsm (
         .clk           (sys_clk       ),
         .rst           (rst           ),
@@ -156,6 +167,15 @@ module w3_top # (
         .c2_boot_seed  (64'hA7A6_A5A4_A3A2_A1A0),   // 字节 A0..A7（c2_counter[j]=A0+j）
         .device_key_in (96'h1312_1110_0B0A_0908_0302_0100),
         .use_ext_key   (1'b0),
+        .cd_start      (cd_start     ),
+        .cd_seed       (cd_seed      ),
+        .cd_pair_table (cd_pair_table),
+        .cd_done       (cd_done      ),
+        .ra_measure_en (ra_measure_en),
+        .ra_ring_en    (ra_ring_en   ),
+        .ra_busy       (ra_busy      ),
+        .ra_done       (ra_done      ),
+        .ra_ring_freq  (ra_ring_freq ),
         .fp_msg_id     (fp_msg_id     ),
         .fp_pay_len    (fp_pay_len    ),
         .fp_frame_ok   (fp_frame_ok   ),
@@ -176,6 +196,52 @@ module w3_top # (
         .mf_frame_done (mf_done       ),
         .mf_frame_err  (mf_err        )
     );
+
+    //------------------------------------------------------------------------
+    // PUF 子系统（W4 B5a）：挑战解码器 + 环振阵列
+    // 仿真用行为级替身（-d PUF_MODEL_SIM），上板用真阵列（组合环设计使然，
+    // 由 build_w3_board.tcl 加载 w2_waiver.xdc 豁免 LUTLP-1）
+    //------------------------------------------------------------------------
+    challenge_decode # (
+        .N_ROUNDS ( 8 ),
+        .N_RINGS  ( 16 ),
+        .IDX_W    ( 4 )
+    ) u_cd (
+        .clk         (clk          ),
+        .rst         (rst          ),
+        .start       (cd_start     ),
+        .seed        (cd_seed      ),
+        .pair_table  (cd_pair_table),
+        .done        (cd_done      )
+    );
+`ifdef PUF_MODEL_SIM
+    ro_array_sim # (
+        .N_RINGS ( 16 ),
+        .CNT_W   ( 16 )
+    ) u_ro_array (
+        .clk         (clk          ),
+        .rst         (rst          ),
+        .measure_en  (ra_measure_en),
+        .ring_en     (ra_ring_en   ),
+        .busy        (ra_busy      ),
+        .done        (ra_done      ),
+        .ring_freq   (ra_ring_freq )
+    );
+`else
+    ro_array # (
+        .N_RINGS    ( 16 ),
+        .CNT_W      ( 16 ),
+        .DIV_STAGES ( 5 )
+    ) u_ro_array (
+        .clk         (clk          ),
+        .rst         (rst          ),
+        .measure_en  (ra_measure_en),
+        .ring_en     (ra_ring_en   ),
+        .busy        (ra_busy      ),
+        .done        (ra_done      ),
+        .ring_freq   (ra_ring_freq )
+    );
+`endif
 
     //------------------------------------------------------------------------
     // TX 帧构造器

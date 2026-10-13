@@ -47,7 +47,40 @@ module tb_level3_protocol;
     //------------------------------------------------------------------------
     // 真实 terminal_fsm
     //------------------------------------------------------------------------
-    terminal_fsm # (.TIMEOUT_CYCLES(2000)) u_fsm (
+
+    //------------------------------------------------------------------------
+    // W4 B5a PUF 子系统（challenge_decode + 行为级 ro_array_sim）
+    //------------------------------------------------------------------------
+    wire        cd_start, cd_done;
+    wire [63:0] cd_seed;
+    wire [511:0] cd_pair_table;
+    wire        ra_measure_en, ra_ring_en, ra_busy, ra_done;
+    wire [255:0] ra_ring_freq;
+
+    challenge_decode # (
+        .N_ROUNDS ( 8 ), .N_RINGS ( 16 ), .IDX_W ( 4 )
+    ) u_cd (
+        .clk         (clk           ),
+        .rst         (rst           ),
+        .start       (cd_start      ),
+        .seed        (cd_seed       ),
+        .pair_table  (cd_pair_table ),
+        .done        (cd_done       )
+    );
+
+    ro_array_sim # (
+        .N_RINGS ( 16 ), .CNT_W ( 16 )
+    ) u_ro_array (
+        .clk         (clk           ),
+        .rst         (rst           ),
+        .measure_en  (ra_measure_en ),
+        .ring_en     (ra_ring_en    ),
+        .busy        (ra_busy       ),
+        .done        (ra_done       ),
+        .ring_freq   (ra_ring_freq  )
+    );
+
+    terminal_fsm # (.TIMEOUT_CYCLES(2000), .MEASURE_CYCLES(32'd64)) u_fsm (
         .clk           (clk           ),
         .rst           (rst           ),
         .auth_start    (auth_start    ),
@@ -58,6 +91,15 @@ module tb_level3_protocol;
         .c2_boot_seed  (64'hA7A6_A5A4_A3A2_A1A0),
         .device_key_in (96'h1312_1110_0B0A_0908_0302_0100),
         .use_ext_key   (1'b0),
+        .cd_start      (cd_start     ),
+        .cd_seed       (cd_seed      ),
+        .cd_pair_table (cd_pair_table),
+        .cd_done       (cd_done      ),
+        .ra_measure_en (ra_measure_en),
+        .ra_ring_en    (ra_ring_en   ),
+        .ra_busy       (ra_busy      ),
+        .ra_done       (ra_done      ),
+        .ra_ring_freq  (ra_ring_freq ),
         .fp_msg_id     (fp_msg_id     ),
         .fp_pay_len    (fp_pay_len    ),
         .fp_frame_ok   (fp_frame_ok   ),

@@ -120,7 +120,8 @@ $tbs = @(
     "sim\tb\tb_challenge_decode.v",
     "sim\tb\tb_crc16.v", "sim\tb\tb_mavlink_frame.v", "sim\tb\tb_frame_parser.v",
     "sim\tb\tb_byte_fifo.v", "sim\tb\tb_uart_tx.v", "sim\tb\tb_terminal_fsm.v",
-    "sim\tb\tb_tx_chain.v", "sim\tb\tb_level3_protocol.v", "sim\tb\tb_w3_top.v"
+    "sim\tb\tb_tx_chain.v", "sim\tb\tb_level3_protocol.v", "sim\tb\tb_w3_top.v",
+    "sim\tb\ro_array_sim.v"
 )
 $tbNames = @("tb_speck", "tb_gap_regression",
              "tb_challenge_decode","tb_crc16","tb_mavlink_frame","tb_frame_parser",
@@ -133,7 +134,9 @@ $tbNames = @("tb_speck", "tb_gap_regression",
 if ($RtlList)    { $rtl     = @($RtlList    -split ',' | ForEach-Object { $_.Trim() }) }
 if ($TbList)     { $tbs     = @($TbList     -split ',' | ForEach-Object { $_.Trim() }) }
 if ($TbNameList) { $tbNames = @($TbNameList -split ',' | ForEach-Object { $_.Trim() }) }
-if ($tbs.Count -ne $tbNames.Count) {
+# The count guard only applies to overrides: $tbs may legitimately carry
+# helper modules (ro_array_sim.v) that are not standalone TB tops.
+if (($TbList -or $TbNameList) -and ($tbs.Count -ne $tbNames.Count)) {
     Write-Host "OVERRIDE MISMATCH: TbList/$($tbs.Count) vs TbNameList/$($tbNames.Count)"; exit 1
 }
 $overridesActive = [bool]($RtlList -or $TbList -or $TbNameList)
@@ -147,7 +150,7 @@ if ($overridesActive) {
 Write-Host "=== CI: Compile ==="
 Remove-Item xsim.dir -Recurse -Force -ErrorAction SilentlyContinue
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
-$res = Invoke-TimedNative -File "$vivado\xvlog.bat" -Arguments (@($rtl) + @($tbs)) -TimeoutS $CompileTimeoutS -Label "xvlog compile" -WorkDir (Get-Location).Path
+$res = Invoke-TimedNative -File "$vivado\xvlog.bat" -Arguments (@("-d", "PUF_MODEL_SIM") + @($rtl) + @($tbs)) -TimeoutS $CompileTimeoutS -Label "xvlog compile" -WorkDir (Get-Location).Path
 if ($res.TimedOut -or $res.Code -ne 0) {
     $res.Lines | Select-Object -Last 20 | ForEach-Object { Write-Host "  $_" }
     Write-Host "COMPILE FAILED (timeout=$($res.TimedOut))"; exit 1
