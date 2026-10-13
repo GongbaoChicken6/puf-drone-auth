@@ -121,12 +121,13 @@ $tbs = @(
     "sim\tb\tb_crc16.v", "sim\tb\tb_mavlink_frame.v", "sim\tb\tb_frame_parser.v",
     "sim\tb\tb_byte_fifo.v", "sim\tb\tb_uart_tx.v", "sim\tb\tb_terminal_fsm.v",
     "sim\tb\tb_tx_chain.v", "sim\tb\tb_level3_protocol.v", "sim\tb\tb_w3_top.v",
-    "sim\tb\ro_array_sim.v"
+    "sim\tb\ro_array_sim.v",
+    "sim\tb\tb_puf_path.v"
 )
 $tbNames = @("tb_speck", "tb_gap_regression",
              "tb_challenge_decode","tb_crc16","tb_mavlink_frame","tb_frame_parser",
              "tb_byte_fifo","tb_uart_tx","tb_terminal_fsm","tb_tx_chain","tb_level3_protocol",
-             "tb_w3_top")
+             "tb_w3_top", "tb_puf_path")
 # Test-only overrides (W4-P0 timeout experiment).  Deliberately plain
 # [string] + internal split: powershell.exe -File does NOT split commas
 # for array parameters (that is -Command behaviour), so accepting one
@@ -134,10 +135,15 @@ $tbNames = @("tb_speck", "tb_gap_regression",
 if ($RtlList)    { $rtl     = @($RtlList    -split ',' | ForEach-Object { $_.Trim() }) }
 if ($TbList)     { $tbs     = @($TbList     -split ',' | ForEach-Object { $_.Trim() }) }
 if ($TbNameList) { $tbNames = @($TbNameList -split ',' | ForEach-Object { $_.Trim() }) }
-# The count guard only applies to overrides: $tbs may legitimately carry
-# helper modules (ro_array_sim.v) that are not standalone TB tops.
-if (($TbList -or $TbNameList) -and ($tbs.Count -ne $tbNames.Count)) {
-    Write-Host "OVERRIDE MISMATCH: TbList/$($tbs.Count) vs TbNameList/$($tbNames.Count)"; exit 1
+# Override guard: $tbs may carry helper modules (ro_array_sim.v) that are
+# not standalone tops, so instead of count equality every named top must
+# have a matching file in the list.
+if ($TbList -or $TbNameList) {
+    foreach ($name in $tbNames) {
+        if (-not ($tbs | Where-Object { $_.EndsWith("$name.v") })) {
+            Write-Host "OVERRIDE MISMATCH: no file for top '$name' in TbList"; exit 1
+        }
+    }
 }
 $overridesActive = [bool]($RtlList -or $TbList -or $TbNameList)
 if ($overridesActive) {

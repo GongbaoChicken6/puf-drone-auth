@@ -26,8 +26,12 @@ from src.python.evaluation.puf_model import (  # noqa: E402
     GOLDEN_SEED_B,
     GOLDEN_SEED_C,
     N_RINGS,
+    ROPairingPUF,
     pair_table_hex,
 )
+
+#: tb_puf_path 专用第 4 种子（首轮 4 种子 = A/B/C/D）
+GOLDEN_SEED_D = 0x1234_5678_9ABC_DEF0
 
 
 def golden() -> int:
@@ -59,17 +63,33 @@ def tb_mem() -> int:
     return 0
 
 
+def tb_resp() -> int:
+    """Print the R1 golden bytes tb_puf_path checks (puf_model at the
+    fixture frequencies).  Single source: the same .mem ro_array_sim loads."""
+    mem = ROOT / "sim" / "testvectors" / "puf_tb_freqs.mem"
+    freqs = [int(line.strip(), 16) for line in mem.read_text().split() if line.strip()]
+    puf = ROPairingPUF(freqs=freqs)
+    for tag, seed in (("A", GOLDEN_SEED_A), ("B", GOLDEN_SEED_B),
+                      ("C", GOLDEN_SEED_C), ("D", GOLDEN_SEED_D)):
+        print(f"localparam [63:0] R1_SEED_{tag} = 64'h{int.from_bytes(puf.ideal(seed), 'big'):016X};")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--golden", action="store_true",
                         help="print frozen pair-table fixtures")
     parser.add_argument("--tb-mem", action="store_true",
                         help="write sim/testvectors/puf_tb_freqs.mem (ro_array_sim)")
+    parser.add_argument("--tb-resp", action="store_true",
+                        help="print tb_puf_path golden R1 bytes (from puf_model at fixture freqs)")
     args = parser.parse_args()
     if args.golden:
         return golden()
     if args.tb_mem:
         return tb_mem()
+    if args.tb_resp:
+        return tb_resp()
     parser.print_help()
     return 2
 
