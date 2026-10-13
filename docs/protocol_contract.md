@@ -197,3 +197,36 @@ default → 0x00（未知消息，帧应被丢弃）
 - 本契约的任何修改必须**同步修改 protocol.py 并重跑黄金向量生成**，双侧一起提交
 - hfida.xml dialect 生成后，CRC_EXTRA 占位表（0x5A~0x5F）将被 mavgen 计算值替换——届时两侧同步更新并重跑全部 TB
 - 序号 SEQ 由发送方各自维护（终端、基站独立计数），接收方不校验 SEQ 连续性（MAVLink 惯例，丢包容忍）。安全后果：RESULT 帧无新鲜度来源，叠加 C2 上电确定性复位构成终端侧跨断电重放路径（HANDOFF P1-5，W4 修复：nonce 随机化回显或 C2 种子非易失）
+
+## 8. PUF 响应语义与黄金配对表（W4 冻结，2026-10-13）
+
+R1 语义（位级冻结，双侧唯一依据 = src/python/evaluation/puf_model.py，RTL 对拍锚 = tb_challenge_decode 黄金用例）：
+
+- seed → challenge_decode 配对表：8 轮 × 8 对；对 p 的载荷字节 = (order[2p+1]<<4) | order[2p]（低 4bit=环 A，高 4bit=环 B）
+- 响应位 bit(r,p) = 1 当且仅当 freq[B] > freq[A]（相等取 0）
+- 组装：R1[63-8r-p] = bit(r,p)；序列化大端（byte 0 = 第 0 轮 8 对，MSB 在前）
+- 熵：单路 = 16 环总排序 ≈ 2^44；灰区加测每种子同管线独立 64bit
+- 信任边界：配对表为纯公开确定性逻辑（无秘密）；设备秘密只在频率向量
+
+冻结黄金配对表（512-bit 寄存器镜像；hex 首字节 = round 7 / pair 0；由 scripts/gen_puf_fixtures.py --golden 生成；tb_challenge_decode 与本表与 puf_model 三方一致）：
+
+# PUF_SEED_A  (seed 64'hC0FF_EEBE_EF12_3456)
+  ED 95 C6 42 73 1B 8F 0A 3D 64 75 9E 18 2A 0B CF
+  54 DE 39 C8 6A 0F 7B 12 49 10 25 86 BA 7F EC 3D
+  17 49 F5 08 CD A2 6B E3 09 D6 43 E7 B2 CA 85 F1
+  C3 74 51 DF 82 A6 90 BE 0F E8 B7 25 1A C3 D4 69
+
+# PUF_SEED_B  (seed 64'h0F1E_2D3C_4B5A_6978)
+  C1 FE 30 D6 87 5A B2 94 31 5B 0F 4E 2D AC 68 97
+  30 47 8C EF 9A 5B D1 26 04 B1 6C E3 AF 89 75 2D
+  5B 6D 30 2A 84 9E 1F 7C D7 E6 51 9A F4 C3 20 B8
+  49 A0 F3 2C B1 87 5E D6 F0 38 D2 5B E7 1C A4 96
+
+# PUF_SEED_C  (seed 64'hFEED_FACE_CAFE_BABE)
+  48 67 C9 15 FE A0 BD 23 F8 B2 43 DC 1A 7E 65 90
+  CD 50 16 2E A8 7F B9 34 61 40 B2 AC 8F ED 95 73
+  87 5E D2 03 F6 1A B4 9C 1A B2 45 C0 9F D6 83 7E
+  38 C4 96 A2 EF 50 1D 7B EC FB A1 6D 28 39 57 40
+
+变更控制：任何一侧（puf_model.py / challenge_decode.v / 本节）改动都必须三方同步重生成并重跑 CI（§7 纪律同样适用）。
+

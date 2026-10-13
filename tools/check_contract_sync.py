@@ -16,6 +16,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from src.python.evaluation.puf_model import (  # noqa: E402
+    GOLDEN_SEED_A,
+    GOLDEN_SEED_B,
+    GOLDEN_SEED_C,
+    pair_table_int,
+)
 from src.python.server.protocol import HFIDAProtocol as H  # noqa: E402
 
 
@@ -73,9 +79,45 @@ def contract_vectors():
     return out
 
 
+def build_puf_tables():
+    """W4 S8: regenerate the three frozen pair tables from puf_model."""
+    out = {}
+    for name, seed in (
+        ("PUF_SEED_A", GOLDEN_SEED_A),
+        ("PUF_SEED_B", GOLDEN_SEED_B),
+        ("PUF_SEED_C", GOLDEN_SEED_C),
+    ):
+        out[name] = pair_table_int(seed).to_bytes(64, "big")
+    return out
+
+
+def contract_puf_vectors():
+    """Parse S8 golden blocks with the same shape as contract_vectors()."""
+    md = (ROOT / "docs" / "protocol_contract.md").read_text(encoding="utf-8")
+    if "## 8." not in md:
+        return {}
+    section = md.split("## 8.")[1].split("\n## ")[0]
+    out = {}
+    name = None
+    body = []
+    for raw in section.splitlines():
+        line = raw.strip()
+        hdr = re.match(r"#\s+([A-Z_][A-Z0-9_]*)\b", line)
+        if hdr and not line.startswith("#!"):
+            if name and body:
+                out[name] = bytes.fromhex("".join(body))
+            name, body = hdr.group(1), []
+            continue
+        if name and re.fullmatch(r"(?:[0-9A-Fa-f]{2}[\s]+)+[0-9A-Fa-f]{2}", line):
+            body.extend(line.split())
+    if name and body:
+        out[name] = bytes.fromhex("".join(body))
+    return out
+
+
 def main() -> int:
-    gen = build_frames()
-    doc = contract_vectors()
+    gen = {**build_frames(), **build_puf_tables()}
+    doc = {**contract_vectors(), **contract_puf_vectors()}
     bad = 0
     for name, frame in gen.items():
         want = doc.get(name)
@@ -98,7 +140,8 @@ def main() -> int:
     if bad:
         print(f"\nDRIFT DETECTED: {bad} mismatch(es) -- update protocol.py AND contract/TB together!")
         return 1
-    print("\nCONTRACT SYNC OK: protocol.py == contract S4 " "(TB golden arrays are manually mirrored -- this tool does not read them)")
+    print("\nCONTRACT SYNC OK: protocol.py + puf_model == contract S4 + S8 "
+          "(TB golden arrays are manually mirrored -- this tool does not read them)")
     return 0
 
 

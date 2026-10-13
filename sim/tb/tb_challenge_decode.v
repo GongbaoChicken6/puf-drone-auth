@@ -9,6 +9,8 @@
 //       （Fisher-Yates 构造保证，逐轮逐值复核，100 次全部检查）；
 //    3. 延迟测量：统计 start 脉冲采样沿到 done 置位的时钟周期数；
 //    4. 边界用例：全零种子（LFSR 停 0、j 恒 0）仍须输出合法排列。
+//    5. 黄金向量：3 个冻结种子的 pair_table 与 Python puf_model 逐 bit
+//       对拍（W4-P1，scripts/gen_puf_fixtures.py --golden 生成，契约 §8 冻结）。
 //  全部通过打印 TB_CHALLENGE_DECODE_PASS，否则打印 TB_CHALLENGE_DECODE_FAIL
 //  并列出错项（CI 门禁约定 TB_<模块名>_PASS）。
 //////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +42,12 @@ module tb_challenge_decode;
 
     localparam [63:0] SEED_FIX = 64'hC0FF_EEBE_EF12_3456;    // 固定测试种子
 
-    //---------------- 100MHz 时钟 ---------------//
+    // W4-P1 黄金种子与期望表（Python puf_model 生成，契约 §8 冻结；
+    // 双侧独立实现逐 bit 相等才算 PASS——单侧改动必在此爆红）
+    localparam [63:0] SEED_GOLDEN_A = 64'hC0FF_EEBE_EF12_3456;
+    localparam [63:0] SEED_GOLDEN_B = 64'h0F1E_2D3C_4B5A_6978;
+    localparam [63:0] SEED_GOLDEN_C = 64'hFEED_FACE_CAFE_BABE;
+    localparam [511:0] GOLDEN_TBL_A = 512'hED95C642731B8F0A3D64759E182A0BCF54DE39C86A0F7B1249102586BA7FEC3D1749F508CDA26BE309D643E7B2CA85F1C37451DF82A690BE0FE8B7251AC3D469;localparam [511:0] GOLDEN_TBL_B = 512'hC1FE30D6875AB294315B0F4E2DAC689730478CEF9A5BD12604B16CE3AF89752D5B6D302A849E1F7CD7E6519AF4C320B849A0F32CB1875ED6F038D25BE71CA496;localparam [511:0] GOLDEN_TBL_C = 512'h4867C915FEA0BD23F8B243DC1A7E6590CD50162EA87FB9346140B2AC8FED9573875ED203F61AB49C1AB245C09FD6837E38C496A2EF501D7BECFBA16D28395740;//---------------- 100MHz 时钟 ---------------//
     initial begin
         clk = 1'b0;
         forever #5 clk = ~clk;
@@ -165,12 +172,38 @@ module tb_challenge_decode;
         end
         $display("[TB] 全零种子（LFSR 停 0 边界）pair_table = %h", cur_table);
 
+        // ---- 黄金向量对拍（W4-P1：RTL vs Python puf_model，逐 bit）----
+        do_decode(SEED_GOLDEN_A);
+        if (cur_table !== GOLDEN_TBL_A) begin
+            err_cnt = err_cnt + 1;
+            $display("[TB] ERROR: GOLDEN_A pair_table 与 Python 模型不一致");
+            $display("[TB]   rtl = %h", cur_table);
+            $display("[TB]   py  = %h", GOLDEN_TBL_A);
+        end
+        do_decode(SEED_GOLDEN_B);
+        if (cur_table !== GOLDEN_TBL_B) begin
+            err_cnt = err_cnt + 1;
+            $display("[TB] ERROR: GOLDEN_B pair_table 与 Python 模型不一致");
+            $display("[TB]   rtl = %h", cur_table);
+            $display("[TB]   py  = %h", GOLDEN_TBL_B);
+        end
+        do_decode(SEED_GOLDEN_C);
+        if (cur_table !== GOLDEN_TBL_C) begin
+            err_cnt = err_cnt + 1;
+            $display("[TB] ERROR: GOLDEN_C pair_table 与 Python 模型不一致");
+            $display("[TB]   rtl = %h", cur_table);
+            $display("[TB]   py  = %h", GOLDEN_TBL_C);
+        end
+        if (err_cnt == 0) begin
+            $display("[TB] 黄金对拍 A/B/C：RTL 与 Python puf_model 逐 bit 一致");
+        end
+
         // ---- 汇总 ----
         $display("[TB] 延迟统计（固定种子 100 次）：min = %0d，max = %0d", lat_min, lat_max);
         if (err_cnt == 0) begin
             // CI 门禁约定：TB_<模块名>_PASS（与 tb_byte_fifo/tb_crc16 等一致；
         // 旧标记 "TB_PASS" 不匹配 ci_regression.ps1 的 TB_.*_PASS 正则）
-        $display("TB_CHALLENGE_DECODE_PASS: 100 次确定性 + 每轮排列性质 + 全零边界 用例全部通过");
+        $display("TB_CHALLENGE_DECODE_PASS: 100 次确定性 + 每轮排列性质 + 全零边界 + 黄金对拍 A/B/C 用例全部通过");
         end
         else begin
             $display("TB_CHALLENGE_DECODE_FAIL: 共 %0d 项错误", err_cnt);

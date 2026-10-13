@@ -232,6 +232,14 @@ if ($serialCode -ne 0) {
     Write-Host "SERIAL SERVER TESTS FAILED"; exit 1
 }
 $outS | Select-Object -Last 4 | ForEach-Object { Write-Host "  $_" }
+# W4-P1 PUF golden-model tests (RTL<->Python cross-check anchor).
+$outP = & cmd.exe /c "python tests\test_puf_model.py 2>&1" | ForEach-Object { "$_" }
+$pufCode = $LASTEXITCODE
+if ($pufCode -ne 0) {
+    $outP | Select-Object -Last 40 | ForEach-Object { Write-Host "  $_" }
+    Write-Host "PUF MODEL TESTS FAILED"; exit 1
+}
+$outP | Select-Object -Last 4 | ForEach-Object { Write-Host "  $_" }
 $out2 = & cmd.exe /c "python scripts\test_r2_nonlinearity.py 2>&1" | ForEach-Object { "$_" }
 $canCode = $LASTEXITCODE
 if ($canCode -ne 0) {
