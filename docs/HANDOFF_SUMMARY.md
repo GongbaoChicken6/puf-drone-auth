@@ -238,6 +238,10 @@ Git：57 commits（截至 A1 收官提交 a678274）· 144 files · tag w3-compl
 **A1 已全部完成**（六阶段 + 五轮多代理审查，证据 build/reviews/a1p4~a1p6/）。选择下一任务：
 
 0. **【2026-10-13 追加】W4 计划书+设计书已入库**（docs/plans/W4_plan.md / W4_design.md v1.1，经 3 代理计划审查 P1R/P2R/P3R 共 33 项发现全部修订）——W4 执行从 **W4-P0（CI 超时作业化 + RemoteException，HANDOFF deferred 首项）** 开始，按计划书 §9 顺序推进；并行会话记账改用追加式协议（见计划书 §4 R5）。
+0. **【2026-10-13 晚追加】W4-P0/P1/P2 三阶段完成 + auto-review 四代理综合审查闭环**：
+   - P0(32030e5): CI 超时作业化 + RemoteException=0；P1(7cf52ce): puf_model 黄金模型 + 三方对拍(配对表 A/B/C 逐 bit)；P2(23ed28a/baa9a00/6644196): RTL B5a PUF 真实管线(S_PUF 三态+热稳定 7 窗+打包) + tb_puf_path 字节级语义锁 + CI 12→13 TB
+   - 审查（4 代理 A/B/C/D）→ 修复：**P0 w3_top clk→sys_clk**(B/D 双源) + **P1 看门狗预算分段**（C/D 双源，板默认余量从 244us→65536 拍，各态入口清零）+ tb_speck T10 毛刺 + --check 新鲜度门禁 + 窗口计数断言 + ring_en 占空比差异文档化 + 账本/看板同步(83→85) + 契约 S8 pair7 笔误
+   - **遗留待 W4-P3**：SimulatedTerminal 换 RO 语义、interop 固化、评估工具适配
 
 1. **B5 PUF 真实接入**（W4 核心创新，最高优先）：替换种子直通占位 → challenge_decode + ro_array 真实测量；同时处理 W4 安全项（P1-1 真密钥 / P1-4 PUF / P1-5 终端重放三选一 / 44-bit 熵混合 / CI 超时作业化）
 2. **B6 ML 攻击实验**（W4 交付物，20 分）：实验 A 合成 arbiter 基线 + 实验 B 排序重构攻击（设计见 project_design.md §W4）

@@ -208,7 +208,7 @@ R1 语义（位级冻结，双侧唯一依据 = src/python/evaluation/puf_model.
 - 熵：单路 = 16 环总排序 ≈ 2^44；灰区加测每种子同管线独立 64bit
 - 信任边界：配对表为纯公开确定性逻辑（无秘密）；设备秘密只在频率向量
 
-冻结黄金配对表（512-bit 寄存器镜像；hex 首字节 = round 7 / pair 0；由 scripts/gen_puf_fixtures.py --golden 生成；tb_challenge_decode 与本表与 puf_model 三方一致）：
+冻结黄金配对表（512-bit 寄存器镜像；hex MSB-first 首字节 = round 7 / pair 7；由 scripts/gen_puf_fixtures.py --golden 生成；tb_challenge_decode 与本表与 puf_model 三方一致）：
 
 # PUF_SEED_A  (seed 64'hC0FF_EEBE_EF12_3456)
   ED 95 C6 42 73 1B 8F 0A 3D 64 75 9E 18 2A 0B CF

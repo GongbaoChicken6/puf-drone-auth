@@ -207,7 +207,7 @@ module w3_top # (
         .N_RINGS  ( 16 ),
         .IDX_W    ( 4 )
     ) u_cd (
-        .clk         (clk          ),
+        .clk         (sys_clk      ),   // 审查 D-P1 修复：原误接未声明的 clk
         .rst         (rst          ),
         .start       (cd_start     ),
         .seed        (cd_seed      ),
@@ -219,7 +219,7 @@ module w3_top # (
         .N_RINGS ( 16 ),
         .CNT_W   ( 16 )
     ) u_ro_array (
-        .clk         (clk          ),
+        .clk         (sys_clk      ),   // 审查 D-P1 修复
         .rst         (rst          ),
         .measure_en  (ra_measure_en),
         .ring_en     (ra_ring_en   ),
@@ -233,7 +233,7 @@ module w3_top # (
         .CNT_W      ( 16 ),
         .DIV_STAGES ( 5 )
     ) u_ro_array (
-        .clk         (clk          ),
+        .clk         (sys_clk      ),   // 审查 D-P1 修复
         .rst         (rst          ),
         .measure_en  (ra_measure_en),
         .ring_en     (ra_ring_en   ),

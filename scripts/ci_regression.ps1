@@ -263,6 +263,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 # One audible line on success so the evidence log proves the check ran.
 $out3 | Select-Object -Last 1 | ForEach-Object { Write-Host "  $_" }
+# W4-P1 review D-P2: PUF fixture freshness (.mem + tb_puf_path R1 constants).
+$outP2 = & cmd.exe /c "python scripts\gen_puf_fixtures.py --check 2>&1" | ForEach-Object { "$_" }
+if ($LASTEXITCODE -ne 0) {
+    $outP2 | Select-Object -Last 10 | ForEach-Object { Write-Host "  $_" }
+    Write-Host "PUF FIXTURE FRESHNESS CHECK FAILED"; exit 1
+}
+$outP2 | Select-Object -Last 1 | ForEach-Object { Write-Host "  $_" }
 $out4 = & cmd.exe /c "python tools\check_contract_sync.py 2>&1" | ForEach-Object { "$_" }
 if ($LASTEXITCODE -ne 0) {
     $out4 | Select-Object -Last 10 | ForEach-Object { Write-Host "  $_" }

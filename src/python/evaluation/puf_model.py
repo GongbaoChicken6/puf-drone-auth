@@ -140,6 +140,8 @@ class ROPairingPUF:
             self.freqs = [int(f) for f in freqs]
             if len(self.freqs) != N_RINGS:
                 raise ValueError(f"freqs must have {N_RINGS} entries")
+        if not 0.0 <= float(flip_prob) <= 1.0:
+            raise ValueError(f"flip_prob must be in [0,1], got {flip_prob}")
         self.flip_prob = float(flip_prob)
 
     def ideal(self, seed: bytes | bytearray | int) -> bytes:
@@ -168,6 +170,8 @@ class ROPairingPUF:
         clamped to >= 1.  Used by reliability experiments and the W5
         temperature curves; not part of the frozen wire semantics.
         """
+        if scale <= 0:
+            raise ValueError(f"scale must be > 0, got {scale}")
         out: list[int] = []
         for f in self.freqs:
             scaled = float(f) * float(scale)

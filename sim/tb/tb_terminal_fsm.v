@@ -47,10 +47,6 @@ module tb_terminal_fsm;
     //------------------------------------------------------------------------
     // W4 B5a PUF 子系统（challenge_decode + 行为级 ro_array_sim）
     //------------------------------------------------------------------------
-
-    //------------------------------------------------------------------------
-    // W4 B5a PUF 子系统（challenge_decode + 行为级 ro_array_sim）
-    //------------------------------------------------------------------------
     wire        cd_start, cd_done;
     wire [63:0] cd_seed;
     wire [511:0] cd_pair_table;
@@ -218,7 +214,7 @@ module tb_terminal_fsm;
         end else if (mf_pay_len !== 6'd32) begin
             errors = errors + 1; $display("[T1 FAIL] R1 len=%0d expect 32", mf_pay_len);
         end else
-            $display("  [T1] RESPONSE_R1 sent (32B, stub=seeds passthrough)");
+            $display("  [T1] RESPONSE_R1 sent (32B, W4 B5a: PUF comparison bits)");
 
         // TB 发 RESULT（PASS + R2）——先重填载荷（CHALLENGE 种子已覆盖！）
         fp_payload_buf[0] = 8'h00;                   // result = PASS

@@ -6,16 +6,15 @@
 // T2: KAT（与 Python 交叉验证的已知答案）
 // T3: 边角向量（全0/全FF）
 // T4: 全量向量回放——$fgets 消费 gen_speck_vectors.py 单源 .mem
-//     （NSA KAT + 边角 + 单比特游走 + 进位链 + 密钥隔离 + 随机，共 1175 组；
-//       A1 阶段 6 修复：此前该文件仅被生成器/CI 维护而无任何 RTL 消费者）
 // T5: 背靠背操作
 // T6: 忙时 start 忽略
 // T7: 运行中复位
 // T8: done 单拍验证
 // T9: 时延上界（start→done ≤ 60 周期，标称 53）
+// T10: 输入毛刺（W4-P2 补齐——运算中 key/plaintext 翻转不影响密文）
 //
-// 计划偏差（诚实登记）：plan v3 的"输入毛刺"用例未实现——集成中
-// sp_key/sp_plaintext 由 terminal_fsm 保持稳定，无实际暴露面（W4 可补）。
+// T10: 输入毛刺（W4-P2 审查 B-P2 补齐：运算中 key/plaintext 翻转不影响结果）
+//
 //============================================================================
 module tb_speck;
 
@@ -267,6 +266,39 @@ module tb_speck;
             else begin
                 errors = errors + 1;
                 $display("  [T9 FAIL] lat=%0d done=%b ct=%h", lat, done, ciphertext_out);
+            end
+        end
+
+        //==============================================================
+        // T10: 输入毛刺——运算中途翻转 key/plaintext，密文不变
+        //==============================================================
+        begin : T10_BLOCK
+            reg [63:0] ct_clean, ct_glitch;
+            $display("[T10] input glitch immunity");
+            // 基准
+            @(negedge clk);
+            key_in = 96'h1312_1110_0B0A_0908_0302_0100;
+            plaintext_in = 64'h6120_CFE7_2D61_0F38;
+            start = 1'b1;
+            @(negedge clk); start = 1'b0;
+            wait (done); @(negedge clk);
+            ct_clean = ciphertext_out;
+            // 毛刺：再次启动，中途打翻转
+            @(negedge clk); start = 1'b1;
+            @(negedge clk); start = 1'b0;
+            repeat(5) @(negedge clk);
+            key_in = ~key_in;                 // key 全翻
+            plaintext_in = ~plaintext_in;     // plaintext 全翻
+            repeat(2) @(negedge clk);
+            key_in = ~key_in;                 // 翻回来
+            plaintext_in = ~plaintext_in;
+            wait (done); @(negedge clk);
+            ct_glitch = ciphertext_out;
+            if (ct_glitch === ct_clean)
+                $display("  [T10 PASS] glitch ct=%h == clean ct=%h", ct_glitch, ct_clean);
+            else begin
+                errors = errors + 1;
+                $display("  [T10 FAIL] glitch ct=%h != clean ct=%h", ct_glitch, ct_clean);
             end
         end
 

@@ -21,8 +21,10 @@ module terminal_fsm # (
     parameter TIMEOUT_CYCLES   = 32'd50_000_000,  // 0.5s @ 100MHz（板上用 200M=2s）
     parameter [4:0] WARMUP_WINS = 5'd7,            // W2 冻结：7 轮热稳定窗（逐窗丢弃）
     parameter MEASURE_CYCLES   = 32'd100_000,     // 1ms 测量窗 @100MHz（TB 缩小加速）
-    // S_PUF_* 三态共享看门狗预算：热窗+测量 + 4 种子解码（4×~2058）+ 裕量
-    parameter PUF_WD_CYCLES    = (WARMUP_WINS + 1) * MEASURE_CYCLES + 32'd32768
+    // S_PUF_* 三态分段看门狗预算（每态入口清零 timeout_cnt，审查 D-P1）：
+    // 单段最大 = 测量段 (WARMUP_WINS+1)*MEASURE_CYCLES；解码段 4×~2058；
+    // 裕量 65536 覆盖打包与握手抖动
+    parameter PUF_WD_CYCLES    = (WARMUP_WINS + 1) * MEASURE_CYCLES + 32'd65536
 ) (
     input  wire        clk       ,
     input  wire        rst       ,
@@ -400,6 +402,7 @@ module terminal_fsm # (
                         puf_extra   <= 1'b0;         // W4：首轮 4 种子
                         puf_seed_idx<= 3'd0;
                         puf_dec_busy<= 1'b0;
+                        timeout_cnt <= 32'd0;        // 审查 D-P1：等待帧时间不吃 PUF 预算
                         state       <= S_PUF_DECODE;
                     end else if (timeout_cnt >= TIMEOUT_CYCLES) begin
                         state    <= S_BLOCKED;
@@ -445,6 +448,7 @@ module terminal_fsm # (
                                 (!puf_extra && puf_seed_idx == 3'd3)) begin
                                 // 全部配对表就绪 → 热稳定 + 测量
                                 state         <= S_PUF_MEASURE;
+                                timeout_cnt   <= 32'd0;   // 分段预算：解码段清零
                                 puf_win_idx   <= 5'd0;
                                 puf_win_cnt   <= 32'd0;
                                 puf_win_wait  <= 1'b0;
@@ -482,6 +486,7 @@ module terminal_fsm # (
                                 puf_freqs     <= ra_ring_freq;  // 末窗频率
                                 puf_ring_en_r <= 1'b0;           // 功耗：测量完停振
                                 puf_pack_idx  <= 6'd0;
+                                timeout_cnt   <= 32'd0;         // 分段预算：测量段清零
                                 state         <= S_PUF_PACK;
                             end else begin
                                 puf_win_idx  <= puf_win_idx + 5'd1;
@@ -497,6 +502,9 @@ module terminal_fsm # (
                 //====================================================
                 S_PUF_PACK: begin
                     if (timeout_cnt >= PUF_WD_CYCLES) begin
+                        puf_dec_busy  <= 1'b0;   // 审查 D-P2：与其他两态对齐
+                        puf_ring_en_r <= 1'b0;
+                        puf_measure_r <= 1'b0;
                         state    <= S_BLOCKED;
                         result_r <= 2'd3;
                     end else begin
@@ -522,6 +530,7 @@ module terminal_fsm # (
                         puf_extra   <= 1'b1;
                         puf_seed_idx<= 3'd0;
                         puf_dec_busy<= 1'b0;
+                        timeout_cnt <= 32'd0;        // 审查 D-P1：同上
                         state       <= S_PUF_DECODE;
                     end else if (timeout_cnt >= TIMEOUT_CYCLES) begin
                         state    <= S_BLOCKED;

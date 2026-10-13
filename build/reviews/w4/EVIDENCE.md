@@ -2,7 +2,7 @@
 
 ## T1 超时作业化（HANDOFF deferred「W4 首项」）
 
-**机制**：ci_regression.ps1 的每个原生工具调用（xvlog 整体 / xelab 每 TB / xsim 每 TB）经 `Invoke-TimedNative`（Start-Job + Wait-Job -Timeout）执行；作业体显式传参（无闭包）+ 作业内 Set-Location 仓库根（修复相对路径）；超时路径先按**本作业 PID 的进程树**精准击杀（仅自己的 xsim，绝不动并行会话的 Vivado），Stop-Job→Remove-Job，判 `[TIMEOUT][FAIL]` 并继续后续 TB。
+**机制**：ci_regression.ps1 的每个原生工具调用经 `Invoke-TimedNative`（Start-Job + Wait-Job -Timeout）执行；超时路径尝试按作业 PID 树击杀（**审查 C-P3 修正：PS 5.1 标准 Job 的 ChildJobs[0].ProcessId 实际为空，精准击杀目前为 no-op，孤儿 xsim 依赖 Stop-Job 兜底**——已知残余风险，日志中有 WARN 提示），判 `[TIMEOUT][FAIL]` 并继续后续 TB。
 
 **注入实验**（scripts/ci_timeout_experiment.ps1，挂死 TB = forever 振荡 + 永假 wait）：
 - 日志：build/reviews/w4/ci_timeout_experiment.log

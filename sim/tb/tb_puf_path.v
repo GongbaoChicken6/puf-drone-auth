@@ -48,6 +48,8 @@ module tb_puf_path;
     integer     tx_byte_count = 0;
     reg [7:0]   tx_captured [0:63];
     integer     guard;
+    integer     win_count = 0;     // D-P2/B-P2：ra_measure_en 上升沿计数（热窗可观测性）
+    reg         ra_measure_en_prev = 1'b0;
 
     // 黄金 R1（scripts/gen_puf_fixtures.py --tb-resp，puf_model × fixture 频率）
     localparam [63:0] R1_SEED_A = 64'h6677FEA45A09061F;
@@ -61,6 +63,12 @@ module tb_puf_path;
     wire [511:0] cd_pair_table;
     wire        ra_measure_en, ra_ring_en, ra_busy, ra_done;
     wire [255:0] ra_ring_freq;
+
+    // 热窗计数（D-P2：ra_measure_en 上升沿 = 开一窗）
+    always @(posedge clk) begin
+        if (ra_measure_en && !ra_measure_en_prev) win_count = win_count + 1;
+        ra_measure_en_prev <= ra_measure_en;
+    end
 
     challenge_decode # (
         .N_ROUNDS ( 8 ), .N_RINGS ( 16 ), .IDX_W ( 4 )
@@ -240,7 +248,11 @@ module tb_puf_path;
              tx_captured[28],tx_captured[29],tx_captured[30],tx_captured[31]} !== R1_SEED_D) begin
             errors = errors + 1; $display("[T1] R1_D mismatch: want %h", R1_SEED_D);
         end
-        if (errors == 0) $display("[T1 PASS] 首轮 R1 32 字节 = puf_model 黄金（fixture 频率）");
+        if (win_count !== 8) begin
+            errors = errors + 1;
+            $display("[T1] 测量窗计数 %0d != 8（WARMUP_WINS=7+末窗）", win_count);
+        end
+        if (errors == 0) $display("[T1 PASS] 首轮 R1 32 字节 = puf_model 黄金 + %0d 测量窗（热稳定 7+末窗 1）", win_count);
 
         //==================== T2：灰区 R1（3 种子 A/B/C）====================
         tx_byte_count = 0;

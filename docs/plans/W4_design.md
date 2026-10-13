@@ -24,6 +24,7 @@ input  wire         use_ext_key;    // TB 显式 0；板上接内部 key_valid�
 ### 2.2 状态机（编码 13/14/15 空闲已核）
 - S_PUF_DECODE(13)：逐种子 cd_start→cd_done，缓存 pair_table×4（灰区×3）
 - S_PUF_MEASURE(14)：ra_ring_en=1 → **WARMUP_WINS=7 轮热稳定窗（W2 冻结口径，w2_top.v:17-19 / project_design.md:201-203，逐窗丢弃）** → 第 8 窗测量锁存 ring_freq
+- **ring_en 占空比差异（审查 C-P2 记录）**：W2 w2_top.v:373 ring_en 恒 1（环自上电常开，G2≥97% 基线在此条件建立）；本设计仅测量期开振（认证期 ~8ms），每次从冷环起步靠 7 窗热稳定逼近——**该差异未论证等效**，W4-P6 板上可靠性判据须在冷启动条件下实测验证（若不达标回退方案：decode 期间提前开振）
 - S_PUF_PACK(15)：比较位打包——4 种子填 resp_buf[0..31]→S_TX_R1；**灰区 3 种子填 resp_buf[0..23]、tx_len=24→S_TX_R1_EXTRA**（4'd10 既有态）
 - **S_PUF_* 看门狗**：三态共用超时计数（预算 = (WARMUP_WINS+1)×MEASURE_CYCLES + 10^5 拍余量；超时→S_BLOCKED，auth_result=3）——修正 v1.0"2s 超时覆盖"的错误归因（原超时只挂等待态，terminal_fsm.v:217-218）
 - **同步功能条件（P2R-P3）**：fp_rx_inhibit（terminal_fsm.v:158）与 rx_ok_latch 条件（:170-171）中的 S_PROC_SEEDS/S_PROC_EXTRA 引用需替换为 S_PUF_* 三态——这是功能条件非注释，漏改则载荷保护失效；tb_gap GA inhibit 用例为回归锚点

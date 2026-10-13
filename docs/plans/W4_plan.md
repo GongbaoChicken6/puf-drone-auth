@@ -54,7 +54,7 @@
 | T1 terminal_fsm：PUF 子接口端口；S_PROC_SEEDS 拆 S_PUF_DECODE→S_PUF_MEASURE（**含 W2 冻结的 7 轮热稳定窗**，WARMUP_WINS=7 参数）→S_PUF_PACK（4 种子 32B→S_TX_R1；灰区 3 种子 24B→S_TX_R1_EXTRA）；**S_PUF_* 三态挂看门狗**（超时→S_BLOCKED） | 改后 RTL（guardrails 全规则） | xvlog/xelab + 新 tb_puf_path（含看门狗/热窗/窗口边界/毛刺） |
 | T2 可注入端口：c2_boot_seed[63:0] / device_key_in[95:0] / use_ext_key。**V2001 无端口默认值 → 既有 TB 补两行 tie-off，黄金 C2/R2 期望值零改动**（诚实口径，非"TB 零改动"） | 端口+TB tie-off | tb_gap 黄金用例通过（期望值文件不变） |
 | T3 w3_top 集成 + `PUF_MODEL_SIM` stub；**build_w3_board.tcl 同步扩源**（ro_ring/ro_div/ro_array/challenge_decode 四文件 + w2_waiver.xdc 挂 constrs，脚本头注释同步"设计使然豁免"口径） | 集成+脚本 | ifdef 两态 elab；上板脚本 dry-run 源清单核对 |
-| T4 TB 黄金再生：4 个既有 TB 期望 R1 由 scripts/gen_puf_fixtures.py（调 puf_model）生成 .mem；**补 tb_speck 输入毛刺用例**（HANDOFF 计划偏差）；tb_challenge_decode 扩 3 对拍种子 | TB+脚本 | CI 12→14 TB 全绿；黄金再生证据入库 |
+| T4 TB 黄金再生：4 个既有 TB 期望 R1 由 scripts/gen_puf_fixtures.py（调 puf_model）生成 .mem；**补 tb_speck 输入毛刺用例**（HANDOFF 计划偏差，审查后补入）；tb_challenge_decode 扩 3 对拍种子 | TB+脚本 | CI 12→13 TB 全绿（+tb_puf_path）；黄金再生证据入库 |
 
 ### W4-P3 PC 侧全链适配（1 天 + 0.5 天审查返工）
 T1 SimulatedTerminal 重写为 ROPairingPUF 薄壳（温度可调噪声）；T2 interop 固化 tests/test_interop_rtl_model.py（复用 tests/test_serial_server.py 既有 WireTransport 模式，必要时提取公共测试工具）；T3 评估工具对齐 64-bit R1 + reliability 统计口径。验收：单测绿 + loopback 端到端 PASS + interop 入 CI。
@@ -87,7 +87,7 @@ D13 报告骨架起草（失败分析章节现成）+ D14 Skill ≥2 脚本候�
 | M3 ML 数据就绪 | 10-22 | P5 完成 + 数字复核 |
 | M4 板上尽力 + 冻结 | 10-24 | 板上项完成或降级决策记录 + 审查轮 + 进入 W5 |
 
-G4 总门禁：CI 全绿（TB≥14 + 单测≥80，超时作业化生效）｜**仿真 reliability ≥97% 明确为"工具链+语义自检口径"（stub 噪声模型自证），PUF 物理指标以板上实测为准**｜threat_poc.py exit 0｜ML 可复现｜HANDOFF/看板同步。
+G4 总门禁：CI 全绿（TB≥13 + 单测≥80，超时作业化生效）｜**仿真 reliability ≥97% 明确为"工具链+语义自检口径"（stub 噪声模型自证），PUF 物理指标以板上实测为准**｜threat_poc.py exit 0｜ML 可复现｜HANDOFF/看板同步。
 
 ## 4. 风险与降级
 

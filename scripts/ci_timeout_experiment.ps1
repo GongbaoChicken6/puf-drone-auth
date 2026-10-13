@@ -38,6 +38,7 @@ try {
     $code = $LASTEXITCODE
 } finally {
     Remove-Item $hangTb -Force -ErrorAction SilentlyContinue
+    if (Test-Path $hangTb) { Write-Host "[WARN] hang TB cleanup failed: $hangTb still present" }
     Remove-Item xsim.dir -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item *.pb -Force -ErrorAction SilentlyContinue
 }

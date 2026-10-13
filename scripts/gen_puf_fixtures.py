@@ -75,6 +75,39 @@ def tb_resp() -> int:
     return 0
 
 
+def check() -> int:
+    """Freshness gate (review D-P2): the on-disk .mem must match what
+    --tb-mem would regenerate, and the R1 constants in tb_puf_path.v
+    must match what --tb-resp would produce.  Exit 1 on drift."""
+    import tempfile
+    bad = 0
+    # .mem freshness
+    rng = random.Random(0x0044_3450)
+    freqs = sorted(rng.sample(range(DEFAULT_FREQ_MIN, DEFAULT_FREQ_MAX + 1), N_RINGS))
+    expected = "\n".join(f"{f:04X}" for f in freqs) + "\n"
+    mem = ROOT / "sim" / "testvectors" / "puf_tb_freqs.mem"
+    actual = mem.read_text(encoding="ascii") if mem.exists() else ""
+    if actual != expected:
+        print(f"[DRIFT] {mem.name}: on-disk != regenerated")
+        print(f"  expected first line: {expected.splitlines()[0]}")
+        print(f"  actual   first line: {actual.splitlines()[0] if actual else '(missing)'}")
+        bad += 1
+    else:
+        print(f"[OK]   {mem.name} fresh ({len(freqs)} freqs)")
+    # R1 constants in tb_puf_path.v
+    tb = (ROOT / "sim" / "tb" / "tb_puf_path.v").read_text(encoding="utf-8")
+    puf = ROPairingPUF(freqs=freqs)
+    for tag, seed in (("A", GOLDEN_SEED_A), ("B", GOLDEN_SEED_B),
+                      ("C", GOLDEN_SEED_C), ("D", GOLDEN_SEED_D)):
+        want = f"R1_SEED_{tag} = 64'h{int.from_bytes(puf.ideal(seed), 'big'):016X}"
+        if want not in tb:
+            print(f"[DRIFT] tb_puf_path.v missing/mismatched: {want}")
+            bad += 1
+        else:
+            print(f"[OK]   R1_SEED_{tag} matches puf_model")
+    return 1 if bad else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--golden", action="store_true",
@@ -83,6 +116,8 @@ def main() -> int:
                         help="write sim/testvectors/puf_tb_freqs.mem (ro_array_sim)")
     parser.add_argument("--tb-resp", action="store_true",
                         help="print tb_puf_path golden R1 bytes (from puf_model at fixture freqs)")
+    parser.add_argument("--check", action="store_true",
+                        help="freshness gate: .mem + tb_puf_path R1 constants vs puf_model")
     args = parser.parse_args()
     if args.golden:
         return golden()
@@ -90,6 +125,8 @@ def main() -> int:
         return tb_mem()
     if args.tb_resp:
         return tb_resp()
+    if args.check:
+        return check()
     parser.print_help()
     return 2
 
