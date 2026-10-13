@@ -387,7 +387,10 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
    `vivado -mode batch -source build/tcl/build_w3_board.tcl -tclargs xc7z020clg484-1 D:/puf-drone-auth/build/vivado/w3_board D:/puf-drone-auth/src`
    （上板脚本会自动：top=`w3_top_zc702` + 生成 `clk_wiz_0` + 加载 `w3_top.xdc` + 全程无 DRC 豁免；产物 `w3_board/w3_top_zc702.bit`）
 
-### 2.5 验收（无电台也能做的三连测）
+### 2.5 验收（无电台也能做的四连测）
+
+> 先看 **DS3（DONE 灯）**：Vivado 烧录成功后应亮——它只表示「PL 配置完成」，不代表时钟/复位/VADJ 正常。
+> DS3 亮 + 下面三测通过 = 全链路 OK；DS3 亮但下面三测不过 → 查时钟（MMCM）、复位、**J12 跳线（VADJ）**。
 
 | 测 | 操作 | 预期 |
 |---|---|---|

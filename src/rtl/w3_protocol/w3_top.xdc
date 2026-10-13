@@ -19,6 +19,24 @@
 # set_property -dict {PACKAGE_PIN C19 IOSTANDARD LVDS_25} [get_ports clk_n]
 # create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]   ;# 200MHz = 5ns
 
+# === 时序约束（异步 I/O 的 false_path，防止伪时序违例）===
+# set_false_path -from [get_ports sys_rst_btn_n]              ;# 异步复位，经 wrapper 的 AND + w3_top 的 2FF 同步器
+# set_false_path -from [get_ports auth_btn]                   ;# 机械按键，经 w3_top 的 10ms 消抖
+# set_false_path -from [get_ports {term_id_dip[*]}]           ;# 拨码开关，静态电平
+# set_false_path -to [get_ports led_*]                        ;# LED 输出，无时序要求
+
+# === ⚠ VADJ 电源依赖（UG850 第 62 页）===
+# PL Bank 13/33/34/35 由 VADJ=2.5V 供电。VADJ 是否上电由 **J12 跳线**决定（上电时采样）：
+#   J12 有跳线（出厂默认）→ VADJ=2.5V 正常上电 → 本文件全部 GPIO 可用
+#   J12 无跳线 → VADJ 不上电 → LED/按键/拨码/FMC 全部不工作（PL 配置仍会成功，DONE 会亮！）
+#   上电后拔掉 J12 不影响已上电的 VADJ。
+# **如果 LED 不亮但 Vivado 显示配置成功（DS3 DONE 亮），先检查 J12 跳线。**
+
+# === 调试提示 ===
+# DS3 = DONE LED：FPGA 比特流下载完成后亮（UG850 Table 1-22）
+#   烧录后 DS3 亮 + DS16 心跳闪 = 全链路正常
+#   DS3 亮但 DS16 不闪 = PL 配置成功但时钟/复位/VADJ 有问题
+
 # === RESET (wrapper 端口: sys_rst_btn_n，低有效) ===
 # ZC702 的 CPU_RESET (SRST_B/POR_B) 在 PS 域，PL 不可见 —— 用 PL 按键：
 # set_property -dict {PACKAGE_PIN G19 IOSTANDARD LVCMOS25} [get_ports sys_rst_btn_n]   ;# GPIO_SW_N
