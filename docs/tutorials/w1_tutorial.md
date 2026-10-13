@@ -351,14 +351,20 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
 
 > **本 wrapper 不参与仿真/CI**（IP 无仿真源）；它对 CI 的影响为零：`ci_regression.ps1` 编译清单里没有它。
 
-### 2.3 XDC 取消注释清单（逐行，每行都要 UG850/ZC702 原理图核对）
+### 2.3 前置开关检查 + XDC 取消注释清单
+
+> **先检查 SW10**（JTAG 选择开关，2 位拨码，UG850 callout 23 / Table 1-10）：
+> 出厂默认 **SW10.1=Off、SW10.2=On**（= 01 = Digilent USB JTAG）——**这是 Vivado 能看到芯片的前提**。
+> 如果 SW10 被拨到了其他位置（00=断开/10=并口缆/11=20 针头），JTAG 完全不工作且不报错。
+
+### XDC 取消注释清单（引脚号已按 UG850 官方核验，直接取消注释即可）
 
 | 行 | 内容 | 核对来源 |
 |---|---|---|
 | `set_property PACKAGE_PIN G19 [get_ports sys_rst_btn_n]` + `IOSTANDARD LVCMOS25` | 复位 = GPIO_SW_N（**端口名用 wrapper 的 `sys_rst_btn_n`**） | UG850 表 "GPIO SW N" |
-| `P17` → led_busy（LED0） | 认证进行灯 | **官方板卡定义: leds_4bits = P17/P18/W10/V7**；⚠ ``Y11/T22/U21`` 是 FMC2 LPC 脚、**不是 LED**（旧底稿错）。每行都要配 `IOSTANDARD LVCMOS25` |
+| `P17` → led_busy（**DS15**） | 认证进行灯 | **官方板卡定义: leds_4bits = P17/P18/W10/V7**；⚠ ``Y11/T22/U21`` 是 FMC2 LPC 脚、**不是 LED**（旧底稿错）。每行都要配 `IOSTANDARD LVCMOS25` |
 | `P18` → led_heartbeat（LED1，**DS16**） | 心跳灯 | 同上；位号对应已核（UG850）：P17/P18/W10/V7 = DS15/16/17/18 |
-| `W10` / `V7` → led_result[1:0]（LED2/LED3） | 结果码灯 | 同上 |
+| `W10` / `V7` → led_result[1:0]（**DS17/DS18**） | 结果码灯 | 同上 |
 | `W6` / `W7` → term_id_dip[1:0]（wrapper 端口） | 仅 2 位拨码在 PL | 同上 + IOSTANDARD；**wrapper 已把高 6 位 tie 0**（`.term_id_sw({6'h00, term_id_dip})`），无需手工改代码 |
 | `auth_btn` → **F19** | PL 按键（GPIO_SW_S，官方板卡定义核验） | 已在 `w3_top.xdc` 补好注释行；不接则 2.5 测 3 跳过 |
 
@@ -389,7 +395,7 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
 | 复位 | 按住 GPIO_SW_N 不放 | 按住期间 DS16 停在固定电平（复位生效）；松开后恢复 1.34 s 周期闪烁 |
 | 按键协议触发 | 按 auth_btn（无基站） | led_busy（DS15）亮约 **2 秒**（等待基站判定超时）→ 灭，led_result 显示阻断码（两灯同亮 = 11） |
 
-> 心跳闪烁 = 时钟 ✓ + 复位 ✓ + 引脚 ✓ + 计数逻辑 ✓，四件事一次全验。
+> 心跳闪烁（**DS16**）= 时钟 ✓ + 复位 ✓ + 引脚 ✓ + 计数逻辑 ✓，四件事一次全验。
 > 任何一项不符 → 见排障速查"验证点②"段。
 
 ---
@@ -414,13 +420,13 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
 
 > ⚠ **先断电再插 FMC**（或板上 PMOD，若有）：ZC702 官方禁止带电插拔 FMC（见 `board/zc702/README.md`）。
 > 顺序：SW11 断电 → 插 FMC/PMOD 转接板 → 接线 → 上电。
-> **引脚状态**：`w3_top.xdc` 目前**没有** UART 引脚（只有注释段）——必须先从 UG850 选定 FMC LPC 的 LA 脚对
+> **引脚状态**：UART 引脚已选定并填入 `w3_top.xdc`（注释状态，取消注释即可）：radio_txd=L21(H7)、radio_rxd=L22(H8)
 > （`radio_txd`/`radio_rxd` + `IOSTANDARD LVCMOS25`）填入 XDC，才能做本验证点；**未选定引脚前本步暂缓**。
 
 | w3_top 信号 | XDC 引脚 | 接到 USB-UART 桥 |
 |---|---|---|
-| radio_txd | **待选**（FMC LPC LA 脚对，查 UG850 后填入） | 桥的 RXD |
-| radio_rxd | **待选**（同上） | 桥的 TXD |
+| radio_txd | **L21**（FMC1_LPC_LA02_P，FMC 座 H7 脚，LVCMOS25） | 桥的 RXD |
+| radio_rxd | **L22**（FMC1_LPC_LA02_N，FMC 座 H8 脚，LVCMOS25） | 桥的 TXD |
 | GND | — | 桥的 GND（**必须共地**） |
 
 ### 3.3 PC 侧对接（都在仓库里现成）
