@@ -22,11 +22,11 @@
 # set_property -dict {PACKAGE_PIN <FMC/PMOD 引脚> IOSTANDARD LVCMOS25} [get_ports radio_txd]
 # set_property -dict {PACKAGE_PIN <FMC/PMOD 引脚> IOSTANDARD LVCMOS25} [get_ports radio_rxd]
 
-# === LEDs (DS9~DS12) —— 引脚号已对照 AMD 官方 ZC702 板卡定义核验 ===
+# === LEDs (DS15~DS18) —— 引脚号已对照 AMD 官方 ZC702 板卡定义核验 ===
 # 官方板卡文件 xilinx.com:zc702:part0:1.4 (part0_pins.xml):
 #   leds_4bits_tri_o_0..3 = P17 / P18 / W10 / V7  (LVCMOS25)
 #   ⚠ Y11 / T22 / U21 是 FMC2_LPC 的 la33_p / la14_p / la07_n —— **不是 LED**（旧底稿写错）。
-#   DS9~DS12 与 bit0..3 的对应关系仍请以 UG850/原理图核实。
+#   位号对应（UG850 已核）：P17=DS15 / P18=DS16 / W10=DS17 / V7=DS18。
 # set_property -dict {PACKAGE_PIN P17 IOSTANDARD LVCMOS25} [get_ports led_busy]         ;# LED0
 # set_property -dict {PACKAGE_PIN P18 IOSTANDARD LVCMOS25} [get_ports led_heartbeat]    ;# LED1
 # set_property -dict {PACKAGE_PIN W10 IOSTANDARD LVCMOS25} [get_ports {led_result[0]}]  ;# LED2

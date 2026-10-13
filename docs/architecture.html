@@ -125,7 +125,7 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 
 <div class="hero">
 <h1>🔒 PUF 无人机身份认证系统 · 诚实的进度图谱</h1>
-<p>所有模块都通过了仿真测试，但<b>没有任何一个上过真实板子</b>。电台还没买。以下用四级验证状态标注每个部件的真实进度。</p>
+<p>所有模块都通过了仿真测试，但<b>没有任何一个上过真实板子</b>（板卡已尝试上电：DS14 亮 / DS13 不亮，电源故障排查中，见 HANDOFF §三）。电台还没买。以下用四级验证状态标注每个部件的真实进度。</p>
 </div>
 
 <!-- ====== 验证级别图例 ====== -->
@@ -220,10 +220,10 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <b style="font-size:12px;color:var(--hw)">板级硬件状态</b>
 </div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px">
-<div class="afbox"><span class="fi">💠</span><div class="ft"><b>ZC702 板</b><span>已有，未上电验证</span></div><span class="vs"><span class="v code on">📝</span></span></div>
+<div class="afbox"><span class="fi">💠</span><div class="ft"><b>ZC702 板</b><span>已有；上电尝试中 DS13 不亮（电源排查中）</span></div><span class="vs"><span class="v code on">📝</span></span></div>
 <div class="afbox"><span class="fi">📦</span><div class="ft"><b>比特流 .bit</b><span>生成验证过，未烧板</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
-<div class="afbox"><span class="fi">📍</span><div class="ft"><b>XDC 引脚</b><span>模板就绪，引脚号未填</span></div><span class="vs"><span class="v code off">📝</span></span></div>
-<div class="afbox"><span class="fi">🕐</span><div class="ft"><b>时钟适配</b><span>板上200MHz差分≠设计100MHz</span></div><span class="vs"><span class="v code off">📝</span></span></div>
+<div class="afbox"><span class="fi">📍</span><div class="ft"><b>XDC 引脚</b><span>底稿已核引脚；UART 待选；全部仍注释</span></div><span class="vs"><span class="v code off">📝</span></span></div>
+<div class="afbox"><span class="fi">🕐</span><div class="ft"><b>时钟适配</b><span>✅ wrapper + clk_wiz_0 已解决</span></div><span class="vs"><span class="v code off">📝</span></span></div>
 </div>
 </div>
 </div>
@@ -301,7 +301,7 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <div class="dhead"><span class="di">🔩</span><div><h2>功能域 7：板级硬件</h2><p class="dd">所有逻辑运行的物理平台。板子已有但从未上电验证过我们的设计。</p></div></div>
 <div class="dbody"><div class="nodes">
 <div class="node"><div class="nh"><span class="ni">💠</span><span class="nn">ZC702 开发板</span><div class="vs"><span class="v code on">📝</span><span class="v sim off">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>AMD官方FPGA评估板。我们的设计只用了1.23%的资源。</div><div class="nf"><b>真实状态：</b>板子在手但<b>从未上电跑过我们的代码</b>。Vivado环境已验证可连接JTAG（W1阶段确认过）。</div></div>
-<div class="node"><div class="nh"><span class="ni">📍</span><span class="nn">引脚约束 XDC</span><div class="vs"><span class="v code off">📝</span><span class="v sim off">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>告诉Vivado每个信号连到板上哪个引脚。没有这个，比特流不知道信号路由到哪里。</div><div class="nf"><b>真实状态：</b>模板写好了但引脚号全是占位符。需查UG850手册。且发现3个适配问题（时钟/复位/拨码开关数量）。</div></div>
+<div class="node"><div class="nh"><span class="ni">📍</span><span class="nn">引脚约束 XDC</span><div class="vs"><span class="v code off">📝</span><span class="v sim off">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>告诉Vivado每个信号连到板上哪个引脚。没有这个，比特流不知道信号路由到哪里。</div><div class="nf"><b>真实状态：</b>底稿已改写为 wrapper 端口名；LED/时钟/复位/按键/拨码引脚已核（P17/P18/W10/V7=DS15~DS18、D18/C19、G19、F19、W6/W7），UART 电台脚待选型；全部约束仍为注释（上板前取消）。原 3 个适配问题（时钟/复位/拨码）已由 wrapper 解决。</div></div>
 </div></div>
 </div>
 
@@ -309,11 +309,11 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <div class="todo">
 <h3>📋 上板前必须完成的事（按优先级排序）</h3>
 
-<div class="todo-item"><div class="tn">1</div><div class="tt"><b>填入 ZC702 真实引脚号</b><span>查UG850手册+确定电台接在哪个FMC/PMOD引脚 → 填入w3_top.xdc → 重新综合生成正式比特流</span></div><span class="tp crit">必须有</span></div>
+<div class="todo-item"><div class="tn">1</div><div class="tt"><b>启用 XDC 引脚约束（引脚号已核）</b><span>LED/时钟/复位/按键/拨码引脚已按 UG850 与官方板卡文件核好（P17/P18/W10/V7=DS15~DS18、D18/C19、G19、F19、W6/W7）→ 取消 w3_top.xdc 注释；UART 电台脚待选 FMC/PMOD → 重新综合出正式比特流</span></div><span class="tp crit">必须有</span></div>
 
-<div class="todo-item"><div class="tn">2</div><div class="tt"><b>解决时钟适配（200MHz差分→100MHz）</b><span>方案A：w3_top加IBUFDS+MMCM分频。方案B：改用FREQ_HZ=200M。不解决则串口波特率错2倍</span></div><span class="tp crit">必须有</span></div>
+<div class="todo-item"><div class="tn">2</div><div class="tt"><b>✅ 时钟适配已解决（wrapper + clk_wiz_0）</b><span>w3_top_zc702 差分输入 → clk_wiz_0 出 100MHz + locked；clk_wiz_0 须上板时在 Vivado 工程内生成（不在仓库、不参与 CI）</span></div><span class="tp done">已完成</span></div>
 
-<div class="todo-item"><div class="tn">3</div><div class="tt"><b>解决复位源（PS域→PL域）</b><span>ZC702的CPU_RESET在PS域不在PL域。改用GPIO_SW_N按钮（G19引脚，LVCMOS25）</span></div><span class="tp crit">必须有</span></div>
+<div class="todo-item"><div class="tn">3</div><div class="tt"><b>✅ 复位源已解决（PL 域）</b><span>wrapper 组合复位 rst_n = sys_rst_btn_n(GPIO_SW_N/G19) &amp; mmcm_locked（ZC702 的 CPU_RESET 在 PS 域，PL 不可见）</span></div><span class="tp done">已完成</span></div>
 
 <div class="todo-item"><div class="tn">4</div><div class="tt"><b>购买并配置 433MHz 电台（一对）</b><span>购买SiK兼容电台×2 + USB-TTL转接线×2。配置：57600波特/64k空中速率/ECC开/网络ID匹配</span></div><span class="tp crit">必须有</span></div>
 
@@ -327,7 +327,7 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 
 <div class="todo-item"><div class="tn">9</div><div class="tt"><b>验证 PUF 核心假设</b><span>上板后验证：不同芯片频率是否确实不同（唯一性）、同一芯片频率是否稳定（可靠性）。如果不行需增加环数</span></div><span class="tp med">W4实验</span></div>
 
-<div class="todo-item"><div class="tn">10</div><div class="tt"><b>解决拨码开关数量不足</b><span>ZC702只有2个PL拨码开关，设计需要8位终端ID。方案：用常量（演示固定ID）或FMC扩展</span></div><span class="tp low">可延后</span></div>
+<div class="todo-item"><div class="tn">10</div><div class="tt"><b>✅ 拨码不足已解决（wrapper tie）</b><span>ZC702 仅 W6/W7 两位 PL 拨码；wrapper 内 term_id_sw = {6'h00, term_id_dip} 高位 tie 0，w3_top 一行未改</span></div><span class="tp done">已完成</span></div>
 </div>
 
 <!-- ====== 诚实进度 ====== -->
@@ -348,7 +348,7 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 </div>
 
 <footer>
-60 commits · 147 files · 15 RTL模块 · 12 TB套件 · 44 单测+1175 向量+金丝雀<br>
+74 commits · 168 files · 15 RTL模块 · 12 TB套件 · 44 单测+1175 向量+金丝雀<br>
 <b>仿真通过≠板级验证</b> · 当前所有"✅"均指仿真级别 · 上板验证 = 0 · 系统联调 = 0
 </footer>
 </div>

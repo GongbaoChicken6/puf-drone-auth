@@ -1,0 +1,87 @@
+{
+  "agent": "B",
+  "verdicts": [
+    {
+      "claim": "C14",
+      "verdict": "CONFIRMED",
+      "evidence": "docs/HANDOFF_SUMMARY.md:38「**用户 LED**：P17=**DS15**、P18=**DS16**、W10=**DS17**、V7=**DS18**」; :39「DS12 = PS_MIO8_LED0、DS23 = PS_LED1（PS 侧，勿混用）」; :32「**J17**（U36，**Mini-B**）= USB-UART 桥 CP2103GM」; :33「**U23**（**Micro-B**）= PL JTAG」; :34「**J1**（U9，**Mini-B**）= PS USB 2.0 ULPI（OTG；无 PS 程序时零枚举）」; :36-37 DS14/DS13。「UG850 LED 表无 DS9~DS11」一项实际出自 §四 :51, 不在 §三(事实本身准确, 仅节次归属偏差, 见 P3)。"
+    },
+    {
+      "claim": "C15",
+      "verdict": "CONFIRMED",
+      "evidence": "待办仍在: architecture.html:314/:316/:330、project_flow.html:193-194、project_status.html:173、mindmap.html:140; 已解决: w3_top_zc702.v:31 clk_wiz_0 u_mmcm、:40 wire rst_n = sys_rst_btn_n & mmcm_locked、:21/:52 term_id_dip、build_w3_board.tcl、w3_top.xdc:3/:11-12(wrapper 端口 clk_p/clk_n)。git log 实证 9ff5299/d17b038/895b4fb 均为 2026-10-10。页脚: 四份 HTML 均「60 commits · 147 files」; 实测 git rev-list --count HEAD=73、git ls-files=159。architecture.html 全文无 DS13/PWRGOOD 内容(grep 0 命中)。"
+    },
+    {
+      "claim": "C16",
+      "verdict": "CONFIRMED",
+      "evidence": "HANDOFF_SUMMARY.md:201-203「⬜ W4/W5/W6」; G5 四件套与判据: project_design.md:262-265/:278-281; :290「11-03 晚提交」; HANDOFF:61「11-04 18:00」。ML 实验 0 文件: 全仓搜索项目自有代码 0 命中, 仅 external/PUF-lab 参考源 arbiter.v/arbiterpuf.v; 实验 A=design.md:385-388、实验 B=:391-395「~120 条带噪 CRP」、结论口径冻结=:398-402。"
+    },
+    {
+      "claim": "C17",
+      "verdict": "CONFIRMED",
+      "evidence": "docs/HANDOFF_SUMMARY.md:51「**外部复核待做**（智谱配额 10-10 21:57 重置后）：DS9~DS11 的含义（LED 表中未见）、板上 USB 口丝印实测、JTAG 口线型确认。」——恰为 3 项。教程保守措辞: w1_tutorial.md:52/:226「以实物丝印为准」。"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "P2",
+      "file": "D:\\puf-drone-auth\\build\\reviews\\todo-recheck\\claims.md",
+      "line": 43,
+      "category": "omission",
+      "description": "附录自称「主会话梳理的完整待办清单」, 但遗漏了权威文档明确记录的关键阻塞待办——板卡 DS13 电源故障排查及后续判定路径(重新插紧 J60/断电重启/拔 FMC-PMOD-SD 清负载/仍不亮则判硬件故障报告老师/用 Mini-B 线插 J17 验证 CP2103)。仅看附录的读者会低估板卡侧当前阻塞状态。",
+      "evidence": "docs/HANDOFF_SUMMARY.md:41「**当前故障**：DS14 亮（12V 到位）但 **DS13 不亮（PWRGOOD 未建立）**→ 板内电源未起来 → JTAG/USB 全部无法工作」; :43「下一步（板卡会话继续）：重新插紧 J60 → 断电重启 → 拔 FMC/PMOD/SD 清空负载 → 若 DS13 仍不亮则判硬件故障报告老师; 同时可用 Mini-B 线插 J17 验证 CP2103」。claims.md 附录 L43-47 五个分类中均无此项(头部背景 L5 有「另一会话处理」提示, 故不定 P1)。",
+      "function_context": "",
+      "sources": [
+        "agent-B"
+      ]
+    },
+    {
+      "severity": "P3",
+      "file": "D:\\puf-drone-auth\\build\\reviews\\todo-recheck\\claims.md",
+      "line": 23,
+      "category": "citation-accuracy",
+      "description": "C14 将「UG850 LED 表无 DS9~DS11」归入「HANDOFF §三 UG850 权威事实」, 但该表述原文位于 HANDOFF §四(遗留待办第 4 条), §三 LED 表并无此句; 按 C14 去原文核实会找不到。",
+      "evidence": "docs/HANDOFF_SUMMARY.md §三（L29-44）无「DS9~DS11」字样; 原文在 :51「**外部复核待做**…DS9~DS11 的含义（LED 表中未见）」。",
+      "function_context": "",
+      "sources": [
+        "agent-B"
+      ]
+    },
+    {
+      "severity": "P3",
+      "file": "D:\\puf-drone-auth\\build\\reviews\\todo-recheck\\claims.md",
+      "line": 24,
+      "category": "overgeneralization",
+      "description": "C15「四份 HTML 仍把时钟适配/复位源/拨码开关不足列为待办」按字面(每份都列三项)解读不成立: 时钟适配四份均有, 「复位」以概括形式出现于三份, project_flow.html 无复位源与拨码开关待办, 「拨码开关数量不足」仅 architecture.html 一份列出。建议改为按文件分列, 避免核查者在错误文件中找项。",
+      "evidence": "architecture.html:314/:316/:330(三项齐); project_flow.html:193-194 仅「填入 ZC702 引脚」「时钟适配」; project_status.html:173「上板适配待办（引脚/时钟/复位）」; mindmap.html:140「上板: 引脚/时钟/复位适配」。",
+      "function_context": "",
+      "sources": [
+        "agent-B"
+      ]
+    },
+    {
+      "severity": "P3",
+      "file": "D:\\puf-drone-auth\\build\\reviews\\todo-recheck\\claims.md",
+      "line": 44,
+      "category": "omission",
+      "description": "附录「二、需板卡」遗漏上板必要前置步骤: 在 Vivado 工程内生成 clk_wiz_0 IP(200MHz 差分→100MHz+locked)。wrapper 依赖该 IP 且不在仓库中, 缺此步骤上板构建必失败。",
+      "evidence": "docs/HANDOFF_SUMMARY.md:210「上板时须在 Vivado 工程内生成 clk_wiz_0（200MHz 差分 → 100MHz + locked），wrapper 不参与仿真/CI」; w3_top_zc702.v:8「Clk Wizard IP（clk_wiz_0）不在仓库里 —— 上板前须在 Vivado 工程中生成」。",
+      "function_context": "",
+      "sources": [
+        "agent-B"
+      ]
+    },
+    {
+      "severity": "P3",
+      "file": "D:\\puf-drone-auth\\build\\reviews\\todo-recheck\\claims.md",
+      "line": 43,
+      "category": "incomplete-scope",
+      "description": "附录一「预认证池 DoS 限速」只概括了 HANDOFF 所载 W4 方案的一个子项, 遗漏「暂存-释放式 draw」与「池补充 SOP」两个并列子方案, 后续排期可能只做限速而漏掉池维护流程。",
+      "evidence": "docs/HANDOFF_SUMMARY.md:154「W4：per-tid 限速 / 暂存-释放式 draw / 池补充 SOP」; 附录 L43 仅写「预认证池 DoS 限速」。",
+      "function_context": "",
+      "sources": [
+        "agent-B"
+      ]
+    }
+  ]
+}

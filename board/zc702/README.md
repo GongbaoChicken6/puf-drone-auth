@@ -5,7 +5,10 @@
 - Power switch ON after connecting adapter
 
 ## USB Connection
-- Two USB ports with different roles: **J17 = USB-UART (CP210x serial, used by the factory BIST/Tera Term)**, the other = **JTAG (used by Vivado Hardware Manager for programming + VIO)**. For Vivado, plug the JTAG port; the connector type per port varies between docs, so go by the silkscreen. + IOSTANDARD
+- Three USB ports (per UG850) — do not mistake one for another:
+  - **J17 (Mini-B)** = USB-UART bridge (CP2103GM). Powered from the PC's USB 5V, so the COM port enumerates even with the board off — used by factory BIST / Tera Term.
+  - **U23 (Micro-B, on the Digilent JTAG module)** = PL JTAG — used by Vivado Hardware Manager for programming + VIO.
+  - **J1 (Mini-B)** = PS USB 2.0 ULPI (OTG). Enumerates nothing without a PS program — the easiest port to plug into by mistake.
 - Use a **data cable** (not charge-only)
 
 ## Boot Mode (SW16)

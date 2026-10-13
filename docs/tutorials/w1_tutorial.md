@@ -55,7 +55,7 @@ tb_speck 1175 组全量回放、tb_gap 7 用例含码 4 拒绝）+ 44 Python 单
 | **SW15-1/2 ≈ SW13/SW14** | 并联信号（BIST 的 Switch Test 用） | 任选一种 |
 | **FMC 连接器** | 扩展接口 | 验证点①不碰（验证点③的 USB-UART 桥/电台会用到） |
 | **GPIO_SW_N 按键**（G19） | PL 域复位（验证点②用） | 先认识位置，本课暂不按 |
-| **DS9~DS12 LED**（**P17/P18/W10/V7**，已对照 AMD 官方板卡定义核验） | 状态灯（验证点②用） | 先认识位置 |
+| **DS15~DS18 LED**（**P17/P18/W10/V7**，已对照 AMD 官方板卡定义核验；位号对应 UG850） | 状态灯（验证点②用） | 先认识位置 |
 
 > ⚠ **两个 board 认知提前打预防针**（验证点②会展开）：
 > ① ZC702 的 PL 时钟是 **200MHz 差分**（D18/C19, LVDS_25），而 w3_top 期待 100MHz 单端；
@@ -357,7 +357,7 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
 |---|---|---|
 | `set_property PACKAGE_PIN G19 [get_ports sys_rst_btn_n]` + `IOSTANDARD LVCMOS25` | 复位 = GPIO_SW_N（**端口名用 wrapper 的 `sys_rst_btn_n`**） | UG850 表 "GPIO SW N" |
 | `P17` → led_busy（LED0） | 认证进行灯 | **官方板卡定义: leds_4bits = P17/P18/W10/V7**；⚠ ``Y11/T22/U21`` 是 FMC2 LPC 脚、**不是 LED**（旧底稿错）。每行都要配 `IOSTANDARD LVCMOS25` |
-| `P18` → led_heartbeat（LED1） | 心跳灯 | 同上；DS9~DS12 与 LED0~3 的对应请以 UG850/原理图核实 |
+| `P18` → led_heartbeat（LED1，**DS16**） | 心跳灯 | 同上；位号对应已核（UG850）：P17/P18/W10/V7 = DS15/16/17/18 |
 | `W10` / `V7` → led_result[1:0]（LED2/LED3） | 结果码灯 | 同上 |
 | `W6` / `W7` → term_id_dip[1:0]（wrapper 端口） | 仅 2 位拨码在 PL | 同上 + IOSTANDARD；**wrapper 已把高 6 位 tie 0**（`.term_id_sw({6'h00, term_id_dip})`），无需手工改代码 |
 | `auth_btn` → **F19** | PL 按键（GPIO_SW_S，官方板卡定义核验） | 已在 `w3_top.xdc` 补好注释行；不接则 2.5 测 3 跳过 |
@@ -385,9 +385,9 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
 
 | 测 | 操作 | 预期 |
 |---|---|---|
-| 心跳 | 数 DS10：10 秒内亮/灭**变化次数** | 约 **15 次变化 = 7~8 个完整亮灭来回**（周期 ≈1.34 s，0.75 Hz） |
-| 复位 | 按住 GPIO_SW_N 不放 | 按住期间 DS10 停在固定电平（复位生效）；松开后恢复 1.34 s 周期闪烁 |
-| 按键协议触发 | 按 auth_btn（无基站） | led_busy（DS9）亮约 **2 秒**（等待基站判定超时）→ 灭，led_result 显示阻断码（两灯同亮 = 11） |
+| 心跳 | 数 DS16：10 秒内亮/灭**变化次数** | 约 **15 次变化 = 7~8 个完整亮灭来回**（周期 ≈1.34 s，0.75 Hz） |
+| 复位 | 按住 GPIO_SW_N 不放 | 按住期间 DS16 停在固定电平（复位生效）；松开后恢复 1.34 s 周期闪烁 |
+| 按键协议触发 | 按 auth_btn（无基站） | led_busy（DS15）亮约 **2 秒**（等待基站判定超时）→ 灭，led_result 显示阻断码（两灯同亮 = 11） |
 
 > 心跳闪烁 = 时钟 ✓ + 复位 ✓ + 引脚 ✓ + 计数逻辑 ✓，四件事一次全验。
 > 任何一项不符 → 见排障速查"验证点②"段。
