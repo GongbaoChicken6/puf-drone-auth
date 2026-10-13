@@ -207,6 +207,28 @@ class CRPPool:
             self._persist_locked()
             return [bytes.fromhex(key) for key in picked]
 
+    def release(self, seeds: list[bytes] | tuple[bytes, ...]) -> int:
+        """Roll back seeds minted by reserve() when enrollment aborted.
+
+        review B-P1: reserve() puts freshly minted seeds straight into
+        the drawable set.  If the enrollment exchange dies halfway
+        (serial timeout, Ctrl-C), those seeds have no template entry and
+        drawing one later would blow up scoring.  Removes the given
+        seeds from the available set again (used seeds are kept -- they
+        were genuinely consumed) and persists.  Returns how many were
+        actually removed.
+        """
+        keys = [bytes(s).hex() for s in seeds]
+        with self._lock:
+            removed = 0
+            for key in keys:
+                if key in self._available and key not in self._used:
+                    self._available.discard(key)
+                    removed += 1
+            if removed:
+                self._persist_locked()
+            return removed
+
     def _remaining_nolock(self) -> int:
         """Remaining (enrolled, unused) challenge count.  Lock required."""
         return len(self._available - self._used)

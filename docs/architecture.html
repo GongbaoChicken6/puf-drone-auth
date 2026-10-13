@@ -222,7 +222,7 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px">
 <div class="afbox"><span class="fi">💠</span><div class="ft"><b>ZC702 板</b><span>已有；上电尝试中 DS13 不亮（电源排查中）</span></div><span class="vs"><span class="v code on">📝</span></span></div>
 <div class="afbox"><span class="fi">📦</span><div class="ft"><b>比特流 .bit</b><span>生成验证过，未烧板</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
-<div class="afbox"><span class="fi">📍</span><div class="ft"><b>XDC 引脚</b><span>底稿已核引脚；UART 待选；全部仍注释</span></div><span class="vs"><span class="v code off">📝</span></span></div>
+<div class="afbox"><span class="fi">📍</span><div class="ft"><b>XDC 引脚</b><span>全部引脚已核（UART=FMC1_LPC L21/L22）；约束仍注释</span></div><span class="vs"><span class="v code off">📝</span></span></div>
 <div class="afbox"><span class="fi">🕐</span><div class="ft"><b>时钟适配</b><span>✅ wrapper + clk_wiz_0 已解决</span></div><span class="vs"><span class="v code off">📝</span></span></div>
 </div>
 </div>
@@ -301,7 +301,7 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <div class="dhead"><span class="di">🔩</span><div><h2>功能域 7：板级硬件</h2><p class="dd">所有逻辑运行的物理平台。板子已有但从未上电验证过我们的设计。</p></div></div>
 <div class="dbody"><div class="nodes">
 <div class="node"><div class="nh"><span class="ni">💠</span><span class="nn">ZC702 开发板</span><div class="vs"><span class="v code on">📝</span><span class="v sim off">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>AMD官方FPGA评估板。我们的设计只用了1.23%的资源。</div><div class="nf"><b>真实状态：</b>板子在手但<b>从未上电跑过我们的代码</b>。Vivado环境已验证可连接JTAG（W1阶段确认过）。</div></div>
-<div class="node"><div class="nh"><span class="ni">📍</span><span class="nn">引脚约束 XDC</span><div class="vs"><span class="v code off">📝</span><span class="v sim off">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>告诉Vivado每个信号连到板上哪个引脚。没有这个，比特流不知道信号路由到哪里。</div><div class="nf"><b>真实状态：</b>底稿已改写为 wrapper 端口名；LED/时钟/复位/按键/拨码引脚已核（P17/P18/W10/V7=DS15~DS18、D18/C19、G19、F19、W6/W7），UART 电台脚待选型；全部约束仍为注释（上板前取消）。原 3 个适配问题（时钟/复位/拨码）已由 wrapper 解决。</div></div>
+<div class="node"><div class="nh"><span class="ni">📍</span><span class="nn">引脚约束 XDC</span><div class="vs"><span class="v code off">📝</span><span class="v sim off">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>告诉Vivado每个信号连到板上哪个引脚。没有这个，比特流不知道信号路由到哪里。</div><div class="nf"><b>真实状态：</b>底稿已改写为 wrapper 端口名；LED/时钟/复位/按键/拨码引脚已核（P17/P18/W10/V7=DS15~DS18、D18/C19、G19、F19、W6/W7），UART 已选 FMC1_LPC LA02=L21/L22；全部约束仍为注释（上板前取消）。原 3 个适配问题（时钟/复位/拨码）已由 wrapper 解决。</div></div>
 </div></div>
 </div>
 
@@ -309,7 +309,7 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <div class="todo">
 <h3>📋 上板前必须完成的事（按优先级排序）</h3>
 
-<div class="todo-item"><div class="tn">1</div><div class="tt"><b>启用 XDC 引脚约束（引脚号已核）</b><span>LED/时钟/复位/按键/拨码引脚已按 UG850 与官方板卡文件核好（P17/P18/W10/V7=DS15~DS18、D18/C19、G19、F19、W6/W7）→ 取消 w3_top.xdc 注释；UART 电台脚待选 FMC/PMOD → 重新综合出正式比特流</span></div><span class="tp crit">必须有</span></div>
+<div class="todo-item"><div class="tn">1</div><div class="tt"><b>启用 XDC 引脚约束（引脚号已核）</b><span>LED/时钟/复位/按键/拨码引脚已按 UG850 与官方板卡文件核好（P17/P18/W10/V7=DS15~DS18、D18/C19、G19、F19、W6/W7）→ 取消 w3_top.xdc 注释（UART 已选 FMC1_LPC LA02=L21/L22）→ 重新综合出正式比特流</span></div><span class="tp crit">必须有</span></div>
 
 <div class="todo-item"><div class="tn">2</div><div class="tt"><b>✅ 时钟适配已解决（wrapper + clk_wiz_0）</b><span>w3_top_zc702 差分输入 → clk_wiz_0 出 100MHz + locked；clk_wiz_0 须上板时在 Vivado 工程内生成（不在仓库、不参与 CI）</span></div><span class="tp done">已完成</span></div>
 
@@ -348,7 +348,7 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 </div>
 
 <footer>
-74 commits · 168 files · 15 RTL模块 · 12 TB套件 · 44 单测+1175 向量+金丝雀<br>
+77 commits · 171 files · 15 RTL模块 · 12 TB套件 · 63 单测+1175 向量+金丝雀<br>
 <b>仿真通过≠板级验证</b> · 当前所有"✅"均指仿真级别 · 上板验证 = 0 · 系统联调 = 0
 </footer>
 </div>

@@ -159,7 +159,7 @@ Git：57 commits（截至 A1 收官提交 a678274）· 144 files · tag w3-compl
 ### A1 整体复审新增备注（2026-10-08 全六阶段交叉审查，全部 P3 级）
 
 - **SimulatedHSM 已休眠**：A1 后无任何生产调用方与测试覆盖（规格要求保留供 legacy enroll），W4 决策点：删除或补 3-4 行最小单测防 bit-rot
-- **on_confirm 无运行时调用方**：HF-IDA 最后一步（基站确知终端已验证 R2）的 PC 侧消费在串口接收环路落地时必须接线（W3 上板清单第 5 条的自然延伸）
+- **on_confirm 无运行时调用方**：✅ 2026-10-13 已接线——serial_server.SerialServer 消费 CONFIRM（CONFIRM_OK=会话建立+完整互认计数，CONFIRM_FAIL=会话关闭），19 单测入 CI
 - **互操作 harness 固化建议**：整体复审的跨阶段实演（RTL 语义终端模型↔真实服务器栈，18/18 断言：黄金 R2/重放拒止/跨重启持久/灰区/CONFIRM 闭环）价值高，建议 W4 固化为 tests/test_interop_rtl_model.py（本次为一次性证据，见 build/reviews/a1full/interop_run.json）
 - **串口联调前置：注册语义配对**：当前 loopback 终端响应=HMAC、RTL W3 占位=种子直通——未来串口环路联调时，enroll 必须用与终端一致的响应语义（或对真实终端注册），否则 PUF 评分必 REJECT、易误判为协议缺陷
 - 本轮已顺手修复：tb_level3 两处 ~C2 过时注释、tb_gap 新增 GH 用例（码 4 + 正确 R2_7 → REJECT，锁定阶段 4 语义）、check_contract_sync 输出措辞诚实化（TB 数组为人工镜像，工具不读）
@@ -210,7 +210,7 @@ Git：57 commits（截至 A1 收官提交 a678274）· 144 files · tag w3-compl
    上板时须在 Vivado 工程内生成 `clk_wiz_0`（200MHz 差分 → 100MHz + locked），wrapper 不参与仿真/CI
 3. **复位源**——✅ wrapper 已组合：`rst_n = sys_rst_btn_n & mmcm_locked`（按键低有效 + MMCM 未锁持续复位，两者不冲突）
 4. **购买 433MHz 电台一对**——⬜ 待做
-5. **PC 串口通信循环**——⬜ 待做（前置：选定 FMC/PMOD 的 UART 引脚；**插 FMC 前必须断电**，官方禁止带电插拔）
+5. **PC 串口通信循环**——✅ 代码完成 2026-10-13：serial_server.py 终端发起接收循环（REPL 'serve' 命令，线上取 C2）+ enroll.py 注册语义配对 + on_confirm 接线，19 单测入 CI。剩余为真机联调前置：XDC 取消注释 + clk_wiz_0 生成（UART 引脚已由板卡会话选定 FMC1_LPC LA02 = L21/L22 / H7/H8）；**插 FMC 前必须断电**，官方禁止带电插拔
 6. **拨码开关不够 8 位**——✅ 已在 wrapper 内解决：`term_id_dip[1:0]`（W6/W7）+ 内部 `{6'h00, term_id_dip}` tie 高位，无需手工改代码
 
 > 支撑改动：`build_w3.tcl` 原先**完全不加载** `w3_top.xdc`（引脚约束在批处理流里静默失效）——已补 `add_files -fileset constrs_1`。

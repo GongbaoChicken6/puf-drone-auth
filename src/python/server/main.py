@@ -18,6 +18,8 @@ REPL commands::
     setkey <terminal_id> <hex> install an explicit Speck64/96 device key
     c2reset <terminal_id>      clear the C2 replay window (terminal
                                power-cycle recovery)
+    serve                      serial mode only: run the terminal-initiated
+                               receive loop (protocol_contract §5) until Ctrl-C
     status                     show sessions, templates and CRP pools
     quit                       exit the server
 """
@@ -44,6 +46,11 @@ if __package__ in (None, ""):
         PoolExhaustedError,
         format_pool_summary,
     )
+    from src.python.server.enroll import (  # noqa: E402,F401
+        enroll_device,
+        majority_bytes,
+    )
+    from src.python.server.serial_server import serve_forever  # noqa: E402
     from src.python.server.hsm import (  # noqa: E402
         DEVICE_KEY_BYTES,
         SpeckHSM,
@@ -63,6 +70,8 @@ if __package__ in (None, ""):
     from src.python.server.template_db import TemplateDB  # noqa: E402
 else:
     from .crp_pool import PoolExhaustedError, format_pool_summary
+    from .enroll import enroll_device, majority_bytes  # noqa: F401
+    from .serial_server import serve_forever
     from .hsm import DEVICE_KEY_BYTES, SpeckHSM, hsm_status
     from .protocol import (
         CONFIRM_OK,
@@ -200,8 +209,11 @@ class SerialTransport:
         self.port = port
 
     def counter_challenge(self, terminal_id: int) -> bytes:
-        """The real terminal sends C2 inside MSG_ACCESS_REQUEST; the REPL
-        path generates it here until the full receive loop lands (W3)."""
+        """Stub C2 for the one-shot REPL 'auth' path only.
+
+        The real flow is terminal-initiated: 'serve' reads the genuine
+        C2 from the ACCESS_REQUEST frame (W3 receive loop, serial_server).
+        """
         return secrets.token_bytes(8)
 
     def respond(
@@ -497,19 +509,8 @@ def _flush_c2_state(protocol: HFIDAProtocol, store: DeviceKeyStore) -> None:
 
 
 # ---------------------------------------------------------------------
-# Helpers
+# Helpers (majority_bytes now lives in enroll.py; re-exported above)
 # ---------------------------------------------------------------------
-def majority_bytes(responses: Sequence[bytes]) -> bytes:
-    """Bit-wise majority vote across repeated 8-byte responses (ties -> 0)."""
-    n = len(responses)
-    if n == 0:
-        raise ValueError("no responses to vote on")
-    values = [int.from_bytes(r, "big") for r in responses]
-    out = 0
-    for i in range(64):
-        if sum((v >> i) & 1 for v in values) * 2 > n:
-            out |= 1 << i
-    return out.to_bytes(8, "big")
 
 
 def _print_verdict(fields: dict[str, Any], protocol: HFIDAProtocol, tid: int) -> None:
@@ -537,28 +538,34 @@ def cmd_enroll(
     measurements: int,
     store: DeviceKeyStore,
 ) -> None:
-    """REPL 'enroll' command: enroll (or refresh) a device template."""
+    """REPL 'enroll' command: enroll (or refresh) a device template.
+
+    Delegates to enroll_device() so loopback and serial links share one
+    registration path -- the semantics-pairing rule from HANDOFF.
+    """
     if not args:
         print("usage: enroll <terminal_id> [n_challenges]")
         return
     tid = int(args[0])
     n = int(args[1]) if len(args) > 1 else 100
-    m = max(1, measurements)
     try:
-        seeds = protocol.pools.get(tid).reserve(n)
+        result = enroll_device(
+            protocol, transport, tid,
+            n_challenges=n, measurements=measurements,
+        )
     except PoolExhaustedError as exc:
         print(f"[ERROR] {exc}")
         print("        run 'status' and consider pool maintenance (reset).")
         return
-    data: dict[str, list[bytes]] = {seed.hex(): [] for seed in seeds}
-    for round_index in range(m):
-        for seed, resp in zip(seeds, transport.respond(tid, seeds)):
-            data[seed.hex()].append(resp)
-    pairs = [(bytes.fromhex(hx), majority_bytes(rs)) for hx, rs in data.items()]
-    summary = protocol.templates.enroll(tid, pairs, measurements=data)
+    if result["n_challenges"] != n:
+        print(f"[NOTE]   requested {n} challenges rounded up to "
+              f"{result['n_challenges']} (CHALLENGE frames carry "
+              f"{HFIDAProtocol.N_CHALLENGES} seeds each)")
+    summary = result["summary"]
     print(f"[ENROLL] terminal {tid}: {summary['n_pairs']} CRPs stored "
           f"(+{summary['added']}), stable bits {summary['stable_bits']}/64 "
-          f"({summary['stability_pct']}%) over {m} measurement(s)/challenge")
+          f"({summary['stability_pct']}%) over {result['measurements']} "
+          f"measurement(s)/challenge")
     pool = protocol.pools.get(tid)
     print(f"[POOL]   {pool.remaining}/{pool.pool_size} challenges remaining "
           f"({pool.remaining_pct}%)")
@@ -697,6 +704,8 @@ HELP_TEXT = """commands:
   enroll <terminal_id> [n]    enroll device template (default n=100 CRPs)
   setkey <terminal_id> <hex>  install Speck64/96 device key (24 hex chars)
   c2reset <terminal_id>       clear C2 replay window (power-cycle recovery)
+  serve                       serial mode: terminal-initiated receive loop
+                              (Ctrl-C returns to the prompt)
   status                      sessions / templates / CRP pools
   quit                        exit"""
 
@@ -734,6 +743,20 @@ def repl(
                 cmd_setkey(protocol, store, args)
             elif cmd == "c2reset":
                 cmd_c2reset(protocol, store, args)
+            elif cmd == "serve":
+                if not isinstance(transport, SerialTransport):
+                    print("[ERROR] 'serve' needs serial mode "
+                          "(start with --port COMx); loopback has no wire")
+                else:
+                    print(f"[SERVE]  receive loop on {transport.port} "
+                          f"(Ctrl-C to return)")
+                    try:
+                        serve_forever(transport.serial, protocol)
+                    finally:
+                        # review C-P2: same crash-consistency discipline
+                        # as cmd_auth -- a serve session killed mid-run
+                        # must not reopen the C2 replay window.
+                        _flush_c2_state(protocol, store)
             elif cmd == "status":
                 cmd_status(protocol)
             elif cmd in ("help", "?"):

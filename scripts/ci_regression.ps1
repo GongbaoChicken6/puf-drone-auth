@@ -98,6 +98,14 @@ if ($pyCode -ne 0) {
     Write-Host "PYTHON UNIT TESTS FAILED"; exit 1
 }
 $out | Select-Object -Last 4 | ForEach-Object { Write-Host "  $_" }
+# W3 serial-loop tests (receive loop + on_confirm wiring + enroll pairing).
+$outS = & python "tests\test_serial_server.py" 2>&1 | ForEach-Object { "$_" }
+$serialCode = $LASTEXITCODE
+if ($serialCode -ne 0) {
+    $outS | Select-Object -Last 40 | ForEach-Object { Write-Host "  $_" }
+    Write-Host "SERIAL SERVER TESTS FAILED"; exit 1
+}
+$outS | Select-Object -Last 4 | ForEach-Object { Write-Host "  $_" }
 $out2 = & python "scripts\test_r2_nonlinearity.py" 2>&1 | ForEach-Object { "$_" }
 $canCode = $LASTEXITCODE
 if ($canCode -ne 0) {
