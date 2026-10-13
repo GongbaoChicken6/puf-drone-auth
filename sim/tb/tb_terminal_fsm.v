@@ -54,6 +54,10 @@ module tb_terminal_fsm;
         .terminal_id   (terminal_id  ),
         .auth_busy     (auth_busy    ),
         .auth_result   (auth_result  ),
+        // W4-T2 可注入端口 tie-off（黄金零改动）
+        .c2_boot_seed  (64'hA7A6_A5A4_A3A2_A1A0),
+        .device_key_in (96'h1312_1110_0B0A_0908_0302_0100),
+        .use_ext_key   (1'b0),
         .fp_msg_id     (fp_msg_id    ),
         .fp_pay_len    (fp_pay_len   ),
         .fp_frame_ok   (fp_frame_ok  ),

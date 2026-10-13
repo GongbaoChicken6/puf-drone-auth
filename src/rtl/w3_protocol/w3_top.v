@@ -152,6 +152,10 @@ module w3_top # (
         .terminal_id   (term_id_sw    ),
         .auth_busy     (led_busy      ),
         .auth_result   (led_result    ),
+        // W4-T2 可注入端口 tie-off（行为与 W3 一致；P4 起换 ro_entropy/派生密钥）
+        .c2_boot_seed  (64'hA7A6_A5A4_A3A2_A1A0),   // 字节 A0..A7（c2_counter[j]=A0+j）
+        .device_key_in (96'h1312_1110_0B0A_0908_0302_0100),
+        .use_ext_key   (1'b0),
         .fp_msg_id     (fp_msg_id     ),
         .fp_pay_len    (fp_pay_len    ),
         .fp_frame_ok   (fp_frame_ok   ),

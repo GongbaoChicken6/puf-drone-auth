@@ -25,6 +25,13 @@ module terminal_fsm # (
     input  wire [7:0]  terminal_id,                // 终端 ID
     output wire        auth_busy ,                 // 认证进行中
     output wire [1:0]  auth_result,                // 0=进行中 1=通过 2=拒绝 3=阻断
+    // -- W4 可注入性（P2-T2：tie-off 后行为与 W3 完全一致）---------------
+    // V2001 输入端口无默认值：所有例化方必须显式 tie（见 w3_top / TBs）。
+    // c2_boot_seed 逐字节展开为 C2 初值（默认 A0..A7）；W4-P4 板上接
+    // ro_entropy 上电熵采样（P1-5 修复），TB tie 常量保持黄金不变。
+    input  wire [63:0] c2_boot_seed,               // 字节 j = bits[8j+:8]
+    input  wire [95:0] device_key_in,              // 运行时密钥（use_ext_key=0 时忽略）
+    input  wire        use_ext_key,                // 0=DEVICE_KEY 参数（TB/演示），1=运行时密钥
     // -- RX 接口（frame_parser）----------------------------------------------
     input  wire [23:0] fp_msg_id ,                 // 消息 ID（fp_frame_ok_pulse 时有效）
     input  wire [7:0]  fp_pay_len,
@@ -102,7 +109,8 @@ module terminal_fsm # (
     reg         sp_start_w  = 1'b0;              // Speck 启动脉冲（内部）
     localparam  CALC_WD_MAX = 8'd255;            // 256 周期看门狗
 
-    assign sp_key = DEVICE_KEY;
+    // W4-T2 密钥选择：use_ext_key=0 走参数（TB 黄金），1 走运行时输入（W4-P4 派生密钥）
+    assign sp_key = use_ext_key ? device_key_in : DEVICE_KEY;
 
     // C2 字节重排：c2_counter[0..7] → sp_plaintext（NSA 小端约定）
     // C2[0]=y LSB → pt[39:32], C2[1] → pt[47:40], C2[2] → pt[55:48], C2[3]=y MSB → pt[63:56]
@@ -147,7 +155,7 @@ module terminal_fsm # (
     integer    j;
     initial begin
         for (j = 0; j < 8; j = j + 1) begin
-            c2_counter[j]  = 8'hA0 + j[7:0];
+            c2_counter[j]  = c2_boot_seed[8*j +: 8];   // W4-T2：可注入（tie A0..A7 = 旧行为）
             // r2_expected 不初始化——首次使用前必经 S_CALC_R2 写入
         end
     end
