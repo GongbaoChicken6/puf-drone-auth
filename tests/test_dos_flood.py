@@ -11,7 +11,12 @@ if __package__ in (None, ""):
 from src.python.evaluation.puf_model import ROPairingPUF
 from src.python.server.crp_pool import CRPPoolRegistry
 from src.python.server.hsm import SpeckHSM
-from src.python.server.protocol import HFIDAProtocol, RESULT_ERROR, RESULT_PASS
+from src.python.server.protocol import (
+    HFIDAProtocol,
+    RESULT_ERROR,
+    RESULT_PASS,
+    RESULT_REJECT,
+)
 from src.python.server.template_db import TemplateDB
 
 
@@ -92,6 +97,81 @@ class TestDoSFlood(unittest.TestCase):
             # Should NOT be rejected by rate limiter (tokens refilled)
             self.assertNotEqual(fields.get("result"), RESULT_ERROR,
                 "rate limiter did not recover after 61s")
+
+
+    def test_failed_auth_returns_seeds_to_pool(self) -> None:
+        """T4 staging-release: a REJECTed auth must not burn its draw.
+
+        Before: draw() marked seeds used permanently, so an attacker
+        flooding ACCESS_REQUEST drained the pool even through the rate
+        limiter (B-P2 F5).  Now a failed auth calls unuse() and the pool
+        only shrinks on successful authentications.
+        """
+        protocol = HFIDAProtocol(
+            templates=TemplateDB(self.tmp / 't3.json'),
+            hsm=SpeckHSM(),
+            pools=CRPPoolRegistry(self.tmp / 'p3', pool_size=100),
+        )
+        puf = ROPairingPUF(flip_prob=0.0)
+        seeds = protocol.pools.get(1).reserve(100)
+        protocol.templates.enroll(1, [(s, puf.ideal(s)) for s in seeds])
+        protocol.hsm.set_key(1, bytes(12))
+
+        before = protocol.pools.get(1).remaining
+        reply = protocol.on_access_request(1, c2=b'\x11' * 8, nonce=1)
+        _mid, fields = HFIDAProtocol.parse(reply)
+        self.assertIn('seeds', fields, 'expected CHALLENGE')
+        drawn = protocol.pools.get(1).remaining
+        self.assertEqual(drawn, before - protocol.N_CHALLENGES,
+                         'draw should reduce remaining by N_CHALLENGES')
+
+        # Wrong R1 -> REJECT -> staged seeds returned
+        bad = [bytes(8) for _ in fields['seeds']]
+        reply2 = protocol.on_response(1, bad)
+        _m2, f2 = HFIDAProtocol.parse(reply2)
+        self.assertEqual(f2['result'], RESULT_REJECT)
+        after = protocol.pools.get(1).remaining
+        self.assertEqual(after, before,
+                         f'failed auth must return the draw: {before} -> {drawn} -> {after}')
+
+    def test_stalled_session_swept_and_seeds_returned(self) -> None:
+        """T4: a session that opens then goes silent releases its seeds.
+
+        Closes the flood-without-response vector (attacker never answers
+        the CHALLENGE; without the sweep the staged seeds stay pinned).
+        """
+        protocol = HFIDAProtocol(
+            templates=TemplateDB(self.tmp / 't4.json'),
+            hsm=SpeckHSM(),
+            pools=CRPPoolRegistry(self.tmp / 'p4', pool_size=100),
+        )
+        puf = ROPairingPUF(flip_prob=0.0)
+        seeds = protocol.pools.get(1).reserve(100)
+        protocol.templates.enroll(1, [(s, puf.ideal(s)) for s in seeds])
+        protocol.hsm.set_key(1, bytes(12))
+
+        before = protocol.pools.get(1).remaining
+        protocol.on_access_request(1, c2=b'\x22' * 8, nonce=1)
+        staged = protocol.pools.get(1).remaining
+        self.assertEqual(staged, before - protocol.N_CHALLENGES)
+
+        # No response; advance past the session timeout and poke again.
+        base = time.monotonic()
+        with patch.object(time, 'monotonic', return_value=base + 31.0):
+            protocol.on_access_request(1, c2=b'\x33' * 8, nonce=2)
+        # Without the sweep this would be before - 2*N (both draws burned);
+        # with it, only the live session's draw counts.
+        after = protocol.pools.get(1).remaining
+        self.assertEqual(
+            after, before - protocol.N_CHALLENGES,
+            f'stalled session must be swept: {before} -> {staged} -> {after} '
+            f'(expected {before - protocol.N_CHALLENGES}; '
+            f'{before - 2 * protocol.N_CHALLENGES} would mean no sweep)')
+        # The stalled entry's timestamp must have been replaced by the live
+        # session's (i.e. the old one was swept, not merely overwritten by luck).
+        self.assertGreater(
+            protocol._staged_at[1], base + protocol.SESSION_TIMEOUT_S - 1.0,
+            'stalled session timestamp must be replaced by the fresh one')
 
 
 if __name__ == "__main__":

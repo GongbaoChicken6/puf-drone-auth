@@ -205,6 +205,16 @@ class HFIDAProtocol:
         self.lock = threading.RLock()
         self._seq: int = 0
         self._pending: dict[int, PendingAuth] = {}
+        # W4-P4 T4: staging-release (B-P2 F5).  Seeds drawn for an in-flight
+        # session stay "staged" here; a failed auth returns them to the pool
+        # (unuse) so flooding ACCESS_REQUEST cannot drain the CRP pool.
+        # Committed (dropped from staging) only on RESULT_PASS.
+        self._staged: dict[int, list[bytes]] = {}
+        # T4 companion: stage timestamps so a session that never completes
+        # (attacker sends ACCESS_REQUEST then goes silent) can be swept and
+        # its seeds returned to the pool.
+        self._staged_at: dict[int, float] = {}
+        self.SESSION_TIMEOUT_S = 30.0
         # Anti-replay window per terminal (A1 P1-2): newest-last ordered
         # map of recently seen C2 values; hydrated from DeviceKeyStore.
         self._seen_c2: dict[int, OrderedDict[bytes, None]] = {}
@@ -446,6 +456,9 @@ class HFIDAProtocol:
                     self.MSG_RESULT, result=RESULT_ERROR, hd=HD_NONE
                 )
 
+            # T4: sweep stalled sessions first (return their staged seeds)
+            self._sweep_stale_staged(time.monotonic())
+
             # W4-P4 DoS: rate limit before any pool consumption.
             # P1 fix: lazy refill MUST run before the token check.
             now = time.monotonic()
@@ -477,6 +490,9 @@ class HFIDAProtocol:
                 )
             session = PendingAuth(terminal_id=tid, seeds=list(seeds), c2=c2)
             self._pending[tid] = session
+            # T4: stage (not commit) -- released if this auth fails or stalls
+            self._staged[tid] = list(seeds)
+            self._staged_at[tid] = time.monotonic()
             return self.pack(self.MSG_CHALLENGE, seeds=seeds)
 
     #: Alias for server-initiated authentication flows.
@@ -676,6 +692,8 @@ class HFIDAProtocol:
             session.state = "BLOCKED"
             return self.pack(self.MSG_RESULT, result=RESULT_ERROR, hd=HD_NONE)
         session.state = "SESSION"
+        # T4: auth passed -- commit the staged draw (seeds now permanent)
+        self._commit_staged(session.terminal_id)
         return self.pack(
             self.MSG_RESULT,
             result=RESULT_PASS,
@@ -683,9 +701,40 @@ class HFIDAProtocol:
             r2=r2,
         )
 
+    def _release_staged(self, tid: int) -> int:
+        """T4: return a failed session's staged seeds to the CRP pool."""
+        seeds = self._staged.pop(tid, None)
+        self._staged_at.pop(tid, None)
+        if not seeds:
+            return 0
+        return self.pools.get(tid).unuse(seeds)
+
+    def _commit_staged(self, tid: int) -> None:
+        """T4: auth succeeded -- the draw is now permanent."""
+        self._staged.pop(tid, None)
+        self._staged_at.pop(tid, None)
+
+    def _sweep_stale_staged(self, now: float) -> int:
+        """T4: release staged seeds of sessions that stalled past the timeout.
+
+        Closes the flood-without-response vector: an attacker that opens
+        sessions and never answers would otherwise pin (and permanently
+        burn) N_CHALLENGES seeds each time.
+        """
+        stale = [t for t, ts in self._staged_at.items()
+                 if now - ts > self.SESSION_TIMEOUT_S]
+        n = 0
+        for t in stale:
+            n += self._release_staged(t)
+            self._staged_at.pop(t, None)
+            self._pending.pop(t, None)
+        return n
+
     def _finish_reject(self, session: PendingAuth) -> bytes:
         """Complete a failed authentication."""
         session.state = "BLOCKED"
+        # T4: failed auth must not burn the challenge permanently
+        self._release_staged(session.terminal_id)
         return self.pack(
             self.MSG_RESULT,
             result=RESULT_REJECT,

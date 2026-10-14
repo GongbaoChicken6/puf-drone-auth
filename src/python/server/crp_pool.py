@@ -229,6 +229,32 @@ class CRPPool:
                 self._persist_locked()
             return removed
 
+    def unuse(self, seeds: list[bytes] | tuple[bytes, ...]) -> int:
+        """Return drawn-but-unconsumed seeds to the drawable set.
+
+        W4-P4 T4 staging-release semantics (review B-P2 F5): draw() marks
+        seeds used **permanently**, so a failed authentication burns the
+        challenge for good.  An attacker flooding ACCESS_REQUEST therefore
+        drains the pool even through the rate limiter (~90s to empty a
+        100-seed pool at 10/min).  This rolls a *failed* session's draw
+        back, so the pool only shrinks on successful authentications.
+
+        Contrast release(), which removes never-enrolled seeds from the
+        available set (enrollment abort path) -- different direction.
+
+        Returns how many seeds were actually returned.
+        """
+        keys = [bytes(s).hex() for s in seeds]
+        with self._lock:
+            returned = 0
+            for key in keys:
+                if key in self._used:
+                    self._used.discard(key)
+                    returned += 1
+            if returned:
+                self._persist_locked()
+            return returned
+
     def _remaining_nolock(self) -> int:
         """Remaining (enrolled, unused) challenge count.  Lock required."""
         return len(self._available - self._used)
