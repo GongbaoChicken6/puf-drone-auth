@@ -90,6 +90,7 @@ module tb_terminal_fsm;
         .c2_boot_seed  (64'hA7A6_A5A4_A3A2_A1A0),
         .device_key_in (96'h1312_1110_0B0A_0908_0302_0100),
         .use_ext_key   (1'b0),
+        .seed_load     (1'b0),   // W4-P4 T2: TB 恒 0（板上接 ro_entropy）
         .cd_start      (cd_start     ),
         .cd_seed       (cd_seed      ),
         .cd_pair_table (cd_pair_table),

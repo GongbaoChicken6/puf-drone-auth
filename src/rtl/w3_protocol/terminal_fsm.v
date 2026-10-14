@@ -24,7 +24,9 @@ module terminal_fsm # (
     // S_PUF_* 三态分段看门狗预算（每态入口清零 timeout_cnt，审查 D-P1）：
     // 单段最大 = 测量段 (WARMUP_WINS+1)*MEASURE_CYCLES；解码段 4×~2058；
     // 裕量 65536 覆盖打包与握手抖动
-    parameter PUF_WD_CYCLES    = (WARMUP_WINS + 1) * MEASURE_CYCLES + 32'd65536
+    parameter PUF_WD_CYCLES    = (WARMUP_WINS + 1) * MEASURE_CYCLES + 32'd65536,
+    // W4-P4 T1: 0=TB 兼容（DEVICE_KEY 参数，黄金不变），1=板上（PUF 派生密钥）
+    parameter ENABLE_KEY_DERIVE = 0
 ) (
     input  wire        clk       ,
     input  wire        rst       ,
@@ -40,6 +42,7 @@ module terminal_fsm # (
     input  wire [63:0] c2_boot_seed,               // 字节 j = bits[8j+:8]
     input  wire [95:0] device_key_in,              // 运行时密钥（use_ext_key=0 时忽略）
     input  wire        use_ext_key,                // 0=DEVICE_KEY 参数（TB/演示），1=运行时密钥
+    input  wire        seed_load,                  // W4-P4 T2: 单拍脉冲，同步重装载 C2（TB 恒 0）
     // -- PUF 子系统（W4 B5a：challenge_decode + ro_array 由上层例化互连）---
     output wire        cd_start,                   // 解码启动（单拍）
     output wire [63:0] cd_seed,
@@ -79,13 +82,13 @@ module terminal_fsm # (
     localparam [3:0] S_IDLE        = 4'd0 ,   // 空闲等 auth_start
                      S_TX_ACCESS   = 4'd1 ,   // 发 ACCESS_REQUEST
                      S_WAIT_CHALL  = 4'd2 ,   // 等 CHALLENGE 帧
-                     // 4'd3 = 原 S_PROC_SEEDS（W3 种子直通桩），W4 B5a 退役
+                     S_KEY_MEASURE = 4'd3,   // W4-P4 T1: PUF 测 key_seed 响应 → k_boot
                      S_TX_R1       = 4'd4 ,   // 发 RESPONSE_R1（4×8B）
                      S_WAIT_RESULT = 4'd5 ,   // 等 RESULT 或 EXTRA_CHALLENGE
                      S_VERIFY_R2   = 4'd6 ,   // 验证 R2
                      S_TX_CONFIRM  = 4'd7 ,   // 发 CONFIRM
                      S_SESSION     = 4'd8 ,   // 认证通过
-                     // 4'd9 = 原 S_PROC_EXTRA（W3 灰区桩），W4 B5a 退役
+                     S_KEY_DERIVE  = 4'd9,   // W4-P4 T1: Speck×2 KDF → key_reg
                      S_TX_R1_EXTRA = 4'd10,   // 发 RESPONSE_R1（3×8B=24B）
                      S_BLOCKED     = 4'd11,   // 认证失败阻断
                      S_CALC_R2     = 4'd12,   // 启动 Speck 计算 R2（共享起始状态）
@@ -204,23 +207,51 @@ module terminal_fsm # (
 
     reg  [7:0]  calc_wd_cnt = 8'd0;             // S_CALC_R2 看门狗计数器
     reg         calc_done_flag = 1'b0;          // W4-P4 P2-1: Speck 完成旗标
+    // W4-P4 T1 密钥派生寄存器
+    reg [95:0]  key_reg     = 96'd0;   // 派生密钥 K
+    reg         key_valid   = 1'b0;    // 1=K 已派生（每次上电重置）
+    reg [63:0]  k_boot_reg  = 64'd0;   // K_boot = PUF 响应 key_seed
+    reg [63:0]  kdf_ct1     = 64'd0;   // KDF 第一步密文
+    reg [1:0]   kdf_step    = 2'd0;    // KDF 子步（0=idle, 1=ct1, 2=ct2）
+    reg [1:0]   km_substate = 2'd0;    // S_KEY_MEASURE 子态
     reg         sp_start_w  = 1'b0;              // Speck 启动脉冲（内部）
     localparam  CALC_WD_MAX = 8'd255;            // 256 周期看门狗
 
-    // W4-T2 密钥选择：use_ext_key=0 走参数（TB 黄金），1 走运行时输入（W4-P4 派生密钥）
-    assign sp_key = use_ext_key ? device_key_in : DEVICE_KEY;
+    // W4-P4 T1 KDF 冻结常量（与 puf_model.derive_device_key 逐字节一致）
+    localparam [63:0] KDF_KEY_SEED_C = 64'h6B65_7973_6565_6431;  // "keyseed1"
+    localparam [63:0] KDF_MASK_C     = 64'hA5A5_5A5A_A5A5_5A5A;
+    // Speck plaintext 字节映射（pt[i] → plaintext_in[8*(i%4)+39-32*(i<4) +: 8]）
+    // KEY_SEED 大端字节 6B 65 79 73 65 65 64 31 → 预换算为 wire 位序
+    localparam [63:0] KDF_PT1 = 64'h7379_656B_3164_6565;  // KEY_SEED 逐字节映射
+    localparam [63:0] KDF_PT2 = 64'h2923_C0CE_5B3E_C0C0;  // (KEY_SEED^MASK) 映射
 
-    // C2 字节重排：c2_counter[0..7] → sp_plaintext（NSA 小端约定）
-    // C2[0]=y LSB → pt[39:32], C2[1] → pt[47:40], C2[2] → pt[55:48], C2[3]=y MSB → pt[63:56]
-    // C2[4]=x LSB → pt[7:0],   C2[5] → pt[15:8],  C2[6] → pt[23:16], C2[7]=x MSB → pt[31:24]
-    assign sp_plaintext[39:32] = c2_counter[0];  // 已递增（Speck采样时计数器已更新）
-    assign sp_plaintext[47:40] = c2_counter[1];
-    assign sp_plaintext[55:48] = c2_counter[2];
-    assign sp_plaintext[63:56] = c2_counter[3];
-    assign sp_plaintext[7:0]   = c2_counter[4];
-    assign sp_plaintext[15:8]  = c2_counter[5];
-    assign sp_plaintext[23:16] = c2_counter[6];
-    assign sp_plaintext[31:24] = c2_counter[7];
+    // W4-T2 密钥选择 + W4-P4 T1 KDF mux
+    // S_KEY_DERIVE 态：用 kdf_key12（从 k_boot_reg 派生 12B）
+    // 其他态：use_ext_key=0 走参数（TB 黄金），1 走运行时输入
+    wire [95:0] kdf_key12;
+    // key12 = K_boot(8B)+K_boot[0:3](4B)，逐字节映射到 key_in[8*i +: 8]
+    assign kdf_key12 = {
+        k_boot_reg[39:32], k_boot_reg[47:40], k_boot_reg[55:48], k_boot_reg[63:56],  // bytes 11-8（= 3-0 重复）
+        k_boot_reg[7:0],   k_boot_reg[15:8],  k_boot_reg[23:16],  k_boot_reg[31:24],  // bytes 7-4
+        k_boot_reg[63:56], k_boot_reg[55:48], k_boot_reg[47:40], k_boot_reg[39:32]   // bytes 3-0
+    };
+    assign sp_key = (state == S_KEY_DERIVE) ? kdf_key12 :
+                    use_ext_key ? device_key_in : DEVICE_KEY;
+
+    // C2 字节重排 → c2_pt wire（NSA 小端约定）
+    wire [63:0] c2_pt;
+    assign c2_pt[39:32] = c2_counter[0];
+    assign c2_pt[47:40] = c2_counter[1];
+    assign c2_pt[55:48] = c2_counter[2];
+    assign c2_pt[63:56] = c2_counter[3];
+    assign c2_pt[7:0]   = c2_counter[4];
+    assign c2_pt[15:8]  = c2_counter[5];
+    assign c2_pt[23:16] = c2_counter[6];
+    assign c2_pt[31:24] = c2_counter[7];
+
+    // W4-P4 T1: Speck plaintext mux（KDF 态切换到冻结常量）
+    wire [63:0] kdf_pt = (kdf_step == 2'd1) ? KDF_PT1 : KDF_PT2;
+    assign sp_plaintext = (state == S_KEY_DERIVE) ? kdf_pt : c2_pt;
 
     // Speck 密文 → R2 字节（NSA 小端拆包）
     // r2[0]=y LSB → ct[39:32], r2[1] → ct[47:40], r2[2] → ct[55:48], r2[3]=y MSB → ct[63:56]
@@ -258,11 +289,21 @@ module terminal_fsm # (
         end
     end
 
+    // W4-P4 T2: seed_load 单拍脉冲同步重装载（ro_entropy 完成后由 w3_top 触发）
+    // TB 恒 0 → initial 值保持（黄金不变）；板上 ro_entropy seed_valid 上升沿触发
+    always @(posedge clk) begin
+        if (seed_load) begin
+            for (j = 0; j < 8; j = j + 1)
+                c2_counter[j] <= c2_boot_seed[8*j +: 8];
+        end
+    end
+
     assign auth_busy  = (state != S_IDLE) && (state != S_SESSION);
     // 载荷保护：S_PROC_SEEDS/S_PROC_EXTRA/S_VERIFY_R2 期间读 fp 载荷缓冲，
     // 阻止 frame_parser 接收新帧覆盖缓冲（并发竞态修复）
     assign fp_rx_inhibit = (state == S_CALC_R2) || (state == S_PUF_DECODE)
                         || (state == S_PUF_MEASURE) || (state == S_PUF_PACK)
+                        || (state == S_KEY_MEASURE) || (state == S_KEY_DERIVE)
                         || (state == S_VERIFY_R2);
     assign auth_result = result_r;
     assign mf_sysid  = 8'h01;
@@ -275,6 +316,7 @@ module terminal_fsm # (
         if (rst)                       rx_ok_latch <= 1'b0;
         else if (fp_frame_ok)          rx_ok_latch <= 1'b1;
         else if (state == S_PUF_DECODE || state == S_PUF_MEASURE || state == S_PUF_PACK ||
+                 state == S_KEY_MEASURE || state == S_KEY_DERIVE ||
                  state == S_WAIT_CHALL || state == S_WAIT_RESULT)
             ; // 在等待态保持
         else                           rx_ok_latch <= 1'b0;  // 处理完自动清
@@ -323,7 +365,8 @@ module terminal_fsm # (
             // 超时计数：WAIT 态对 TIMEOUT_CYCLES；S_PUF_* 态对 PUF_WD_CYCLES
             // （W4-P2 审查 P2R-F4：原 2s 只挂等待态，PUF 三态自带看门狗）
             if (state == S_WAIT_CHALL || state == S_WAIT_RESULT ||
-                state == S_PUF_DECODE || state == S_PUF_MEASURE || state == S_PUF_PACK) begin
+                state == S_PUF_DECODE || state == S_PUF_MEASURE || state == S_PUF_PACK ||
+                state == S_KEY_MEASURE || state == S_KEY_DERIVE) begin
                 timeout_cnt <= timeout_cnt + 32'd1;
             end else begin
                 timeout_cnt <= 32'd0;
@@ -337,7 +380,14 @@ module terminal_fsm # (
                     if (auth_start) begin
                         result_r <= 2'd0;
                         calc_done_flag <= 1'b0;   // B-P2: 每会话重置
-                        state    <= S_CALC_R2;
+                        if (ENABLE_KEY_DERIVE && !key_valid) begin
+                            // W4-P4 T1: 首次上电需派生密钥
+                            state <= S_KEY_MEASURE;
+                            km_substate <= 2'd0;
+                            timeout_cnt <= 32'd0;
+                        end else begin
+                            state <= S_CALC_R2;
+                        end
                     end
                 end
 
@@ -593,7 +643,13 @@ module terminal_fsm # (
                     if (auth_start) begin
                         result_r <= 2'd0;
                         calc_done_flag <= 1'b0;   // B-P2: 每会话重置
-                        state    <= S_CALC_R2;
+                        if (ENABLE_KEY_DERIVE && !key_valid) begin
+                            state <= S_KEY_MEASURE;
+                            km_substate <= 2'd0;
+                            timeout_cnt <= 32'd0;
+                        end else begin
+                            state <= S_CALC_R2;
+                        end
                     end
                 end
 
@@ -641,6 +697,157 @@ module terminal_fsm # (
                         end else begin
                             calc_wd_cnt <= calc_wd_cnt + 8'd1;
                         end
+                    end
+                end
+
+                //====================================================
+                // W4-P4 T1: S_KEY_MEASURE——PUF 测 key_seed 响应 → k_boot
+                // 子态: 0=启动解码, 1=等cd_done, 2=测量窗, 3=打包k_boot
+                // 复用 PUF 接口信号(cd_*/ra_*)和 puf_tbl_0/puf_freqs
+                //====================================================
+                S_KEY_MEASURE: begin
+                    if (timeout_cnt >= PUF_WD_CYCLES) begin
+                        key_valid   <= 1'b0;
+                        puf_ring_en_r <= 1'b0;
+                        puf_measure_r <= 1'b0;
+                        state    <= S_BLOCKED;
+                        result_r <= 2'd3;
+                    end else begin
+                        case (km_substate)
+                            2'd0: begin
+                                // 启动 challenge_decode（固定 KEY_SEED）
+                                puf_cd_seed_r  <= KDF_KEY_SEED_C;
+                                puf_cd_start_r <= 1'b1;
+                                km_substate    <= 2'd1;
+                            end
+                            2'd1: begin
+                                // 等解码完成，捕获配对表
+                                puf_cd_start_r <= 1'b0;
+                                if (cd_done) begin
+                                    puf_tbl_0    <= cd_pair_table;
+                                    km_substate  <= 2'd2;
+                                    puf_ring_en_r <= 1'b1;
+                                    puf_win_idx  <= 5'd0;
+                                    puf_win_cnt  <= 32'd0;
+                                    puf_win_wait <= 1'b0;
+                                    puf_measure_r <= 1'b0;
+                                end
+                            end
+                            2'd2: begin
+                                // 测量窗（热稳定+末窗，复用 S_PUF_MEASURE 逻辑）
+                                if (!puf_win_wait) begin
+                                    puf_measure_r <= 1'b1;
+                                    if (puf_win_cnt >= MEASURE_CYCLES - 32'd1) begin
+                                        puf_measure_r <= 1'b0;
+                                        puf_win_cnt   <= 32'd0;
+                                        puf_win_wait  <= 1'b1;
+                                    end else begin
+                                        puf_win_cnt <= puf_win_cnt + 32'd1;
+                                    end
+                                end else begin
+                                    if (ra_done) begin
+                                        if (puf_win_idx >= WARMUP_WINS) begin
+                                            puf_freqs     <= ra_ring_freq;
+                                            puf_ring_en_r <= 1'b0;
+                                            puf_pack_idx  <= 6'd0;  // 从 byte 0 开始
+                                            km_substate   <= 2'd3;
+                                        end else begin
+                                            puf_win_idx  <= puf_win_idx + 5'd1;
+                                            puf_win_wait <= 1'b0;
+                                        end
+                                    end
+                                end
+                            end
+                            2'd3: begin
+                                // 打包 k_boot（8B = 1 种子的 64 比较位）
+                                // 复用 puf_pack_byte（puf_pack_idx[5:3]=0 选 puf_tbl_0）
+                                case (puf_pack_idx[2:0])
+                                    3'd0: k_boot_reg[63:56] <= puf_pack_byte;
+                                    3'd1: k_boot_reg[55:48] <= puf_pack_byte;
+                                    3'd2: k_boot_reg[47:40] <= puf_pack_byte;
+                                    3'd3: k_boot_reg[39:32] <= puf_pack_byte;
+                                    3'd4: k_boot_reg[31:24] <= puf_pack_byte;
+                                    3'd5: k_boot_reg[23:16] <= puf_pack_byte;
+                                    3'd6: k_boot_reg[15:8]  <= puf_pack_byte;
+                                    3'd7: k_boot_reg[7:0]   <= puf_pack_byte;
+                                endcase
+                                if (puf_pack_idx[2:0] == 3'd7) begin
+                                    km_substate <= 2'd0;
+                                    state       <= S_KEY_DERIVE;
+                                    kdf_step    <= 2'd0;
+                                    calc_wd_cnt <= 8'd0;
+                                    timeout_cnt <= 32'd0;  // 分段预算
+                                end else begin
+                                    puf_pack_idx <= puf_pack_idx + 6'd1;
+                                end
+                            end
+                        endcase
+                    end
+                end
+
+                //====================================================
+                // W4-P4 T1: S_KEY_DERIVE——Speck×2 KDF → key_reg
+                // step 0=启动ct1, 1=等ct1+启动ct2, 2=等ct2+锁K
+                //====================================================
+                S_KEY_DERIVE: begin
+                    if (timeout_cnt >= PUF_WD_CYCLES) begin
+                        key_valid   <= 1'b0;
+                        state    <= S_BLOCKED;
+                        result_r <= 2'd3;
+                    end else begin
+                        case (kdf_step)
+                            2'd0: begin
+                                // 启动第一次 Speck: key12 加密 KDF_PT1
+                                sp_start_w  <= 1'b1;
+                                kdf_step    <= 2'd1;
+                                calc_wd_cnt <= 8'd1;
+                            end
+                            2'd1: begin
+                                sp_start_w <= 1'b0;
+                                if (sp_done) begin
+                                    kdf_ct1     <= sp_ciphertext;
+                                    sp_start_w  <= 1'b1;  // 立即启动第二次
+                                    kdf_step    <= 2'd2;
+                                    calc_wd_cnt <= 8'd1;
+                                end else if (calc_wd_cnt >= CALC_WD_MAX) begin
+                                    key_valid <= 1'b0;
+                                    state <= S_BLOCKED; result_r <= 2'd3;
+                                    calc_wd_cnt <= 8'd0;
+                                end else begin
+                                    calc_wd_cnt <= calc_wd_cnt + 8'd1;
+                                end
+                            end
+                            2'd2: begin
+                                sp_start_w <= 1'b0;
+                                if (sp_done) begin
+                                    // K = ct1(8B) + ct2[0:3](4B) = 12B
+                                    // 字节映射: key_reg[8*i +: 8] = K_byte[i]
+                                    // ct byte 0 = ct[39:32], ct byte 1 = ct[47:40]...
+                                    key_reg[7:0]   <= kdf_ct1[39:32];
+                                    key_reg[15:8]  <= kdf_ct1[47:40];
+                                    key_reg[23:16] <= kdf_ct1[55:48];
+                                    key_reg[31:24] <= kdf_ct1[63:56];
+                                    key_reg[39:32] <= kdf_ct1[7:0];
+                                    key_reg[47:40] <= kdf_ct1[15:8];
+                                    key_reg[55:48] <= kdf_ct1[23:16];
+                                    key_reg[63:56] <= kdf_ct1[31:24];
+                                    key_reg[71:64] <= sp_ciphertext[39:32];
+                                    key_reg[79:72] <= sp_ciphertext[47:40];
+                                    key_reg[87:80] <= sp_ciphertext[55:48];
+                                    key_reg[95:88] <= sp_ciphertext[63:56];
+                                    key_valid   <= 1'b1;
+                                    kdf_step    <= 2'd0;
+                                    calc_wd_cnt <= 8'd0;
+                                    state       <= S_CALC_R2;  // 派生完成，进正常认证
+                                end else if (calc_wd_cnt >= CALC_WD_MAX) begin
+                                    key_valid <= 1'b0;
+                                    state <= S_BLOCKED; result_r <= 2'd3;
+                                    calc_wd_cnt <= 8'd0;
+                                end else begin
+                                    calc_wd_cnt <= calc_wd_cnt + 8'd1;
+                                end
+                            end
+                        endcase
                     end
                 end
 
