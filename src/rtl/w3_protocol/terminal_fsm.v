@@ -203,6 +203,7 @@ module terminal_fsm # (
     wire        sp_busy;
 
     reg  [7:0]  calc_wd_cnt = 8'd0;             // S_CALC_R2 看门狗计数器
+    reg         calc_done_flag = 1'b0;          // W4-P4 P2-1: Speck 完成旗标
     reg         sp_start_w  = 1'b0;              // Speck 启动脉冲（内部）
     localparam  CALC_WD_MAX = 8'd255;            // 256 周期看门狗
 
@@ -547,8 +548,13 @@ module terminal_fsm # (
                 // 验证 R2（比较载荷 [2..9] 与期望值）
                 //====================================================
                 S_VERIFY_R2: begin
+                    // W4-P4 P2-1: 未经过 S_CALC_R2 的路径在此被拦截
+                    if (!calc_done_flag) begin
+                        state    <= S_BLOCKED;
+                        result_r <= 2'd3;
+                    end
                     // 载荷布局：result(1)+hd(1)+r2(8) = 地址 [0]=result, [1]=hd, [2..9]=r2
-                    if (fp_rd_addr == 5'd0) begin
+                    else if (fp_rd_addr == 5'd0) begin
                         // 第一拍：读 result 码
                         if (fp_rd_data == 8'h00) begin
                             fp_rd_addr <= 5'd2;     // PASS → 跳到 R2 字节
@@ -573,6 +579,7 @@ module terminal_fsm # (
                         tx_len    <= 6'd5;
                         state     <= S_TX_CONFIRM;
                         result_r  <= 2'd1;         // PASS
+                        calc_done_flag <= 1'b0;    // P2-1: 验证完清旗标
                     end
                 end
 
@@ -610,7 +617,8 @@ module terminal_fsm # (
                         sp_start_w <= 1'b0;
 
                         if (sp_done) begin
-                            // Speck 完成：锁存 R2 并进入 TX_ACCESS
+                            // Speck 完成：置旗标 + 锁存 R2 + 进入 TX_ACCESS
+                            calc_done_flag <= 1'b1;
                             r2_expected[0] <= r2_byte_0;
                             r2_expected[1] <= r2_byte_1;
                             r2_expected[2] <= r2_byte_2;

@@ -207,6 +207,12 @@ class HFIDAProtocol:
         # Anti-replay window per terminal (A1 P1-2): newest-last ordered
         # map of recently seen C2 values; hydrated from DeviceKeyStore.
         self._seen_c2: dict[int, OrderedDict[bytes, None]] = {}
+        # W4-P4 DoS mitigation: per-tid token bucket (rate limiter).
+        # Bursts of ACCESS_REQUEST from forged C2s drain CRP pools;
+        # this gate refuses excess requests BEFORE any pool draw.
+        self._rate_tokens: dict[int, float] = {}
+        self._rate_last: dict[int, float] = {}
+        self.RATE_LIMIT_PER_MINUTE = 10  # per-tid auth attempts / minute
 
     # ------------------------------------------------------------------
     # Framing
@@ -432,6 +438,24 @@ class HFIDAProtocol:
         """
         tid = int(terminal_id)
         with self.lock:
+            # W4-P4 DoS: rate limit before any pool consumption
+            import time
+            now = time.monotonic()
+            tokens = self._rate_tokens.get(tid, self.RATE_LIMIT_PER_MINUTE)
+            if tokens < 1.0:
+                return self.pack(
+                    self.MSG_RESULT, result=RESULT_REJECT, hd=HD_NONE
+                )
+            self._rate_tokens[tid] = max(0.0, tokens - 1.0)
+            # Refill (lazy: 1 token per RATE_LIMIT_PER_MINUTE seconds)
+            elapsed = now - self._rate_last.get(tid, now)
+            self._rate_tokens[tid] = min(
+                float(self.RATE_LIMIT_PER_MINUTE),
+                self._rate_tokens[tid] + elapsed * self.RATE_LIMIT_PER_MINUTE / 60.0
+            )
+            self._rate_last = getattr(self, '_rate_last', {})
+            self._rate_last[tid] = now
+
             if not self.templates.has_terminal(tid):
                 return self.pack(
                     self.MSG_RESULT, result=RESULT_ERROR, hd=HD_NONE
