@@ -39,6 +39,7 @@ from __future__ import annotations
 import struct
 import sys
 import threading
+import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Sequence
@@ -438,28 +439,31 @@ class HFIDAProtocol:
         """
         tid = int(terminal_id)
         with self.lock:
-            # W4-P4 DoS: rate limit before any pool consumption
-            import time
-            now = time.monotonic()
-            tokens = self._rate_tokens.get(tid, self.RATE_LIMIT_PER_MINUTE)
-            if tokens < 1.0:
-                return self.pack(
-                    self.MSG_RESULT, result=RESULT_REJECT, hd=HD_NONE
-                )
-            self._rate_tokens[tid] = max(0.0, tokens - 1.0)
-            # Refill (lazy: 1 token per RATE_LIMIT_PER_MINUTE seconds)
-            elapsed = now - self._rate_last.get(tid, now)
-            self._rate_tokens[tid] = min(
-                float(self.RATE_LIMIT_PER_MINUTE),
-                self._rate_tokens[tid] + elapsed * self.RATE_LIMIT_PER_MINUTE / 60.0
-            )
-            self._rate_last = getattr(self, '_rate_last', {})
-            self._rate_last[tid] = now
-
+            # B-P3: unknown tids get RESULT_ERROR BEFORE touching rate
+            # limiter state (prevents unbounded dict growth from tid spray)
             if not self.templates.has_terminal(tid):
                 return self.pack(
                     self.MSG_RESULT, result=RESULT_ERROR, hd=HD_NONE
                 )
+
+            # W4-P4 DoS: rate limit before any pool consumption.
+            # P1 fix: lazy refill MUST run before the token check.
+            now = time.monotonic()
+            tokens = self._rate_tokens.get(tid, float(self.RATE_LIMIT_PER_MINUTE))
+            elapsed = now - self._rate_last.get(tid, now)
+            tokens = min(
+                float(self.RATE_LIMIT_PER_MINUTE),
+                tokens + elapsed * self.RATE_LIMIT_PER_MINUTE / 60.0
+            )
+            if tokens < 1.0:
+                self._rate_tokens[tid] = tokens
+                self._rate_last[tid] = now
+                # P2 fix: RESULT_ERROR not RESULT_REJECT
+                return self.pack(
+                    self.MSG_RESULT, result=RESULT_ERROR, hd=HD_NONE
+                )
+            self._rate_tokens[tid] = tokens - 1.0
+            self._rate_last[tid] = now
             if c2 is not None and not self._remember_c2(tid, c2):
                 # A1 review P1-2: repeated C2 -> replayed ACCESS_REQUEST.
                 return self.pack(

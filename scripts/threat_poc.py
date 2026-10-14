@@ -2,7 +2,9 @@
 """threat_poc.py -- W4-P4 T6: Threat PoC harness (M2 acceptance criteria).
 
 Three cases, each exit 0 = expected behaviour (defence holds):
-  replay   : recorded ACCESS_REQUEST replayed after terminal "power cycle"
+  replay   : server replay window rejects duplicate ACCESS_REQUEST
+             (P1-2, already fixed; terminal-side P1-5 cross-power-cycle
+              replay requires ro_entropy — W4-P4 T2, not yet implemented)
   brute    : offline brute-force of R2 from known (C2, R2) pair
   inject   : protocol state violations via malformed frames
 
@@ -103,13 +105,14 @@ def case_brute() -> int:
     print(f"[BRUTE INFO] oracle confirmed: Speck(K,C2)={r2.hex()} for known pair")
     print(f"[BRUTE INFO] key space: 2^96 = ~{2**96:.2e}")
     print(f"[BRUTE INFO] at 10^12 keys/sec (GPU): ~{2**96/10**12/3600/24:.0f} days")
-    # P1-1 check: current DEVICE_KEY is a PUBLIC NSA test vector
-    from src.python.server.hsm import DEVICE_KEY_BYTES
-    rtl_default = bytes.fromhex("0001020308090a0b10111213")  # terminal_fsm.v parameter
-    if rtl_default == TEST_KEY:
-        print("[BRUTE WARN] key equals RTL default — P1-1 unresolved")
+    # P1-1 regression guard: check test key is NOT the public NSA vector
+    # (terminal_fsm.v DEVICE_KEY parameter, wire-order per cmd_setkey docstring).
+    NSA_PUBLIC_VECTOR = "0001020308090a0b10111213"
+    if TEST_KEY.hex() == NSA_PUBLIC_VECTOR:
+        print("[BRUTE FAIL] test key equals known public NSA vector — P1-1 regression")
         return 1
-    print("[BRUTE PASS] oracle quantified; P1-1 key derivation deferred to full implementation")
+    print(f"[BRUTE INFO] current RTL DEVICE_KEY is the public NSA vector (known limitation, P1-1 T1 pending)")
+    print(f"[BRUTE PASS] oracle quantified with non-public test key; 2^96 key space")
     return 0
 
 
@@ -126,18 +129,14 @@ def case_inject() -> int:
         # Injection 1: unsolicited RESPONSE (fresh server, no session)
         server1 = SerialServer(protocol, on_event=lambda m: None)
         stray = packer.pack(HFIDAProtocol.MSG_RESPONSE_R1, r1s=[bytes(8)]*4)
-        result1 = server1.pump(stray)
-        # Should be silently dropped (no pending session) -> no reply OR
-        # internal error frame -> either is acceptable as long as no crash
-        survived1 = True  # reaching here means no exception
+        server1.pump(stray)  # no pending session -> dropped or error reply
 
         # Injection 2: wrong response count mid-session
         server2 = SerialServer(protocol, on_event=lambda m: None)
         request = term.access_request()
         challenge = server2.pump(request)[0]
         malformed = packer.pack(HFIDAProtocol.MSG_RESPONSE_R1, r1s=[bytes(8)]*3)
-        result2 = server2.pump(malformed)
-        survived2 = True  # reaching here means no exception
+        server2.pump(malformed)  # wrong count -> ProtocolError -> RESULT_ERROR
 
         # Post-injection: normal auth (reuse term so C2 counter advances past replay window)
         server3 = SerialServer(protocol, on_event=lambda m: None)

@@ -336,6 +336,7 @@ module terminal_fsm # (
                     // 只在新一轮认证启动时才清
                     if (auth_start) begin
                         result_r <= 2'd0;
+                        calc_done_flag <= 1'b0;   // B-P2: 每会话重置
                         state    <= S_CALC_R2;
                     end
                 end
@@ -561,12 +562,14 @@ module terminal_fsm # (
                         end else begin
                             state    <= S_BLOCKED;  // REJECT
                             result_r <= 2'd2;
+                            calc_done_flag <= 1'b0; // P3: 拒绝路径也清旗标
                         end
                     end else if (fp_rd_addr >= 5'd2 && fp_rd_addr < 5'd10) begin
                         // 读 r2 字节 [2..9]
                         if (fp_rd_data != r2_expected[fp_rd_addr[3:0] - 5'd2]) begin
                             state    <= S_BLOCKED;  // R2 不匹配
                             result_r <= 2'd3;
+                            calc_done_flag <= 1'b0; // P3: 阻断路径也清
                         end
                         fp_rd_addr <= fp_rd_addr + 5'd1;
                     end else if (fp_rd_addr >= 5'd10) begin
@@ -589,6 +592,7 @@ module terminal_fsm # (
                     // 否则 auth_start 脉冲被本态消费后 IDLE 看不到）
                     if (auth_start) begin
                         result_r <= 2'd0;
+                        calc_done_flag <= 1'b0;   // B-P2: 每会话重置
                         state    <= S_CALC_R2;
                     end
                 end
