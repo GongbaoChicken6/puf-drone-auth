@@ -173,6 +173,8 @@ module w3_top # (
         .device_key_in (fsm_key_reg),      // W4-P4 T1: 派生密钥回环
         .use_ext_key   (fsm_key_valid),    // W4-P4 T1: 派生完成自动使能
         .seed_load     (1'b0),            // TODO S6: 接 ro_entropy.seed_valid 上升沿
+        .key_valid     (fsm_key_valid),   // FIX P0: FSM 输出驱动回环
+        .key_reg       (fsm_key_reg),     // FIX P0: FSM 输出驱动回环
         .cd_start      (cd_start     ),
         .cd_seed       (cd_seed      ),
         .cd_pair_table (cd_pair_table),
