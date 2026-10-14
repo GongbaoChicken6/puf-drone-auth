@@ -27,8 +27,6 @@ REPL commands::
 from __future__ import annotations
 
 import argparse
-import hashlib
-import hmac
 import json
 import os
 import secrets
@@ -142,7 +140,11 @@ class SimulatedTerminal:
     def respond(self, seeds: Sequence[bytes], flip_prob: float | None = None) -> list[bytes]:
         """Respond to challenges with realistic bit-flip noise applied."""
         prob = self.flip_prob if flip_prob is None else flip_prob
+        # Review A-P3: unlocked mutation bypasses ctor validation; safe
+        # today because all callers (REPL/enroll/serve) are single-threaded.
         if prob != self._puf.flip_prob:
+            if not 0.0 <= prob <= 1.0:
+                raise ValueError(f"flip_prob must be in [0,1], got {prob}")
             self._puf.flip_prob = prob
         return [self._puf.respond(seed) for seed in seeds]
 

@@ -19,6 +19,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from src.python.common.speck import Speck6496
 from src.python.evaluation.puf_model import (
     GOLDEN_SEED_A,
     GOLDEN_SEED_B,
@@ -74,7 +75,6 @@ class PUFWireTerminal:
         if msg_id == HFIDAProtocol.MSG_RESULT:
             if fields["result"] != RESULT_PASS:
                 return None
-            from src.python.common.speck import Speck6496
             c2 = bytes((b + self._auth_count) & 0xFF for b in self.C2_INIT)
             expected = Speck6496(self.key).encrypt(c2)
             self.r2_ok = bytes(fields["r2"]) == expected
@@ -157,6 +157,52 @@ class TestInteropRTLModel(unittest.TestCase):
         self.assertEqual(term.puf.ideal(GOLDEN_SEED_B),
                          ROPairingPUF(freqs=freqs).ideal(GOLDEN_SEED_B))
 
+    def test_ro_noise_gray_zone_then_pass(self) -> None:
+        """flip_prob > 0 may land in gray zone -> EXTRA_CHALLENGE -> PASS
+        (B-P2: gray zone path under real RO semantics, not HMAC stub)."""
+        import random
+        protocol = self.build()
+        rng = random.Random(42)
+        puf = ROPairingPUF(flip_prob=0.0)  # enroll noiseless
+        enroll_device(protocol, PUFTransport(puf), terminal_id=1,
+                      n_challenges=16, measurements=1)
+        protocol.hsm.set_key(1, TEST_KEY)
+        # Auth with moderate noise to hit gray zone
+        puf.flip_prob = 0.12  # ~7.7 bits/64 → 4 responses ≈ 31 HD, gray zone
+        term = PUFWireTerminal(1, TEST_KEY, puf)
+        server = SerialServer(protocol, on_event=lambda m: None)
+
+        replies = server.pump(term.access_request())
+        r1_frame = term.on_reply(replies[0])
+        replies = server.pump(r1_frame)
+        msg_id, fields = HFIDAProtocol.parse(replies[0])
+        if msg_id == HFIDAProtocol.MSG_EXTRA_CHALLENGE:
+            # Gray zone: answer extra challenges noiselessly
+            puf.flip_prob = 0.0
+            extra_frame = term.on_reply(replies[0])
+            replies = server.pump(extra_frame)
+            _mid, fields = HFIDAProtocol.parse(replies[0])
+        # Either direct PASS or gray→PASS
+        self.assertEqual(fields["result"], RESULT_PASS)
+
+    def test_ro_confirm_fail_on_wrong_key(self) -> None:
+        """Terminal with wrong key sends CONFIRM_FAIL after PASS
+        (B-P2: CONFIRM_FAIL under RO semantics)."""
+        protocol = self.build()
+        puf = ROPairingPUF(flip_prob=0.0)
+        enroll_device(protocol, PUFTransport(puf), terminal_id=1,
+                      n_challenges=8, measurements=1)
+        # Server has correct key, terminal has wrong key
+        protocol.hsm.set_key(1, TEST_KEY)
+        wrong_key = bytes.fromhex("FF" * 12)
+        term = PUFWireTerminal(1, wrong_key, puf)
+        server = SerialServer(protocol, on_event=lambda m: None)
+
+        fields = self.run_auth(server, term)
+        self.assertEqual(fields["result"], RESULT_PASS)  # PUF side fine
+        self.assertFalse(term.r2_ok)  # but R2 mismatch → CONFIRM_FAIL
+        self.assertEqual(server.rejected_confirms, 1)
+
     def test_replayed_request_rejected(self) -> None:
         protocol = self.build()
         term, puf = self.make_terminal()
@@ -172,6 +218,26 @@ class TestInteropRTLModel(unittest.TestCase):
         replay = server.pump(request)
         _mid, fields = HFIDAProtocol.parse(replay[0])
         self.assertEqual(fields["result"], RESULT_REPLAY)
+
+
+class TestEvalToolAlignment(unittest.TestCase):
+    """B-P2: verify hamming_analysis 64-bit hex interface accepts R1."""
+
+    def test_hamming_distance_of_puf_responses(self) -> None:
+        from src.python.evaluation.hamming_analysis import (
+            hex_to_binary, hamming_distance,
+        )
+        freqs_a = list(range(5000, 5016))
+        freqs_b = list(reversed(range(5000, 5016)))
+        puf_a = ROPairingPUF(freqs=freqs_a)
+        puf_b = ROPairingPUF(freqs=freqs_b)
+        r1_a = puf_a.ideal(GOLDEN_SEED_A).hex()
+        r1_b = puf_b.ideal(GOLDEN_SEED_A).hex()
+        bin_a = hex_to_binary(r1_a)
+        bin_b = hex_to_binary(r1_b)
+        self.assertEqual(len(bin_a), 64)
+        hd = hamming_distance(bin_a, bin_b)
+        self.assertGreater(hd, 20)  # reversed freqs → many bits differ
 
 
 if __name__ == "__main__":
