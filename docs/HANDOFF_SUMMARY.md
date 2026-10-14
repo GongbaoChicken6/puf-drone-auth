@@ -249,7 +249,9 @@ Git：57 commits（截至 A1 收官提交 a678274）· 144 files · tag w3-compl
    - S4 fc150a6：tb_key_derive（T5 首次派生黄金锁 + T6/T6b 未重派生 + kdf_key12 常量比对）；修复 2 个字节序 bug（kdf_key12 底部 4B 拼接序反、KDF_PT2 0x5B→0x6B）
    - **审查（3 代理 A/B/C）→ P0 修复 311fec4**：w3_top 例化**漏接** .key_valid/.key_reg → 回环 wire 悬空 → 综合 tie 常量时静默回落公开向量（A/B 独立复现）。新增 tb_w3top_keyloop.v（w3_top 级 4 断言）入 CI，**CI 15/15 TB + 87 单测全绿**
    - **T1 状态 = 部分（板上未可用，勿声明达成）**：站端缺 K 下发通道（0x0096 KEY_SEED 未做）+ K_boot 单次测量噪声可靠性未解 → w3_top.ENABLE_KEY_DERIVE **默认 0（fail-safe）**
-   - **T2 = 未开始**：ro_entropy RTL 不存在；w3_top 仍 tie 常量
+   - **T2 = RTL 已实现（仿真验证）**：ro_entropy.v（105 行，16 环低 4bit 拼接 64bit boot_seed）+ w3_top 第二 ro_array 例化 + seed_rel 上升沿 seed_load 脉冲；
+     tb_ro_entropy（T10 黄金 0x34F1996F07D25792 / T11 无提前锁存 / T12 一次性语义）+ tb_w3top_keyloop T13 顶层链路断言（boot_seed -> c2_counter[0]=8'h92）；CI 16/16 TB
+   - **T2 诚实边界**：仿真 fixture 确定性 → 可预测 boot_seed；**真实熵只在板上成立**（~16-32bit/次上电 + 服务端 128 窗兜底）；换电重启重放拒止的端到端 PoC 证据待 GK 用例
    - **审查方法学教训**：声明"完成"前必须验证**顶层集成**——子模块 TB 自接回环会掩盖顶层断线（本次 P0 即此类，与 W4-P2 clk bug 同源）
 
 1. **B5 PUF 真实接入**（W4 核心创新，最高优先）：替换种子直通占位 → challenge_decode + ro_array 真实测量；同时处理 W4 安全项（P1-1 真密钥 / P1-4 PUF / P1-5 终端重放三选一 / 44-bit 熵混合 / CI 超时作业化）

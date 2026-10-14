@@ -77,6 +77,23 @@ module tb_w3top_keyloop;
             $display("[T7-3 FAIL] w3_top key_reg=%h != %h", dut.fsm_key_reg, GOLDEN_KEY);
         end
 
+        // T13: W4-P4 T2 集成——ro_entropy 熵种子必须经 seed_load 装载到
+        // c2_counter（模块级 TB 不能替代顶层集成验证，见 P0 教训）。
+        // fixture 黄金 boot_seed=0x34F1996F07D25792 -> c2_counter[0]=8'h92
+        if (dut.re_seed_valid !== 1'b1) begin
+            errors = errors + 1;
+            $display("[T13 FAIL] w3_top 级 re_seed_valid 未置位——熵采样未接入");
+        end else if (dut.u_fsm.c2_counter[0] !== 8'h92) begin
+            errors = errors + 1;
+            $display("[T13 FAIL] c2_counter[0]=%h != 8'h92（seed_load 未生效或熵值错）",
+                     dut.u_fsm.c2_counter[0]);
+        end else if (dut.u_fsm.c2_counter[0] === 8'hA0) begin
+            errors = errors + 1;
+            $display("[T13 FAIL] c2_counter 仍为默认 A0..A7（P1-5 未闭环）");
+        end else
+            $display("[T13 PASS] w3_top 级 T2 链路导通: boot_seed=%h -> c2_counter[0]=%h",
+                     dut.re_boot_seed, dut.u_fsm.c2_counter[0]);
+
         // T7-4: FSM 内部 sp_key 不再用公开向量
         if (dut.u_fsm.sp_key === NSA_VECTOR) begin
             errors = errors + 1;

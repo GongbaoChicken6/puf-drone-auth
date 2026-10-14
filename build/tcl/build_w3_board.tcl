@@ -19,6 +19,7 @@ add_files [list \
     $SRC/rtl/w1_ratio/ro_div.v \
     $SRC/rtl/w2_array/ro_array.v \
     $SRC/rtl/w2_array/challenge_decode.v \
+$SRC/rtl/w2_array/ro_entropy.v \
     $SRC/rtl/common/crc16_mcrf4xx.v \
     $SRC/rtl/common/mavlink_frame.v \
     $SRC/rtl/common/frame_parser.v \

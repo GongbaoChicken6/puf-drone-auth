@@ -28,7 +28,9 @@ module w3_top # (
     // 算 R2 而站端用公开向量 → R2 不匹配 → 恒 BLOCKED（fail-closed）。
     // 站端 K 下发通道：scripts 侧 enroll 时 derive_device_key() 派生并 setkey，
     // 或 W5 落地 0x0096 KEY_SEED 注册通道（W4_design §5v2 主案）。
-    parameter ENABLE_KEY_DERIVE = 0
+    parameter ENABLE_KEY_DERIVE = 0,
+    // W4-P4 T2: 上电熵采样窗（默认 1ms；TB 可缩小加速）
+    parameter [31:0] ENTROPY_CYCLES = 32'd100_000
 ) (
     input  wire        sys_clk      ,   // 系统时钟（100MHz，XDC 约束待填）
     input  wire        sys_rst_n    ,   // 复位按键（低有效，需消抖）
@@ -148,6 +150,16 @@ module w3_top # (
     wire        cd_start, cd_done;
     wire        fsm_key_valid;             // W4-P4 T1: FSM 内密钥派生完成
     wire [95:0] fsm_key_reg;               // W4-P4 T1: FSM 内派生的 96-bit 密钥
+    // W4-P4 T2: 上电熵采样子系统（声明必须在 u_fsm 例化之前，避免隐式 net）
+    wire         re_measure_en, re_ring_en, re_busy, re_done;
+    wire [255:0] re_ring_freq;
+    wire         re_seed_valid;
+    wire [63:0]  re_boot_seed;
+    wire         re_start;
+    wire         re_start_valid;
+    reg          re_started    = 1'b0;
+    reg          seed_valid_d  = 1'b0;
+    reg          seed_load_r   = 1'b0;
     wire [63:0] cd_seed;
     wire [511:0] cd_pair_table;
     wire        ra_measure_en, ra_ring_en, ra_busy, ra_done;
@@ -174,10 +186,10 @@ module w3_top # (
         .auth_result   (led_result    ),
         // W4-P4 T1: key_valid 回环驱动 use_ext_key（派生后自动切换到派生密钥）
         // W4-P4 T2: c2_boot_seed 待接 ro_entropy（当前 tie 常量=旧行为）
-        .c2_boot_seed  (64'hA7A6_A5A4_A3A2_A1A0),   // TODO T2-S5: 待接 ro_entropy.boot_seed
+        .c2_boot_seed  (re_boot_seed),     // W4-P4 T2: ro_entropy 上电熵种子
         .device_key_in (fsm_key_reg),      // W4-P4 T1: 派生密钥回环
         .use_ext_key   (fsm_key_valid),    // W4-P4 T1: 派生完成自动使能
-        .seed_load     (1'b0),            // TODO T2-S5: 待接 ro_entropy.seed_valid 上升沿
+        .seed_load     (seed_load_r),      // W4-P4 T2: seed_valid 上升沿脉冲
         .key_valid     (fsm_key_valid),   // FIX P0: FSM 输出驱动回环
         .key_reg       (fsm_key_reg),     // FIX P0: FSM 输出驱动回环
         .cd_start      (cd_start     ),
@@ -255,6 +267,70 @@ module w3_top # (
         .ring_freq   (ra_ring_freq )
     );
 `endif
+
+    //------------------------------------------------------------------------
+    // W4-P4 T2: 上电熵采样子系统（P1-5 终端跨断电重放修复）
+    // 独立第二 ro_array 实例（不复用认证阵列：认证阵列的 ring_en 受状态机
+    // 控制，此处需上电即采样；两阵列互不干扰）
+    //------------------------------------------------------------------------
+    always @ ( posedge sys_clk ) begin
+        if (rst) begin
+            re_started    <= 1'b0;
+            seed_valid_d  <= 1'b0;
+            seed_load_r   <= 1'b0;
+        end
+        else begin
+            // 复位释放后启动一次熵采样
+            if (!re_started && !re_start_valid) begin
+                re_started <= 1'b1;
+            end
+            // seed_valid 上升沿 -> seed_load 单拍脉冲
+            seed_valid_d <= re_seed_valid;
+            seed_load_r  <= re_seed_valid & ~seed_valid_d;
+        end
+    end
+    // re_start 在复位后保持高（ro_entropy 只在 E_IDLE 且 start=1 时启动一次）
+    assign re_start_valid = re_started;
+    assign re_start       = re_started;
+
+`ifdef PUF_MODEL_SIM
+    ro_array_sim # (.N_RINGS(16), .CNT_W(16)) u_ro_entropy_array (
+        .clk        (sys_clk       ),
+        .rst        (rst           ),
+        .measure_en (re_measure_en ),
+        .ring_en    (re_ring_en    ),
+        .busy       (re_busy       ),
+        .done       (re_done       ),
+        .ring_freq  (re_ring_freq  )
+    );
+`else
+    ro_array # (.N_RINGS(16), .CNT_W(16), .DIV_STAGES(5)) u_ro_entropy_array (
+        .clk        (sys_clk       ),
+        .rst        (rst           ),
+        .measure_en (re_measure_en ),
+        .ring_en    (re_ring_en    ),
+        .busy       (re_busy       ),
+        .done       (re_done       ),
+        .ring_freq  (re_ring_freq  )
+    );
+`endif
+
+    ro_entropy # (
+        .N_RINGS       (16),
+        .CNT_W         (16),
+        .SAMPLE_CYCLES (ENTROPY_CYCLES)
+    ) u_ro_entropy (
+        .clk        (sys_clk       ),
+        .rst        (rst           ),
+        .start      (re_start      ),
+        .measure_en (re_measure_en ),
+        .ring_en    (re_ring_en    ),
+        .busy       (re_busy       ),
+        .done       (re_done       ),
+        .ring_freq  (re_ring_freq  ),
+        .seed_valid (re_seed_valid ),
+        .boot_seed  (re_boot_seed  )
+    );
 
     //------------------------------------------------------------------------
     // TX 帧构造器

@@ -44,7 +44,7 @@
 | 任务 | 状态 | 说明 |
 |---|---|---|
 | **T1 P1-1 真密钥派生** | 🔶 **部分** | **RTL 已实现并仿真验证**（S1-S4: derive_device_key + S_KEY_MEASURE/S_KEY_DERIVE + w3_top 回环 + tb_key_derive/tb_w3top_keyloop）；**板上未可用**——站端缺 K 下发通道（0x0096 KEY_SEED 未做）+ K_boot 单次测量噪声可靠性未解 → `w3_top.ENABLE_KEY_DERIVE` **默认 0（fail-safe）**。**不得声明板上 P1-1 达成** |
-| T2 P1-5 C2 随机化 | ⬜ **未开始** | ro_entropy RTL **不存在**；w3_top 仍 tie 常量（c2_boot_seed/seed_load 标 TODO T2-S5）；**验收机制=终端 S_VERIFY_R2 拒止**（threat_poc replay 仅覆盖服务器窗 P1-2，终端侧待 T2） |
+| T2 P1-5 C2 随机化 | 🔶 **RTL 已实现（仿真验证）** | `ro_entropy.v`（105 行）+ w3_top 第二 ro_array 例化 + seed_load 脉冲链路；tb_ro_entropy(T10/T11/T12) + tb_w3top_keyloop T13 顶层集成断言。**诚实边界**：仿真下 fixture 确定性 → 确定性 boot_seed（黄金 0x34F1996F07D25792）；**真实熵只在板上成立**（有效熵 ~16-32bit/次上电 + 服务端 128 窗兜底）。终端侧 S_VERIFY_R2 拒止的**换电重启 PoC 证据待 GK 用例** |
 | T3 P2-1 TB 用例 | ✅ | tb_gap GI 用例（force calc_done_flag=0 → BLOCKED） |
 | T4 DoS 洪泛测试+文档 | 🔶 部分 | 令牌桶死锁已修 + test_dos_flood.py 入 CI；**暂存-释放语义 + 池补充 SOP 文档仍缺**（限速只削峰不防池耗尽） |
 | T5 运维加固 | 🔶 部分 | setkey 环境变量导入 + 审计日志已做；**DeviceKeyStore mtime 检测 + SimulatedHSM 决策未做** |
