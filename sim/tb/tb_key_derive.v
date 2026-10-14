@@ -36,6 +36,9 @@ module tb_key_derive;
 
     integer errors = 0, guard = 0, tx_byte_count = 0;
     reg [7:0] tx_captured [0:63];
+    reg [95:0] key_reg_snapshot = 96'd0;   // C2: T6 稳定性快照
+    reg        reentered_derive  = 1'b0;   // C2: T6 重派生标志
+    integer    tw_bits = 0;
 
     // 黄金 K（fixture 频率 → puf_model → 字节反转到 RTL 位序）
     localparam [95:0] GOLDEN_KEY = 96'h26c4ec61ba319ff325041dee;
@@ -96,7 +99,8 @@ module tb_key_derive;
         end else if (mf_busy) begin
             if (!mf_pay_phase && tx_byte_count == 0) mf_pay_phase <= 1'b1;
             else if (mf_pay_phase && mf_pay_valid) begin
-                tx_captured[tx_byte_count] <= mf_pay_byte;
+                tx_captured[tx_byte_count] <= mf_pay_byte;  // 保留供未来 R2 断言
+                tw_bits = tw_bits + 1;
                 tx_byte_count <= tx_byte_count + 1;
                 if (tx_byte_count + 1 >= mf_pay_len) begin
                     mf_pay_phase <= 1'b0; mf_busy <= 1'b0; mf_frame_done <= 1'b1;
@@ -156,16 +160,36 @@ module tb_key_derive;
         while (auth_busy && guard < 5000) begin @(posedge clk); guard = guard + 1; end
 
         // 二次 auth_start：key_valid 应保持 1，直接进 S_CALC_R2
+        // C2 强化：直接断言 (a) 派生后 key_reg 不变 (b) 状态从未进入 3/9
+        // (c) kdf_key12 与冻结常量逐位一致 —— 替代原"计时代理"间接判据
         tx_byte_count = 0;
+        key_reg_snapshot = key_reg;
+        reentered_derive = 1'b0;
         @(negedge clk); auth_start = 1'b1;
         @(negedge clk); auth_start = 1'b0;
         guard = 0;
-        while (tx_byte_count < 16 && guard < 5000) begin @(posedge clk); guard = guard + 1; end
-        if (key_valid && guard < 500)   // 应远快于派生路径（<500 vs >3000）
-            $display("[T6 PASS] 二次 auth 快速通过(%0d 拍, 无重复派生), key_valid=1", guard);
+        while (tx_byte_count < 16 && guard < 5000) begin
+            @(posedge clk);
+            guard = guard + 1;
+            // 状态采样：S_KEY_MEASURE=3 / S_KEY_DERIVE=9 出现即失败
+            if (dut.state === 4'd3 || dut.state === 4'd9) reentered_derive = 1'b1;
+        end
+        if (!key_valid) begin
+            errors = errors + 1; $display("[T6 FAIL] key_valid 丢失");
+        end else if (reentered_derive) begin
+            errors = errors + 1; $display("[T6 FAIL] 二次 auth 重入了派生路径 (state 3/9)");
+        end else if (key_reg !== key_reg_snapshot) begin
+            errors = errors + 1;
+            $display("[T6 FAIL] key_reg 变化 %h -> %h", key_reg_snapshot, key_reg);
+        end else
+            $display("[T6 PASS] 二次 auth 未重派生 (%0d 拍), key_reg 稳定=%h", guard, key_reg);
+
+        // T6b: kdf_key12 与冻结常量逐位比对（原为未参与比对的 display）
+        if (dut.kdf_key12 === 96'h0df58d745de035700df58d74)
+            $display("[T6b PASS] kdf_key12 = 冻结常量 0df58d745de035700df58d74");
         else begin
             errors = errors + 1;
-            $display("[T6 FAIL] key_valid=%b guard=%0d", key_valid, guard);
+            $display("[T6b FAIL] kdf_key12=%h != 0df58d745de035700df58d74", dut.kdf_key12);
         end
 
         //==================== 汇总 ====================

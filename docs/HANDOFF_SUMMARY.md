@@ -242,6 +242,15 @@ Git：57 commits（截至 A1 收官提交 a678274）· 144 files · tag w3-compl
    - P0(32030e5): CI 超时作业化 + RemoteException=0；P1(7cf52ce): puf_model 黄金模型 + 三方对拍(配对表 A/B/C 逐 bit)；P2(23ed28a/baa9a00/6644196): RTL B5a PUF 真实管线(S_PUF 三态+热稳定 7 窗+打包) + tb_puf_path 字节级语义锁 + CI 12→13 TB
    - 审查（4 代理 A/B/C/D）→ 修复：**P0 w3_top clk→sys_clk**(B/D 双源) + **P1 看门狗预算分段**（C/D 双源，板默认余量从 244us→65536 拍，各态入口清零）+ tb_speck T10 毛刺 + --check 新鲜度门禁 + 窗口计数断言 + ring_en 占空比差异文档化 + 账本/看板同步(83→85) + 契约 S8 pair7 笔误
    - **W4-P3 已完成（7837317 + 审查修复）**：SimulatedTerminal→ROPairingPUF 薄壳 + interop harness(含灰区/CONFIRM_FAIL/eval-tool 对齐, 6 用例) + CI 13TB+83 单测全绿；评估工具 64bit 兼容已由 hamming_distance 往返测试锁定
+0. **【2026-10-14 追加】W4-P4 S1-S4（T1 密钥派生）+ 三代理审查闭环**：
+   - S1 ab20424：PC 侧 derive_device_key() + 黄金向量 K=ee1d0425f39f31ba61ecc426（4 单测）
+   - S2 a428c03：terminal_fsm 新增 S_KEY_MEASURE(4'd3)/S_KEY_DERIVE(4'd9) + Speck KDF mux + seed_load 端口 + ENABLE_KEY_DERIVE 参数
+   - S3 da9108f：w3_top key_valid/key_reg 回环 + ENABLE_KEY_DERIVE 参数化
+   - S4 fc150a6：tb_key_derive（T5 首次派生黄金锁 + T6/T6b 未重派生 + kdf_key12 常量比对）；修复 2 个字节序 bug（kdf_key12 底部 4B 拼接序反、KDF_PT2 0x5B→0x6B）
+   - **审查（3 代理 A/B/C）→ P0 修复 311fec4**：w3_top 例化**漏接** .key_valid/.key_reg → 回环 wire 悬空 → 综合 tie 常量时静默回落公开向量（A/B 独立复现）。新增 tb_w3top_keyloop.v（w3_top 级 4 断言）入 CI，**CI 15/15 TB + 87 单测全绿**
+   - **T1 状态 = 部分（板上未可用，勿声明达成）**：站端缺 K 下发通道（0x0096 KEY_SEED 未做）+ K_boot 单次测量噪声可靠性未解 → w3_top.ENABLE_KEY_DERIVE **默认 0（fail-safe）**
+   - **T2 = 未开始**：ro_entropy RTL 不存在；w3_top 仍 tie 常量
+   - **审查方法学教训**：声明"完成"前必须验证**顶层集成**——子模块 TB 自接回环会掩盖顶层断线（本次 P0 即此类，与 W4-P2 clk bug 同源）
 
 1. **B5 PUF 真实接入**（W4 核心创新，最高优先）：替换种子直通占位 → challenge_decode + ro_array 真实测量；同时处理 W4 安全项（P1-1 真密钥 / P1-4 PUF / P1-5 终端重放三选一 / 44-bit 熵混合 / CI 超时作业化）
 2. **B6 ML 攻击实验**（W4 交付物，20 分）：实验 A 合成 arbiter 基线 + 实验 B 排序重构攻击（设计见 project_design.md §W4）

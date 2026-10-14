@@ -43,11 +43,21 @@
 ### W4-P4 安全包·剩余子项（预估 1 天 + 0.5 审查）
 | 任务 | 状态 | 说明 |
 |---|---|---|
-| T1 P1-1 真密钥派生 | ⬜ | 设计书 §5v2；需 RTL key_seed 帧通道 + PC 双侧 KDF（当前 RTL 仍为公开 NSA 向量——brute 用例已诚实标注） |
-| T2 P1-5 C2 随机化 | ⬜ | ro_entropy RTL + w3_top 接线；**验收机制=终端 S_VERIFY_R2 拒止**（threat_poc replay 仅覆盖服务器窗 P1-2，终端侧待 T2） |
-| T3 P2-1 TB 用例 | ⬜ | tb_gap 新增注入用例（拦截无仿真证据——B-P2 F3） |
-| T4 DoS 洪泛测试+文档 | ⬜ | 令牌桶已修死锁但限速只削峰不防池耗尽（B-P2 F5）；暂存-释放语义+池补充 SOP 文档待写 |
-| T5 运维加固 | ⬜ | setkey getpass / c2reset 审计 / DeviceKeyStore mtime / SimulatedHSM 决策 |
+| **T1 P1-1 真密钥派生** | 🔶 **部分** | **RTL 已实现并仿真验证**（S1-S4: derive_device_key + S_KEY_MEASURE/S_KEY_DERIVE + w3_top 回环 + tb_key_derive/tb_w3top_keyloop）；**板上未可用**——站端缺 K 下发通道（0x0096 KEY_SEED 未做）+ K_boot 单次测量噪声可靠性未解 → `w3_top.ENABLE_KEY_DERIVE` **默认 0（fail-safe）**。**不得声明板上 P1-1 达成** |
+| T2 P1-5 C2 随机化 | ⬜ **未开始** | ro_entropy RTL **不存在**；w3_top 仍 tie 常量（c2_boot_seed/seed_load 标 TODO T2-S5）；**验收机制=终端 S_VERIFY_R2 拒止**（threat_poc replay 仅覆盖服务器窗 P1-2，终端侧待 T2） |
+| T3 P2-1 TB 用例 | ✅ | tb_gap GI 用例（force calc_done_flag=0 → BLOCKED） |
+| T4 DoS 洪泛测试+文档 | 🔶 部分 | 令牌桶死锁已修 + test_dos_flood.py 入 CI；**暂存-释放语义 + 池补充 SOP 文档仍缺**（限速只削峰不防池耗尽） |
+| T5 运维加固 | 🔶 部分 | setkey 环境变量导入 + 审计日志已做；**DeviceKeyStore mtime 检测 + SimulatedHSM 决策未做** |
+| T6 威胁 PoC | ✅ | threat_poc.py 3/3 入 CI |
+
+### W4-P4 T1/S3-S4 审查闭环（2026-10-14，3 代理 A/B/C）
+| 代理 | P0 | P1 | P2 | 处置 |
+|---|---|---|---|---|
+| A 缺陷 | 1（w3_top 回环断线） | 0 | 4 | P0 已修（311fec4）+ 新增 tb_w3top_keyloop |
+| B 安全/合规 | 1（同上，独立复现） | 1（K 下发通道缺失） | 2 | P1 采纳 fail-safe 默认 0 + 文档诚实标注 |
+| C 静默失败 | 0 | 1（TODO 步骤号 + T2 未闭环） | 6 | TODO 修正 + T1/T2 状态诚实化 |
+
+**关键教训（W5 复用）**：声明"完成"前必须验证**顶层集成**（w3_top 级 TB），单元/子模块 TB 全绿不能替代——本次 P0 正是子模块 TB 自接回环掩盖的。
 
 ### W4-P5 ML 攻击实验（1.5 天，纯 PC）
 实验 A 合成 arbiter+LR（sklearn 已装）／实验 B 排序重构（puf_model 数据）；产出 data/ml_attack/*.json + 图。

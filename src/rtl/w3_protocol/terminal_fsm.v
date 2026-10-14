@@ -611,6 +611,7 @@ module terminal_fsm # (
                         state    <= S_BLOCKED;
                         result_r <= 2'd3;
                     end
+
                     // 载荷布局：result(1)+hd(1)+r2(8) = 地址 [0]=result, [1]=hd, [2..9]=r2
                     else if (fp_rd_addr == 5'd0) begin
                         // 第一拍：读 result 码
@@ -627,6 +628,8 @@ module terminal_fsm # (
                             state    <= S_BLOCKED;  // R2 不匹配
                             result_r <= 2'd3;
                             calc_done_flag <= 1'b0; // P3: 阻断路径也清
+                            // C4: 清 key_valid_r 触发下次认证重派生（坏 K 不永久缓存）
+                            key_valid_r <= 1'b0;
                         end
                         fp_rd_addr <= fp_rd_addr + 5'd1;
                     end else if (fp_rd_addr >= 5'd10) begin
@@ -684,6 +687,15 @@ module terminal_fsm # (
                         sp_start_w <= 1'b0;
 
                         if (sp_done) begin
+                            // B-P2-1: 密文 x 兜底——sp_key 若为 x/z（如回环未接）
+                            // 则密文全 x，下游 '!=' 比对在 x 下走 else 分支 =
+                            // "恒接受"，可被伪造 RESULT 冒充站端。此处源头拒绝。
+                            if (^sp_ciphertext === 1'bx) begin
+                                state       <= S_BLOCKED;
+                                result_r    <= 2'd3;
+                                calc_wd_cnt <= 8'd0;
+                                key_valid_r <= 1'b0;
+                            end else begin
                             // Speck 完成：置旗标 + 锁存 R2 + 进入 TX_ACCESS
                             calc_done_flag <= 1'b1;
                             r2_expected[0] <= r2_byte_0;
@@ -696,6 +708,7 @@ module terminal_fsm # (
                             r2_expected[7] <= r2_byte_7;
                             calc_wd_cnt <= 8'd0;
                             state <= S_TX_ACCESS;
+                            end
                         end else if (calc_wd_cnt >= CALC_WD_MAX) begin
                             // 看门狗超时 → 阻断
                             calc_wd_cnt <= 8'd0;
@@ -804,10 +817,20 @@ module terminal_fsm # (
                     end else begin
                         case (kdf_step)
                             2'd0: begin
-                                // 启动第一次 Speck: key12 加密 KDF_PT1
-                                sp_start_w  <= 1'b1;
-                                kdf_step    <= 2'd1;
-                                calc_wd_cnt <= 8'd1;
+                                // C4: k_boot 退化自检（全 0/全 1 = PUF 读数失效）
+                                // 派生出的"看似合法"的坏 K 会被永久缓存，
+                                // 故在此拒绝并保持 key_valid=0（下次 auth 重试）
+                                if (k_boot_reg == 64'd0 ||
+                                    k_boot_reg == 64'hFFFF_FFFF_FFFF_FFFF) begin
+                                    key_valid_r <= 1'b0;
+                                    state       <= S_BLOCKED;
+                                    result_r    <= 2'd3;
+                                end else begin
+                                    // 启动第一次 Speck: key12 加密 KDF_PT1
+                                    sp_start_w  <= 1'b1;
+                                    kdf_step    <= 2'd1;
+                                    calc_wd_cnt <= 8'd1;
+                                end
                             end
                             2'd1: begin
                                 sp_start_w <= 1'b0;

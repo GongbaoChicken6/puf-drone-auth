@@ -56,7 +56,9 @@ input  wire         use_ext_key;    // TB 显式 0；板上接内部 key_valid�
 **station_random 通道（主案）**：新增帧 **0x0096 KEY_SEED**（server→terminal，载荷 16B=station_random；契约 §3 扩展 + §7 变更控制 + check_contract_sync 扩展）。触发：**term_id_dip==2'b11（拨码 W6/W7 双 1）上电进注册模式**——S_ENROLL_WAIT：先测 K_boot，等 KEY_SEED 帧→两次 Speck 得 K→key_valid=1→回 CONFIRM(status=ENROLL_OK)；超时 30s 退出并拒绝认证。
 **断电语义**：K 无 NVM，每次上电重派生；**key_valid 旗标驱动 use_ext_key**——未派生/派生失败时认证直接 BLOCKED，**绝不静默回退参数 NSA 密钥**（v1.0 未声明，P2R 指出）；参数 DEVICE_KEY 仅存于 TB tie-off 路径。
 **信任边界与安全声明（报告口径）**：station_random 明文仅出现在注册信道（物理近距受控假设，条件化声明）；**离线穷举上界 = 2^96（K 空间），非 2^128**（修正 v1.0 过度声明）；实际增益 = 消除"公开向量密钥"与 2^44 低熵穷举，"抗离线穷举"仍不可声明。
-**降级路径（时间紧）**：不做 0x0096 帧，K = SpeckEnc(K_boot⊕MASK 的 12B 折叠, key_seed 折叠) 公共构造（熵 44bit）——P1-1"非公开向量"成立、熵混合目标失败并诚实记录。
+**降级路径（时间紧，已实现为 W4-P4 T1）**：不做 0x0096 帧；`key12 = K_boot + K_boot[:4]`（8B+4B **拼接**，非折叠），`pt1 = key_seed`、`pt2 = key_seed ⊕ MASK`（均为公开常量），`K = Speck(key12, pt1) ‖ Speck(key12, pt2)[:4]`（96bit，**熵 ≈44bit**）。
+- **诚实口径**：P1-1"非公开向量"在 RTL 层成立；熵混合目标未达成（无 station_random）。
+- **部署前置（2026-10-14 审查 B-P1-1 补记）**：站端必须先获得 K 才能启用（`w3_top.ENABLE_KEY_DERIVE` 默认 0 = fail-safe）。缺失通道 = 0x0096 KEY_SEED 注册模式（主案）或站端注册期派生；且单次测量型 K_boot 存在噪声可靠性问题（需纠错或多数表决），未解决前**不得声明板上 P1-1 达成**。
 
 ## 6. P1-5 C2 上电随机化
 

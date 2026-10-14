@@ -48,19 +48,27 @@ def derive_device_key(puf) -> bytes:
     return ct1 + ct2[:4]  # 12B
 ```
 
-**RTL 对应：**
+**RTL 对应（修正版 — 2026-10-14 审查 A-P3-1/B-P3-1 实测校准）：**
 ```verilog
-// key12 = {k_boot_reg[63:0], k_boot_reg[31:0]}  — 96bit
+// key12 的 12 字节逐字节映射到 key_in[8*i +: 8]（wire-byte，非大端整数）：
+//   key_in[8*i +: 8] = key12_byte[i],  i = 0..11
+//   key12_byte[0..7] = K_boot 的第 0..7 字节（= k_boot_reg[63:56] … [7:0]）
+//   key12_byte[8..11] = K_boot 的第 0..3 字节（重复）
+// 展开：{ k_boot_reg[39:32], kb[47:40], kb[55:48], kb[63:56],   // bytes 11-8
+//         kb[7:0],         kb[15:8],  kb[23:16],  kb[31:24],   // bytes 7-4
+//         kb[39:32],       kb[47:40], kb[55:48],  kb[63:56] }  // bytes 3-0
+// 实测（k_boot=748df50d7035e05d）→ kdf_key12 = 0x0df58d745de035700df58d74
 // pt1 = KEY_SEED（冻结常量）
 // pt2 = KEY_SEED ^ KDF_MASK
 // ct1/ct2 = Speck(key12, pt)  — 时分复用
 // K = {ct1_reg[63:0], ct2_reg[63:32]}  — 96bit
 ```
 
-**字节序（双侧一致）：**
-- key_in[95:0]：Python bytes → int.from_bytes(key, "big") → Verilog 96-bit 向量
-- plaintext_in[63:0]：同上
-- 密钥 K 存储：ct1[0:8] + ct2[0:4]，大端拼接
+**字节序（双侧一致，实测校准）：**
+- **wire-byte 约定**：`key_in[8*i +: 8] = key_byte[i]`、`plaintext_in` 同构（`speck64_96.v` ↔ `speck.py` 的 LE-word 解析）。
+  → 96-bit 十六进制**显示**恰为 Python bytes 的**反序**（例：Python K=`ee1d…c426` ⇔ RTL key_reg=`26c4…1dee`）。**两侧互为反序是正确约定，不是 bug。**
+- plaintext 的字序：`pt[39:32]=b0, [47:40]=b1, [55:48]=b2, [63:56]=b3, [7:0]=b4, [15:8]=b5, [23:16]=b6, [31:24]=b7`（y 在前 x 在后，NSA 小端）。
+- 密钥 K 存储：`key_reg_r[8*i +: 8] = K_byte[i]`（= Python `ct1+ct2[:4]` 的第 i 字节）。
 
 ### 1.2 RTL 架构（P0-2 修复版）
 

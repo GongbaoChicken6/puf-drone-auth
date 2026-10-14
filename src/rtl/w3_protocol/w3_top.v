@@ -23,7 +23,12 @@ module w3_top # (
     parameter TIMEOUT_S     = 2,            // 协议超时（秒，契约 §5 建议 2s）
     parameter MEASURE_CYCLES = FREQ_HZ/1000,// W4：PUF 测量窗（1ms；TB 可缩小加速）
     parameter [4:0] WARMUP_WINS = 5'd7,     // W4：热稳定窗（W2 冻结 7 轮）
-    parameter ENABLE_KEY_DERIVE = 1           // W4-P4 T1: 板上=1（密钥派生），TB 可覆盖为 0
+    // W4-P4 T1: 密钥派生使能。
+    // 默认 0（fail-safe）——启用前站端必须先获得 K，否则终端用派生密钥
+    // 算 R2 而站端用公开向量 → R2 不匹配 → 恒 BLOCKED（fail-closed）。
+    // 站端 K 下发通道：scripts 侧 enroll 时 derive_device_key() 派生并 setkey，
+    // 或 W5 落地 0x0096 KEY_SEED 注册通道（W4_design §5v2 主案）。
+    parameter ENABLE_KEY_DERIVE = 0
 ) (
     input  wire        sys_clk      ,   // 系统时钟（100MHz，XDC 约束待填）
     input  wire        sys_rst_n    ,   // 复位按键（低有效，需消抖）
@@ -169,10 +174,10 @@ module w3_top # (
         .auth_result   (led_result    ),
         // W4-P4 T1: key_valid 回环驱动 use_ext_key（派生后自动切换到派生密钥）
         // W4-P4 T2: c2_boot_seed 待接 ro_entropy（当前 tie 常量=旧行为）
-        .c2_boot_seed  (64'hA7A6_A5A4_A3A2_A1A0),   // TODO S6: 接 ro_entropy.boot_seed
+        .c2_boot_seed  (64'hA7A6_A5A4_A3A2_A1A0),   // TODO T2-S5: 待接 ro_entropy.boot_seed
         .device_key_in (fsm_key_reg),      // W4-P4 T1: 派生密钥回环
         .use_ext_key   (fsm_key_valid),    // W4-P4 T1: 派生完成自动使能
-        .seed_load     (1'b0),            // TODO S6: 接 ro_entropy.seed_valid 上升沿
+        .seed_load     (1'b0),            // TODO T2-S5: 待接 ro_entropy.seed_valid 上升沿
         .key_valid     (fsm_key_valid),   // FIX P0: FSM 输出驱动回环
         .key_reg       (fsm_key_reg),     // FIX P0: FSM 输出驱动回环
         .cd_start      (cd_start     ),
