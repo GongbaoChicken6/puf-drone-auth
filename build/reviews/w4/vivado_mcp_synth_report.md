@@ -1,49 +1,56 @@
-# W4 Vivado MCP 综合实测报告（2026-10-14）
+# W4 Vivado MCP 综合实测报告（HEAD 版，覆盖 W4-P4 S1-S4）
 
-## 综合环境
-- **工具**: Vivado 2026.1 (win64) via MCP (vivado-mcp-server 2026.9.1)
-- **器件**: xc7z020clg484-1 (ZC702)
-- **顶层**: w3_top（含 W4-P2 B5a PUF 管线 + W4-P4 S2 密钥派生状态）
-- **耗时**: 综合 55.5s + read_verilog 9.2s
+> 生成 2026-10-14 21:26（Vivado 2026.1 via MCP）｜**取代** vivado_mcp_synth_report.md 的 S2 快照内容
+> 闭审查发现：A-P2-2 / B-P3-2 / C6（旧证据早于 S3/S4；且综合的 undriven-net 检查本可暴露 P0）
 
-## 资源利用率（综合后）
+## 覆盖范围
+| 项 | 值 |
+|---|---|
+| 提交 | **e3ea9c5**（含 S1-S4 + P0 修复 311fec4 + B/C 审查修复） |
+| 顶层 | w3_top |
+| 器件 | xc7z020clg484-1 (ZC702) |
+| 综合耗时 | 56.9s，**error_count = 0** |
 
-| 资源 | 已用 | 可用 | 利用率 | 备注 |
-|---|---|---|---|---|
-| **Slice LUTs** | **4011** | 53200 | **7.54%** | 含 PUF 管线全量 |
-| LUT as Logic | 3991 | 53200 | 7.50% | |
-| LUT as Memory | 20 | 17400 | 0.11% | 分布式 RAM |
-| **Slice Registers** | **5967** | 106400 | **5.61%** | |
-| F7 Muxes | 730 | 26600 | 2.74% | |
-| F8 Muxes | 264 | 13300 | 1.98% | |
-| BRAM | 0 | 140 | 0% | 未使用 |
-| DSP | 0 | 220 | 0% | 未使用 |
-| Bonded IOB | 17 | 200 | 8.5% | |
+## 资源利用率（HEAD，综合后）
 
-## 时序检查
+| 资源 | HEAD | S2 快照 | Δ | 可用 | 利用率 |
+|---|---|---|---|---|---|
+| **Slice LUTs** | **4190** | 4011 | +179 | 53200 | **7.88%** |
+| LUT as Logic | 4170 | 3991 | +179 | 53200 | 7.84% |
+| **Slice Registers** | **6133** | 5967 | +166 | 106400 | **5.76%** |
+| F7 Muxes | 730 | 730 | 0 | 26600 | 2.74% |
+| F8 Muxes | 264 | 264 | 0 | 13300 | 1.98% |
+| Unique Control Sets | 256 | 253 | +3 | 13300 | 1.92% |
+| BRAM / DSP | 0 / 0 | 0 / 0 | 0 | 140 / 220 | 0% |
 
-| 检查项 | 数量 | 说明 |
+**增量归因**：+179 LUT / +166 FF = W4-P4 T1 密钥派生逻辑（S_KEY_MEASURE 子态机 + S_KEY_DERIVE 双 Speck 时序 + kdf_key12 拼接 + key_valid 生命周期 + 密文 x 兜底）。资源余量充足（<8% LUT）。
+
+## 关键验证：P0 修复的综合级证据
+
+**未连接端口告警：key_valid / key_reg 零命中** ✅
+
+修复前（审查代理 B 实测，HEAD=fc150a6）：
+
+    WARNING: [VRFC 10-3645] port 'key_valid' remains unconnected for this instance [w3_top.v:158]
+
+修复后（HEAD=e3ea9c5）：综合日志无该告警；xvlog 层 unconnected 计数 = 0。
+
+> 这正是 B 代理指出的要点——综合的 undriven-net 检查本可暴露 P0，故本次重跑综合同时作为该缺陷的独立闭环证据。
+
+## 其余综合告警（全部良性，既有项）
+
+| 告警 | 位置 | 判定 |
 |---|---|---|
-| no_clock 寄存器 | 5991 | **预期**（综合时无 XDC 约束，sys_clk 未约束） |
-| unconstrained 内部端点 | 14503 | 同上 |
-| **组合环** | **16** | **预期**（16 个 RO 环振，w2_waiver.xdc 豁免） |
-| latch_loops | 0 | 无锁存器环 |
-
-## 关键结论
-
-1. **设计适配确认**: 4011 LUT / 5967 FF（<8%/<6%）——资源余量极大
-2. **W4 B5a PUF 管线综合成功**: challenge_decode + ro_array + 64 对比较 + Speck×2 KDF 全部综合通过
-3. **W4-P4 S2 新态综合通过**: S_KEY_MEASURE/S_KEY_DERIVE 无综合错误
-4. **组合环 16 个 = 16 个 RO 环振**: 与 w2_waiver.xdc 豁免清单一致（上板需挂载）
-5. **与旧估算对比**: W3-only 约 700 LUT → 含 PUF 管线实际 4011 LUT（5.7x，因 challenge_decode 512bit 配对表 + 64 对比较器 + ro_array 接口）
-
-## 对 W4 计划的影响
-
-- **资源余量**: 足够添加 ro_entropy (~50 LUT) 和第二 ro_array 实例 (~200 LUT)
-- **无需 B5b XOR-4 降级**: 7.54% LUT → XOR-4 约 30% 仍在预算内
-- **时序无红灯**: 综合级无 critical warning（需 XDC 约束后才能看 WNS）
-- **上板信心**: 设计在 Artix-7 级别资源下轻松适配
+| port 'busy' of module 'frame_parser' is unconnected | w3_top.v:336 | 良性：frame_parser.busy 未使用 |
+| Port ra_busy in module terminal_fsm is either unconnected or has no load | terminal_fsm | 良性：FSM 以 ra_done 为完成信号 |
+| Port fp_frame_err in module terminal_fsm is ... no load | terminal_fsm | 良性：帧错误由 fp_frame_ok 路径覆盖 |
+| Found unconnected internal register 'puf_seed_asym_reg' trimmed 64->56 bits | terminal_fsm.v:487 | **良性**：左移装配仅低 56bit 参与读取；逐字节追踪确认 8 字节装配 = 大端序 b0..b7，与 R1 黄金值一致 |
 
 ## 证据文件
-- timing.rpt: 时序检查报告（无约束状态）
-- util.rpt: 资源利用率报告
+- build/vivado_mcp/util_head.rpt（HEAD 资源，Date 2026-10-14 21:26:30）
+- build/vivado_mcp/timing_head.rpt（HEAD 时序检查）
+- build/vivado_mcp/.vivado-ai/vivado_81067483_517a2ddc.log（综合全日志）
+
+## 待办（W4-P6 上板前）
+- 带 XDC 约束的综合（当前无约束 → timing 报告无 WNS 意义）
+- report_drc 完整检查（本次仅确认 TOP_PORTS=17）
