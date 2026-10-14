@@ -67,6 +67,7 @@ if __package__ in (None, ""):
         ProtocolError,
         HFIDAProtocol,
     )
+    from src.python.evaluation.puf_model import ROPairingPUF  # noqa: E402
     from src.python.server.template_db import TemplateDB  # noqa: E402
 else:
     from .crp_pool import PoolExhaustedError, format_pool_summary
@@ -84,6 +85,7 @@ else:
         ProtocolError,
         HFIDAProtocol,
     )
+    from ..evaluation.puf_model import ROPairingPUF
     from .template_db import TemplateDB
 
 #: Default per-bit flip probability of the simulated genuine terminal.
@@ -105,11 +107,14 @@ _RESULT_NAMES = {
 # Simulated drone terminal (loopback transport)
 # ---------------------------------------------------------------------
 class SimulatedTerminal:
-    """Software model of one drone terminal's RO-pairing PUF.
+    """Software model of one drone terminal's RO-pairing PUF (W4 B5a).
 
-    The device secret is a random 32-byte key; the response to a
-    challenge seed is a keyed HMAC-SHA256 digest truncated to 64 bit,
-    then perturbed with per-bit flips to model measurement noise.
+    Wraps ROPairingPUF from puf_model.py — the SAME golden model that
+    the RTL testbenches use — so loopback authentication exercises the
+    real RO-pairing comparison semantics instead of the old HMAC stub.
+    The device secret is its 16-ring frequency vector; the response to
+    a challenge seed is the 64-bit pairwise-comparison vector (contract
+    S8), perturbed with per-bit flips to model measurement noise.
     """
 
     #: C2 reset value matching terminal_fsm.v: c2_counter[j] resets to
@@ -117,30 +122,29 @@ class SimulatedTerminal:
     #: (no carry propagation), exactly like the RTL counter.
     C2_INIT = bytes(0xA0 + j for j in range(8))
 
-    def __init__(self, terminal_id: int, flip_prob: float = NORMAL_FLIP_PROB) -> None:
+    def __init__(self, terminal_id: int, flip_prob: float = NORMAL_FLIP_PROB,
+                 freqs: Sequence[int] | None = None) -> None:
         self.terminal_id = terminal_id
-        self.secret = secrets.token_bytes(32)
         self.flip_prob = flip_prob
         self._rng = secrets.SystemRandom()
+        self._puf = ROPairingPUF(freqs=freqs, flip_prob=flip_prob, rng=self._rng)
         self._auth_count = 0
 
+    @property
+    def freqs(self) -> list[int]:
+        """The device's frequency vector (its physical fingerprint)."""
+        return self._puf.freqs
+
     def ideal_response(self, seed: bytes) -> bytes:
-        """Noiseless response (deterministic for the device secret)."""
-        digest = hmac.new(self.secret, b"resp" + bytes(seed), hashlib.sha256).digest()
-        return digest[:8]
+        """Noiseless response (deterministic for this device's freqs)."""
+        return self._puf.ideal(seed)
 
     def respond(self, seeds: Sequence[bytes], flip_prob: float | None = None) -> list[bytes]:
         """Respond to challenges with realistic bit-flip noise applied."""
         prob = self.flip_prob if flip_prob is None else flip_prob
-        out: list[bytes] = []
-        for seed in seeds:
-            value = int.from_bytes(self.ideal_response(seed), "big")
-            if prob > 0.0:
-                for i in range(64):
-                    if self._rng.random() < prob:
-                        value ^= 1 << i
-            out.append(value.to_bytes(8, "big"))
-        return out
+        if prob != self._puf.flip_prob:
+            self._puf.flip_prob = prob
+        return [self._puf.respond(seed) for seed in seeds]
 
     def counter_challenge(self) -> bytes:
         """Generate the terminal's counter-challenge C2 (8 bytes).

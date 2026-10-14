@@ -249,6 +249,14 @@ if ($pufCode -ne 0) {
     Write-Host "PUF MODEL TESTS FAILED"; exit 1
 }
 $outP | Select-Object -Last 4 | ForEach-Object { Write-Host "  $_" }
+# W4-P3 interop: ROPairingPUF (RTL golden model) <-> real SerialServer.
+$outI = & cmd.exe /c "python tests\test_interop_rtl_model.py 2>&1" | ForEach-Object { "$_" }
+$interopCode = $LASTEXITCODE
+if ($interopCode -ne 0) {
+    $outI | Select-Object -Last 40 | ForEach-Object { Write-Host "  $_" }
+    Write-Host "INTEROP TESTS FAILED"; exit 1
+}
+$outI | Select-Object -Last 4 | ForEach-Object { Write-Host "  $_" }
 $out2 = & cmd.exe /c "python scripts\test_r2_nonlinearity.py 2>&1" | ForEach-Object { "$_" }
 $canCode = $LASTEXITCODE
 if ($canCode -ne 0) {
