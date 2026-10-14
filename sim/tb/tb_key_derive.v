@@ -192,9 +192,65 @@ module tb_key_derive;
             $display("[T6b FAIL] kdf_key12=%h != 0df58d745de035700df58d74", dut.kdf_key12);
         end
 
+        //==================== T8: S_KEY_MEASURE 看门狗 ====================
+        // C3: 派生失败不变式——cd_done 卡死 → PUF_WD → BLOCKED + key_valid 保持 0
+        // 先让 FSM 回 S_IDLE（WAIT_CHALL 超时 → BLOCKED → IDLE）
+        guard = 0;
+        while (dut.state !== 4'd0 && guard < 30000) begin @(posedge clk); guard = guard + 1; end
+        if (dut.state !== 4'd0) begin
+            errors = errors + 1; $display("[T8 FAIL] FSM 未回 IDLE guard=%0d state=%0d", guard, dut.state);
+        end
+        repeat (10) @(negedge clk);
+        force dut.key_valid_r = 1'b0;    // 复位派生状态以重入 S_KEY_MEASURE
+        @(negedge clk); auth_start = 1'b1;
+        @(negedge clk); auth_start = 1'b0;
+        release dut.key_valid_r;
+        guard = 0;
+        while (dut.state !== 4'd3 && guard < 10000) begin @(posedge clk); guard = guard + 1; end
+        if (dut.state !== 4'd3) begin
+            errors = errors + 1; $display("[T8 FAIL] 未进入 S_KEY_MEASURE guard=%0d", guard);
+        end else begin
+            force dut.cd_done = 1'b0;    // 解码永不完
+            guard = 0;
+            while (dut.state !== 4'd11 && guard < 40000) begin @(posedge clk); guard = guard + 1; end
+            release dut.cd_done;
+            if (dut.state === 4'd11 && !key_valid && guard > 500)
+                $display("[T8 PASS] cd_done 卡死 → BLOCKED (%0d 拍) + key_valid=0", guard);
+            else begin
+                errors = errors + 1;
+                $display("[T8 FAIL] state=%0d key_valid=%b guard=%0d", dut.state, key_valid, guard);
+            end
+        end
+        while (dut.auth_busy) @(posedge clk);
+        repeat (5) @(negedge clk);
+
+        //==================== T9: S_KEY_DERIVE 看门狗 ====================
+        // C3: sp_done 卡死 → calc_wd → BLOCKED + key_valid=0
+        force dut.key_valid_r = 1'b0;
+        @(negedge clk); auth_start = 1'b1;
+        @(negedge clk); auth_start = 1'b0;
+        release dut.key_valid_r;
+        guard = 0;
+        while (dut.state !== 4'd9 && guard < 40000) begin @(posedge clk); guard = guard + 1; end
+        if (dut.state !== 4'd9) begin
+            errors = errors + 1; $display("[T9 FAIL] 未进入 S_KEY_DERIVE guard=%0d", guard);
+        end else begin
+            force dut.sp_done = 1'b0;    // Speck 永不完成
+            guard = 0;
+            while (dut.state !== 4'd11 && guard < 10000) begin @(posedge clk); guard = guard + 1; end
+            release dut.sp_done;
+            if (dut.state === 4'd11 && !key_valid && guard > 100)
+                $display("[T9 PASS] sp_done 卡死 → BLOCKED (%0d 拍) + key_valid=0", guard);
+            else begin
+                errors = errors + 1;
+                $display("[T9 FAIL] state=%0d key_valid=%b guard=%0d", dut.state, key_valid, guard);
+            end
+        end
+        while (dut.auth_busy) @(posedge clk);
+
         //==================== 汇总 ====================
         if (errors == 0)
-            $display("TB_KEY_DERIVE_PASS: 密钥派生端到端(黄金值+不重复) 全部通过");
+            $display("TB_KEY_DERIVE_PASS: 密钥派生端到端(黄金值+不重复+双看门狗) 全部通过");
         else
             $display("TB_KEY_DERIVE_FAIL: %0d 项错误", errors);
         $finish;
