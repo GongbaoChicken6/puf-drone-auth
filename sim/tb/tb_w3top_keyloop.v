@@ -26,7 +26,7 @@ module tb_w3top_keyloop;
         .BAUD      (115_200    ),
         .TIMEOUT_S (0.01       ),
         .MEASURE_CYCLES (32'd64),
-        .ENABLE_KEY_DERIVE (1)          // <<< 派生启用（板上默认值）
+        .ENABLE_KEY_DERIVE (1)          // <<< 显式启用（w3_top 默认已改 0 fail-safe）
     ) dut (
         .sys_clk      (sys_clk      ),
         .sys_rst_n    (sys_rst_n    ),
