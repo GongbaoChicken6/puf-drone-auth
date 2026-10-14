@@ -634,6 +634,15 @@ def cmd_setkey(
     e.g. the W3 FPGA demo device (RTL DEVICE_KEY 96'h13121110_0b0a0908_
     03020100 = hex 0001020308090a0b10111213).
     """
+    if len(args) == 1:
+        # W4-P4 T5: non-interactive import from env var (avoid echo)
+        import os
+        hex_key = os.environ.get("PUF_SETKEY_HEX", "")
+        if not hex_key:
+            print("usage: setkey <terminal_id> <24-hex-char key>")
+            print("       or: PUF_SETKEY_HEX=<key> setkey <terminal_id>  (non-interactive)")
+            return
+        args = [args[0], hex_key]
     if len(args) != 2:
         print("usage: setkey <terminal_id> <24-hex-char key>")
         return
@@ -654,6 +663,10 @@ def cmd_setkey(
     hsm = protocol.hsm
     if isinstance(hsm, SpeckHSM):
         hsm.set_key(tid, key)
+    # W4-P4 T5: audit trail (append-only)
+    import datetime
+    with open(Path(args.device_keys if hasattr(args, 'device_keys') else '.') / "audit.log", "a") as f:
+        f.write(f"{datetime.datetime.now().isoformat()} SETKEY tid={tid} key={key.hex()[:6]}...\n")
     print(f"[KEY]    terminal {tid}: Speck64/96 device key installed and "
           f"persisted to {store.path}")
 
@@ -675,6 +688,10 @@ def cmd_c2reset(
     tid = int(args[0])
     protocol.reset_c2_history(tid)
     store.clear_c2_history(tid)
+    # W4-P4 T5: audit trail
+    import datetime
+    with open(Path(store.path).parent / "audit.log", "a") as f:
+        f.write(f"{datetime.datetime.now().isoformat()} C2RESET tid={tid}\n")
     print(f"[C2]     terminal {tid}: replay window cleared "
           f"(power-cycled terminal may authenticate again)")
 

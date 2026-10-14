@@ -44,6 +44,7 @@ module tb_gap_regression;
     integer errors = 0;
     integer i;
     integer tx_byte_count = 0;
+    integer guard = 0;   // W4-P4 GI: 循环保护
     reg [7:0] tx_captured [0:63];
 
 
@@ -315,6 +316,33 @@ module tb_gap_regression;
         repeat (10) @(negedge clk);
         if (auth_result !== 2'd2) begin errors = errors + 1; $display("[GH FAIL] result=%0d exp 2 (non-zero code must reject)", auth_result); end
         else $display("[GH PASS] result=4 (REPLAY) rejected despite correct R2 -> REJECT(2)");
+
+        
+        //==== GI: P2-1 calc_done_flag injection interception ============
+        @(negedge clk); auth_start = 1'b1;
+        @(negedge clk); auth_start = 1'b0;
+        guard = 0;
+        while (tx_byte_count < 16 && guard < 10000) begin @(posedge clk); guard = guard + 1; end
+        repeat (2) @(negedge clk);
+        tx_byte_count = 0;
+        guard = 0;
+        while (dut.state !== 4'd2 && guard < 10000) begin @(posedge clk); guard = guard + 1; end
+        @(negedge clk);
+        load_challenge; feed_frame(24'h0091, 8'd32);
+        guard = 0;
+        while (dut.state !== 4'd5 && guard < 30000) begin @(posedge clk); guard = guard + 1; end
+        force dut.calc_done_flag = 1'b0;
+        load_result(8'h00, 8'h7b,8'h45,8'hb0,8'h54,8'h5e,8'h59,8'haa,8'h94);
+        feed_frame(24'h0093, 8'd10);
+        repeat (20) @(negedge clk);
+        release dut.calc_done_flag;
+        if (auth_result === 2'd3)
+            $display("[GI PASS] calc_done_flag=0 injection -> BLOCKED — P2-1 intercepted");
+        else begin
+            errors = errors + 1;
+            $display("[GI FAIL] calc_done_flag=0 injection result=%0d exp 3", auth_result);
+        end
+        while (auth_busy) @(posedge clk);
 
         repeat (5) @(negedge clk);
         if (errors == 0) $display("TB_GAP_REGRESSION_PASS");

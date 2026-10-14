@@ -257,6 +257,14 @@ if ($interopCode -ne 0) {
     Write-Host "INTEROP TESTS FAILED"; exit 1
 }
 $outI | Select-Object -Last 4 | ForEach-Object { Write-Host "  $_" }
+# W4-P4 T4: DoS rate-limiting flood test.
+$outF = & cmd.exe /c "python tests\test_dos_flood.py 2>&1" | ForEach-Object { "$_" }
+$floodCode = $LASTEXITCODE
+if ($floodCode -ne 0) {
+    $outF | Select-Object -Last 20 | ForEach-Object { Write-Host "  $_" }
+    Write-Host "DOS FLOOD TESTS FAILED"; exit 1
+}
+$outF | Select-Object -Last 3 | ForEach-Object { Write-Host "  $_" }
 # W4-P4 T6: threat PoC harness (replay/brute/inject).
 $outT = & cmd.exe /c "python scripts\threat_poc.py --case all 2>&1" | ForEach-Object { "$_" }
 $threatCode = $LASTEXITCODE

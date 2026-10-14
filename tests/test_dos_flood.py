@@ -1,0 +1,98 @@
+"""W4-P4 T4: DoS rate-limiting flood test (pool not exhausted)."""
+import sys
+import time
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from src.python.evaluation.puf_model import ROPairingPUF
+from src.python.server.crp_pool import CRPPoolRegistry
+from src.python.server.hsm import SpeckHSM
+from src.python.server.protocol import HFIDAProtocol, RESULT_ERROR, RESULT_PASS
+from src.python.server.template_db import TemplateDB
+
+
+class TestDoSFlood(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+
+    def test_flood_does_not_exhaust_pool(self):
+        """Burst 50 forged ACCESS_REQUESTs: pool must NOT be drained.
+
+        Rate limiter (10/min) rejects most; the few that pass
+        consume at most 4 seeds each.  Pool=100 must stay >50%.
+        """
+        protocol = HFIDAProtocol(
+            templates=TemplateDB(self.tmp / "t.json"),
+            hsm=SpeckHSM(),
+            pools=CRPPoolRegistry(self.tmp / "pools", pool_size=100),
+        )
+        puf = ROPairingPUF(flip_prob=0.0)
+        # Enroll 100 seeds
+        seeds = protocol.pools.get(1).reserve(100)
+        pairs = [(s, puf.ideal(s)) for s in seeds]
+        protocol.templates.enroll(1, pairs)
+        protocol.hsm.set_key(1, bytes(12))
+        pool_before = protocol.pools.get(1).remaining
+        self.assertEqual(pool_before, 100)
+
+        # Flood: 50 forged requests with random C2
+        import secrets
+        rejected = 0
+        accepted = 0
+        for i in range(50):
+            c2 = secrets.token_bytes(8)
+            reply = protocol.on_access_request(1, c2=c2, nonce=i)
+            msg_id, fields = HFIDAProtocol.parse(reply)
+            if fields.get("result") == RESULT_ERROR:
+                rejected += 1
+            else:
+                accepted += 1
+                # Clean up the pending session (simulate terminal responding)
+                protocol.on_response(1, [puf.ideal(s) for s in
+                    protocol._pending[1].seeds] if 1 in protocol._pending else [bytes(8)]*4)
+
+        pool_after = protocol.pools.get(1).remaining
+        # Pool should NOT be exhausted (was 100, flood consumed < 50)
+        self.assertGreater(pool_after, 50,
+            f"pool drained to {pool_after}/100 after 50-request flood")
+        self.assertGreater(rejected, 30,
+            f"rate limiter rejected only {rejected}/50 requests")
+        print(f"[FLOOD] {rejected}/50 rejected, {accepted} passed, "
+              f"pool {pool_after}/100 remaining")
+
+    def test_rate_limit_recovers(self):
+        """After burst + wait, legitimate auth succeeds again."""
+        protocol = HFIDAProtocol(
+            templates=TemplateDB(self.tmp / "t2.json"),
+            hsm=SpeckHSM(),
+            pools=CRPPoolRegistry(self.tmp / "p2", pool_size=200),
+        )
+        puf = ROPairingPUF(flip_prob=0.0)
+        seeds = protocol.pools.get(1).reserve(200)
+        pairs = [(s, puf.ideal(s)) for s in seeds]
+        protocol.templates.enroll(1, pairs)
+        protocol.hsm.set_key(1, bytes(12))
+
+        # Exhaust the rate budget
+        import secrets
+        for i in range(15):
+            protocol.on_access_request(1, c2=secrets.token_bytes(8), nonce=i)
+
+        # Simulate 61+ seconds passing (lazy refill)
+        with patch.object(time, 'monotonic', return_value=time.monotonic() + 61):
+            reply = protocol.on_access_request(1, c2=b"\x00"*8, nonce=999)
+            msg_id, fields = HFIDAProtocol.parse(reply)
+            # Should NOT be rejected by rate limiter (tokens refilled)
+            self.assertNotEqual(fields.get("result"), RESULT_ERROR,
+                "rate limiter did not recover after 61s")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
