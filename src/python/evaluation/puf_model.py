@@ -183,3 +183,42 @@ class ROPairingPUF:
     def with_freqs(self, freqs: Iterable[int]) -> "ROPairingPUF":
         """Clone this device at a perturbed operating point (e.g. hot)."""
         return ROPairingPUF(freqs=freqs, flip_prob=self.flip_prob, rng=self.rng)
+
+
+# ========================================================================
+# W4-P4 T1: Device key derivation (P1-1, degraded path — design §5v2:59)
+# ========================================================================
+#: Frozen KDF constants (contract §8; do NOT change without regenerating
+#: golden vectors and syncing both sides).
+KDF_KEY_SEED = 0x6B657973_65656431      # ASCII "keyseed1" (8 bytes)
+KDF_MASK = 0xA5A5_5A5A_A5A5_5A5A
+
+
+def derive_device_key(puf: ROPairingPUF) -> bytes:
+    """Derive a 96-bit Speck device key from the PUF (degraded path).
+
+    Construction (frozen, W4_design §5v2:59 + T1T2R-P0-1 fix):
+      K_boot = puf.ideal(KEY_SEED)           # 8B PUF response to fixed seed
+      key12  = K_boot + K_boot[:4]           # 8B→12B (concatenation, not fold)
+      ct1    = Speck(key12).encrypt(KEY_SEED_be_bytes)
+      ct2    = Speck(key12).encrypt((KEY_SEED^MASK)_be_bytes)
+      K      = ct1 + ct2[:4]                 # 12 bytes = 96 bits
+
+    The key12 derives entirely from the device's PUF frequencies — same
+    device yields same K every boot.  Server learns K during enrollment
+    (derive_device_key + setkey).  Entropy ≈44 bits (PUF root entropy);
+    "not a public vector" (P1-1) but entropy mixing not achieved (no
+    station_random channel — degraded path, honestly documented).
+    """
+    from src.python.common.speck import Speck6496
+
+    k_boot = puf.ideal(KDF_KEY_SEED)         # 8 bytes big-endian
+    key12 = k_boot + k_boot[:4]              # 12 bytes (8+4 concatenation)
+
+    pt1 = KDF_KEY_SEED.to_bytes(8, "big")    # public constant
+    pt2 = (KDF_KEY_SEED ^ KDF_MASK).to_bytes(8, "big")  # public constant
+
+    ct1 = Speck6496(key12).encrypt(pt1)      # 8B
+    ct2 = Speck6496(key12).encrypt(pt2)      # 8B
+
+    return ct1 + ct2[:4]                     # 12 bytes = 96-bit key

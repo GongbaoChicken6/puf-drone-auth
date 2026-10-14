@@ -19,14 +19,18 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.python.evaluation.puf_model import (
+    DEFAULT_FREQ_MAX,
+    DEFAULT_FREQ_MIN,
     GOLDEN_SEED_A,
     GOLDEN_SEED_B,
     GOLDEN_SEED_C,
+    KDF_KEY_SEED,
     N_RINGS,
     N_ROUNDS,
     PAIRS_PER_ROUND,
     ROPairingPUF,
     decode_pair_table,
+    derive_device_key,
     pair_table_hex,
     pair_table_int,
 )
@@ -135,6 +139,47 @@ class TestFixtureScript(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("PUF_SEED_A", proc.stdout)
         self.assertIn(GOLDEN_HEX_A.upper()[:32], proc.stdout.upper())
+
+
+
+class TestKeyDerivation(unittest.TestCase):
+    """W4-P4 T1: derive_device_key golden vectors and properties."""
+
+    def test_golden_k_from_fixture_freqs(self) -> None:
+        """Golden K from the frozen fixture frequencies (CI cross-check anchor)."""
+        import random
+        rng = random.Random(0x0044_3450)
+        freqs = sorted(rng.sample(range(DEFAULT_FREQ_MIN, DEFAULT_FREQ_MAX + 1), N_RINGS))
+        puf = ROPairingPUF(freqs=freqs)
+        k = derive_device_key(puf)
+        self.assertEqual(len(k), 12)
+        # Golden vector (generated 2026-10-13, frozen for RTL cross-check)
+        self.assertEqual(k.hex(), "ee1d0425f39f31ba61ecc426")
+
+    def test_k_boot_is_puf_response_to_key_seed(self) -> None:
+        freqs = list(range(5000, 5016))
+        puf = ROPairingPUF(freqs=freqs)
+        kb = puf.ideal(KDF_KEY_SEED)
+        self.assertEqual(len(kb), 8)
+        # Deterministic: same device → same K_boot
+        self.assertEqual(kb, puf.ideal(KDF_KEY_SEED))
+
+    def test_different_devices_different_keys(self) -> None:
+        puf_a = ROPairingPUF(freqs=list(range(4000, 4016)))
+        puf_b = ROPairingPUF(freqs=list(reversed(range(4000, 4016))))
+        k_a = derive_device_key(puf_a)
+        k_b = derive_device_key(puf_b)
+        self.assertNotEqual(k_a, k_b)
+        self.assertEqual(len(k_a), 12)
+        self.assertEqual(len(k_b), 12)
+
+    def test_key_not_public_vector(self) -> None:
+        """P1-1: derived key must not equal the known NSA public vector."""
+        NSA_PUBLIC = bytes.fromhex("0001020308090a0b10111213")
+        puf = ROPairingPUF(freqs=list(range(5000, 5016)))
+        k = derive_device_key(puf)
+        self.assertNotEqual(k, NSA_PUBLIC,
+            "P1-1 regression: derived key equals public NSA vector")
 
 
 if __name__ == "__main__":
