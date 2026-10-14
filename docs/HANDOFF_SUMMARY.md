@@ -253,6 +253,12 @@ Git：57 commits（截至 A1 收官提交 a678274）· 144 files · tag w3-compl
      tb_ro_entropy（T10 黄金 0x34F1996F07D25792 / T11 无提前锁存 / T12 一次性语义）+ tb_w3top_keyloop T13 顶层链路断言（boot_seed -> c2_counter[0]=8'h92）；CI 16/16 TB
    - **T2 诚实边界**：仿真 fixture 确定性 → 可预测 boot_seed；**真实熵只在板上成立**（~16-32bit/次上电 + 服务端 128 窗兜底）；换电重启重放拒止的端到端 PoC 证据待 GK 用例
    - **审查方法学教训**：声明"完成"前必须验证**顶层集成**——子模块 TB 自接回环会掩盖顶层断线（本次 P0 即此类，与 W4-P2 clk bug 同源）
+0. **【2026-10-14 追加】W4-P4 剩余四项按序完成（T2/GJ+GK/T4/T5）**：
+   - **T2 ro_entropy**（4242301）：ro_entropy.v + w3_top 第二 ro_array + seed_load 链路；tb_ro_entropy T10/T11/T12 + tb_w3top_keyloop T13 顶层集成断言；CI 15→16 TB
+   - **GJ/GK 用例**（8c177a6）：GJ=派生密钥 R2 黄金锁（r2_expected==Speck(K,C2)=730adaa96ee973e9）；GK=P1-5 终端侧换电重放拒止（旧 R2 被拒→BLOCKED）
+   - **T4 暂存-释放 + SOP**（8073cc6）：CRPPool.unuse() + protocol 暂存/提交/释放 + 停滞 30s 清扫 → **池只在认证成功时缩小**（B-P2 F5 闭环）；docs/crp_pool_sop.md
+   - **T5 运维加固**（a4d8ff8）：DeviceKeyStore mtime 外部变更检测（4 mutator 全覆盖）+ SimulatedHSM 决策=对齐 0600 原子写 + 5 项单测
+   - **状态**：CI 16/16 TB + 93 单测全绿；T2/T3/T4/T5/T6 ✅，T1 🔶（板上前提未满足，fail-safe 默认 0）
 
 1. **B5 PUF 真实接入**（W4 核心创新，最高优先）：替换种子直通占位 → challenge_decode + ro_array 真实测量；同时处理 W4 安全项（P1-1 真密钥 / P1-4 PUF / P1-5 终端重放三选一 / 44-bit 熵混合 / CI 超时作业化）
 2. **B6 ML 攻击实验**（W4 交付物，20 分）：实验 A 合成 arbiter 基线 + 实验 B 排序重构攻击（设计见 project_design.md §W4）

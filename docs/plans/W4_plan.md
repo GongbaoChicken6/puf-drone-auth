@@ -44,11 +44,19 @@
 | 任务 | 状态 | 说明 |
 |---|---|---|
 | **T1 P1-1 真密钥派生** | 🔶 **部分** | **RTL 已实现并仿真验证**（S1-S4: derive_device_key + S_KEY_MEASURE/S_KEY_DERIVE + w3_top 回环 + tb_key_derive/tb_w3top_keyloop）；**板上未可用**——站端缺 K 下发通道（0x0096 KEY_SEED 未做）+ K_boot 单次测量噪声可靠性未解 → `w3_top.ENABLE_KEY_DERIVE` **默认 0（fail-safe）**。**不得声明板上 P1-1 达成** |
-| T2 P1-5 C2 随机化 | 🔶 **RTL 已实现（仿真验证）** | `ro_entropy.v`（105 行）+ w3_top 第二 ro_array 例化 + seed_load 脉冲链路；tb_ro_entropy(T10/T11/T12) + tb_w3top_keyloop T13 顶层集成断言。**诚实边界**：仿真下 fixture 确定性 → 确定性 boot_seed（黄金 0x34F1996F07D25792）；**真实熵只在板上成立**（有效熵 ~16-32bit/次上电 + 服务端 128 窗兜底）。终端侧 S_VERIFY_R2 拒止的**换电重启 PoC 证据待 GK 用例** |
+| T2 P1-5 C2 随机化 | ✅ **RTL 完成+仿真验证** | `ro_entropy.v`（105 行）+ w3_top 第二 ro_array 例化 + seed_load 脉冲链路；tb_ro_entropy(T10/T11/T12) + tb_w3top_keyloop T13 顶层集成断言。**诚实边界**：仿真 fixture 确定性 → 确定性 boot_seed（黄金 0x34F1996F07D25792）；**真实熵只在板上成立**（~16-32bit/次上电 + 服务端 128 窗兜底）；真实熵值待 P6 板上实测 |
 | T3 P2-1 TB 用例 | ✅ | tb_gap GI 用例（force calc_done_flag=0 → BLOCKED） |
-| T4 DoS 洪泛测试+文档 | 🔶 部分 | 令牌桶死锁已修 + test_dos_flood.py 入 CI；**暂存-释放语义 + 池补充 SOP 文档仍缺**（限速只削峰不防池耗尽） |
-| T5 运维加固 | 🔶 部分 | setkey 环境变量导入 + 审计日志已做；**DeviceKeyStore mtime 检测 + SimulatedHSM 决策未做** |
+| T4 DoS 三子项 | ✅ **全完成** | ①令牌桶（死锁已修）②**暂存-释放语义**：种子会话期暂存，PASS 提交 / REJECT 释放（新增 `CRPPool.unuse()`）/ 停滞 30s 清扫 → **池只在认证成功时缩小**（B-P2 F5 闭环）③**池补充 SOP** → `docs/crp_pool_sop.md`（池模型/攻击成本对比/余量告警阈值/重新注册流程） |
+| T5 运维加固 | ✅ **全完成** | setkey 环境变量导入 + 审计日志 + **DeviceKeyStore mtime 外部变更检测**（4 个 mutator 全覆盖，loud-by-design）+ **SimulatedHSM 决策=对齐 0600 原子写基线 + 补 5 项单测**（原为世界可读+非原子写，崩溃时静默产生新身份） |
 | T6 威胁 PoC | ✅ | threat_poc.py 3/3 入 CI |
+
+### W4-P4 GJ/GK 验收证据（T1/T2 端到端）
+| 用例 | 内容 | 结果 |
+|---|---|---|
+| **GJ** | 派生密钥认证：S_CALC_R2 锁存的 r2_expected == Speck(K, C2) 黄金 | ✅ `730adaa96ee973e9` = Speck(ee1d…c426, a1a2a3a4a5a6a7a8) |
+| **GK** | **P1-5 终端侧换电重放拒止**：会话1 录制 R2 → 换电（新熵 c2_counter[0]=62）→ 会话2 期望值改变 → 重放旧 R2 被拒 | ✅ BLOCKED(3) |
+
+> GJ/GK 是 T1/T2 的端到端语义证据（区别于 T13 的链路连通性）。**T1 板上前提仍未满足**（站端 K 下发通道），故 ENABLE_KEY_DERIVE 保持 fail-safe 默认 0。
 
 ### W4-P4 T1/S3-S4 审查闭环（2026-10-14，3 代理 A/B/C）
 | 代理 | P0 | P1 | P2 | 处置 |
