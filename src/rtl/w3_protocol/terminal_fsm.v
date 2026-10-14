@@ -43,6 +43,9 @@ module terminal_fsm # (
     input  wire [95:0] device_key_in,              // 运行时密钥（use_ext_key=0 时忽略）
     input  wire        use_ext_key,                // 0=DEVICE_KEY 参数（TB/演示），1=运行时密钥
     input  wire        seed_load,                  // W4-P4 T2: 单拍脉冲，同步重装载 C2（TB 恒 0）
+    // -- W4-P4 T1 密钥派生输出（w3_top 回环驱动 use_ext_key）---------------
+    output wire        key_valid,                  // 1=派生密钥可用
+    output wire [95:0] key_reg,                    // 派生的 96-bit 密钥
     // -- PUF 子系统（W4 B5a：challenge_decode + ro_array 由上层例化互连）---
     output wire        cd_start,                   // 解码启动（单拍）
     output wire [63:0] cd_seed,
@@ -207,13 +210,17 @@ module terminal_fsm # (
 
     reg  [7:0]  calc_wd_cnt = 8'd0;             // S_CALC_R2 看门狗计数器
     reg         calc_done_flag = 1'b0;          // W4-P4 P2-1: Speck 完成旗标
+
     // W4-P4 T1 密钥派生寄存器
-    reg [95:0]  key_reg     = 96'd0;   // 派生密钥 K
-    reg         key_valid   = 1'b0;    // 1=K 已派生（每次上电重置）
+    reg [95:0]  key_reg_r   = 96'd0;   // 派生密钥 K（_r 后缀避免端口冲突）
+    reg         key_valid_r = 1'b0;    // 1=K 已派生（每次上电重置）
     reg [63:0]  k_boot_reg  = 64'd0;   // K_boot = PUF 响应 key_seed
     reg [63:0]  kdf_ct1     = 64'd0;   // KDF 第一步密文
     reg [1:0]   kdf_step    = 2'd0;    // KDF 子步（0=idle, 1=ct1, 2=ct2）
     reg [1:0]   km_substate = 2'd0;    // S_KEY_MEASURE 子态
+
+    assign key_valid = key_valid_r;                // W4-P4 T1: 输出到 w3_top
+    assign key_reg   = key_reg_r;                  // W4-P4 T1: 输出到 w3_top
     reg         sp_start_w  = 1'b0;              // Speck 启动脉冲（内部）
     localparam  CALC_WD_MAX = 8'd255;            // 256 周期看门狗
 
@@ -380,7 +387,7 @@ module terminal_fsm # (
                     if (auth_start) begin
                         result_r <= 2'd0;
                         calc_done_flag <= 1'b0;   // B-P2: 每会话重置
-                        if (ENABLE_KEY_DERIVE && !key_valid) begin
+                        if (ENABLE_KEY_DERIVE && !key_valid_r) begin
                             // W4-P4 T1: 首次上电需派生密钥
                             state <= S_KEY_MEASURE;
                             km_substate <= 2'd0;
@@ -643,7 +650,7 @@ module terminal_fsm # (
                     if (auth_start) begin
                         result_r <= 2'd0;
                         calc_done_flag <= 1'b0;   // B-P2: 每会话重置
-                        if (ENABLE_KEY_DERIVE && !key_valid) begin
+                        if (ENABLE_KEY_DERIVE && !key_valid_r) begin
                             state <= S_KEY_MEASURE;
                             km_substate <= 2'd0;
                             timeout_cnt <= 32'd0;
@@ -707,7 +714,7 @@ module terminal_fsm # (
                 //====================================================
                 S_KEY_MEASURE: begin
                     if (timeout_cnt >= PUF_WD_CYCLES) begin
-                        key_valid   <= 1'b0;
+                        key_valid_r <= 1'b0;
                         puf_ring_en_r <= 1'b0;
                         puf_measure_r <= 1'b0;
                         state    <= S_BLOCKED;
@@ -791,7 +798,7 @@ module terminal_fsm # (
                 //====================================================
                 S_KEY_DERIVE: begin
                     if (timeout_cnt >= PUF_WD_CYCLES) begin
-                        key_valid   <= 1'b0;
+                        key_valid_r <= 1'b0;
                         state    <= S_BLOCKED;
                         result_r <= 2'd3;
                     end else begin
@@ -810,7 +817,7 @@ module terminal_fsm # (
                                     kdf_step    <= 2'd2;
                                     calc_wd_cnt <= 8'd1;
                                 end else if (calc_wd_cnt >= CALC_WD_MAX) begin
-                                    key_valid <= 1'b0;
+                                    key_valid_r <= 1'b0;
                                     state <= S_BLOCKED; result_r <= 2'd3;
                                     calc_wd_cnt <= 8'd0;
                                 end else begin
@@ -821,26 +828,26 @@ module terminal_fsm # (
                                 sp_start_w <= 1'b0;
                                 if (sp_done) begin
                                     // K = ct1(8B) + ct2[0:3](4B) = 12B
-                                    // 字节映射: key_reg[8*i +: 8] = K_byte[i]
+                                    // 字节映射: key_reg_r[8*i +: 8] = K_byte[i]
                                     // ct byte 0 = ct[39:32], ct byte 1 = ct[47:40]...
-                                    key_reg[7:0]   <= kdf_ct1[39:32];
-                                    key_reg[15:8]  <= kdf_ct1[47:40];
-                                    key_reg[23:16] <= kdf_ct1[55:48];
-                                    key_reg[31:24] <= kdf_ct1[63:56];
-                                    key_reg[39:32] <= kdf_ct1[7:0];
-                                    key_reg[47:40] <= kdf_ct1[15:8];
-                                    key_reg[55:48] <= kdf_ct1[23:16];
-                                    key_reg[63:56] <= kdf_ct1[31:24];
-                                    key_reg[71:64] <= sp_ciphertext[39:32];
-                                    key_reg[79:72] <= sp_ciphertext[47:40];
-                                    key_reg[87:80] <= sp_ciphertext[55:48];
-                                    key_reg[95:88] <= sp_ciphertext[63:56];
-                                    key_valid   <= 1'b1;
+                                    key_reg_r[7:0]   <= kdf_ct1[39:32];
+                                    key_reg_r[15:8]  <= kdf_ct1[47:40];
+                                    key_reg_r[23:16] <= kdf_ct1[55:48];
+                                    key_reg_r[31:24] <= kdf_ct1[63:56];
+                                    key_reg_r[39:32] <= kdf_ct1[7:0];
+                                    key_reg_r[47:40] <= kdf_ct1[15:8];
+                                    key_reg_r[55:48] <= kdf_ct1[23:16];
+                                    key_reg_r[63:56] <= kdf_ct1[31:24];
+                                    key_reg_r[71:64] <= sp_ciphertext[39:32];
+                                    key_reg_r[79:72] <= sp_ciphertext[47:40];
+                                    key_reg_r[87:80] <= sp_ciphertext[55:48];
+                                    key_reg_r[95:88] <= sp_ciphertext[63:56];
+                                    key_valid_r <= 1'b1;
                                     kdf_step    <= 2'd0;
                                     calc_wd_cnt <= 8'd0;
                                     state       <= S_CALC_R2;  // 派生完成，进正常认证
                                 end else if (calc_wd_cnt >= CALC_WD_MAX) begin
-                                    key_valid <= 1'b0;
+                                    key_valid_r <= 1'b0;
                                     state <= S_BLOCKED; result_r <= 2'd3;
                                     calc_wd_cnt <= 8'd0;
                                 end else begin

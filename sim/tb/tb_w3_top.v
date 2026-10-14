@@ -31,7 +31,8 @@ module tb_w3_top;
         .FREQ_HZ   (10_000_000),   // 10MHz（仿真加速）
         .BAUD      (115_200    ),
         .TIMEOUT_S (0.01        ),  // 10ms 超时（仿真加速）
-        .MEASURE_CYCLES (32'd64)    // W4：PUF 测量窗缩小加速（语义不变）
+        .MEASURE_CYCLES (32'd64),   // W4：PUF 测量窗缩小加速
+        .ENABLE_KEY_DERIVE (0)       // W4-P4: TB 关闭密钥派生
     ) dut (
         .sys_clk      (sys_clk      ),
         .sys_rst_n    (sys_rst_n    ),

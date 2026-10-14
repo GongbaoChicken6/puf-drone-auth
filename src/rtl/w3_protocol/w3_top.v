@@ -22,7 +22,8 @@ module w3_top # (
     parameter BAUD          = 115_200     ,  // UART 波特率
     parameter TIMEOUT_S     = 2,            // 协议超时（秒，契约 §5 建议 2s）
     parameter MEASURE_CYCLES = FREQ_HZ/1000,// W4：PUF 测量窗（1ms；TB 可缩小加速）
-    parameter [4:0] WARMUP_WINS = 5'd7      // W4：热稳定窗（W2 冻结 7 轮）
+    parameter [4:0] WARMUP_WINS = 5'd7,     // W4：热稳定窗（W2 冻结 7 轮）
+    parameter ENABLE_KEY_DERIVE = 1           // W4-P4 T1: 板上=1（密钥派生），TB 可覆盖为 0
 ) (
     input  wire        sys_clk      ,   // 系统时钟（100MHz，XDC 约束待填）
     input  wire        sys_rst_n    ,   // 复位按键（低有效，需消抖）
@@ -140,6 +141,8 @@ module w3_top # (
 
     // terminal_fsm ↔ PUF 子系统（W4 B5a）
     wire        cd_start, cd_done;
+    wire        fsm_key_valid;             // W4-P4 T1: FSM 内密钥派生完成
+    wire [95:0] fsm_key_reg;               // W4-P4 T1: FSM 内派生的 96-bit 密钥
     wire [63:0] cd_seed;
     wire [511:0] cd_pair_table;
     wire        ra_measure_en, ra_ring_en, ra_busy, ra_done;
@@ -155,7 +158,8 @@ module w3_top # (
     terminal_fsm # (
         .TIMEOUT_CYCLES (TIMEOUT_CYCLES),
         .WARMUP_WINS    (WARMUP_WINS),
-        .MEASURE_CYCLES (MEASURE_CYCLES)
+        .MEASURE_CYCLES (MEASURE_CYCLES),
+        .ENABLE_KEY_DERIVE (ENABLE_KEY_DERIVE)  // W4-P4 T1: 参数传递
     ) u_fsm (
         .clk           (sys_clk       ),
         .rst           (rst           ),
@@ -163,11 +167,12 @@ module w3_top # (
         .terminal_id   (term_id_sw    ),
         .auth_busy     (led_busy      ),
         .auth_result   (led_result    ),
-        // W4-T2 可注入端口 tie-off（行为与 W3 一致；P4 起换 ro_entropy/派生密钥）
-        .c2_boot_seed  (64'hA7A6_A5A4_A3A2_A1A0),   // 字节 A0..A7（c2_counter[j]=A0+j）
-        .device_key_in (96'h1312_1110_0B0A_0908_0302_0100),
-        .use_ext_key   (1'b0),
-        .seed_load     (1'b0),   // W4-P4 T2: TB 恒 0（板上接 ro_entropy）
+        // W4-P4 T1: key_valid 回环驱动 use_ext_key（派生后自动切换到派生密钥）
+        // W4-P4 T2: c2_boot_seed 待接 ro_entropy（当前 tie 常量=旧行为）
+        .c2_boot_seed  (64'hA7A6_A5A4_A3A2_A1A0),   // TODO S6: 接 ro_entropy.boot_seed
+        .device_key_in (fsm_key_reg),      // W4-P4 T1: 派生密钥回环
+        .use_ext_key   (fsm_key_valid),    // W4-P4 T1: 派生完成自动使能
+        .seed_load     (1'b0),            // TODO S6: 接 ro_entropy.seed_valid 上升沿
         .cd_start      (cd_start     ),
         .cd_seed       (cd_seed      ),
         .cd_pair_table (cd_pair_table),
