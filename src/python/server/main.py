@@ -283,6 +283,33 @@ class DeviceKeyStore:
         # saves would interleave writes to the shared .tmp path (defect
         # review).  RLock because mutators call save() while holding it.
         self._lock = threading.RLock()
+        # W4-P4 T5: last mtime we wrote/loaded.  A different value means
+        # another process rewrote the store under us -- our in-memory copy
+        # is stale and saving would clobber their change (e.g. a second
+        # server instance, or a c2reset run in another shell).
+        self._mtime: float | None = None
+
+    def _stamp(self) -> float | None:
+        """Current store mtime, or None when the file does not exist."""
+        try:
+            return self.path.stat().st_mtime
+        except OSError:
+            return None
+
+    def _check_external_change(self) -> None:
+        """Fail loudly if another process rewrote the store since we last
+        read or wrote it.  Loud-by-design: silently merging or overwriting
+        key material is worse than refusing to proceed.
+        """
+        if self._mtime is None:
+            return
+        current = self._stamp()
+        if current is not None and current != self._mtime:
+            raise ValueError(
+                f"{self.path}: modified by another process since load "
+                f"(mtime {self._mtime} -> {current}). Refusing to overwrite; "
+                f"reload the store (or restart the server) before mutating."
+            )
 
     # -- loading / saving ---------------------------------------------------
     def load(self) -> "DeviceKeyStore":
@@ -295,6 +322,7 @@ class DeviceKeyStore:
         """
         if not self.path.exists():
             return self
+        self._mtime = self._stamp()
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:  # JSONDecodeError is a ValueError
@@ -379,6 +407,10 @@ class DeviceKeyStore:
                 os.chmod(self.path, 0o600)
             except OSError:
                 pass  # best effort (e.g. some filesystems)
+            # Our own write is now the reference point for external-change
+            # detection (mtime may not advance on coarse-granularity FS, so
+            # compare against what we just produced).
+            self._mtime = self._stamp()
 
     # -- key access -----------------------------------------------------------
     def key_for(self, terminal_id: int) -> tuple[bytes, bool]:
@@ -386,6 +418,7 @@ class DeviceKeyStore:
         CSPRNG 12-byte key and persisting it immediately on first use."""
         tid = int(terminal_id)
         with self._lock:  # read-mint-persist must be one atomic step
+            self._check_external_change()
             key = self._keys.get(tid)
             if key is not None:
                 return key, False
@@ -408,6 +441,7 @@ class DeviceKeyStore:
                 f"device key must be {DEVICE_KEY_BYTES} bytes, got {len(key)}"
             )
         with self._lock:
+            self._check_external_change()
             tid = int(terminal_id)
             old = self._keys.get(tid)
             self._keys[tid] = bytes(key)
@@ -447,6 +481,7 @@ class DeviceKeyStore:
                 f"store a replay window that save() would drop"
             )
         with self._lock:
+            self._check_external_change()
             tid = int(terminal_id)
             old = self._c2.get(tid)
             self._c2[tid] = list(c2s)
@@ -462,6 +497,7 @@ class DeviceKeyStore:
     def clear_c2_history(self, terminal_id: int) -> None:
         """Drop one terminal's replay window and persist the removal."""
         with self._lock:
+            self._check_external_change()
             tid = int(terminal_id)
             old = self._c2.pop(tid, None)
             try:

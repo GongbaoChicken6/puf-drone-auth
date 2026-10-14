@@ -95,6 +95,48 @@ class TestSpeckHSM(TempDirTest):
         )
 
 
+class TestSimulatedHSM(TempDirTest):
+    """W4-P4 T5: SimulatedHSM was shipped untested while save_secret wrote
+    the station secret world-readable and non-atomically.  Minimal coverage
+    locks the hardened contract (0600 + atomic + restart-stable identity).
+    """
+
+    def test_save_load_roundtrip_keeps_identity(self) -> None:
+        from src.python.server.hsm import SimulatedHSM
+
+        path = self.tmp / "hsm.json"
+        hsm = SimulatedHSM()
+        before = hsm.respond(bytes(8), terminal_id=1)
+        hsm.save_secret(path)
+        reloaded = SimulatedHSM.load_secret(path)
+        self.assertEqual(reloaded.secret, hsm.secret)
+        self.assertEqual(reloaded.respond(bytes(8), terminal_id=1), before)
+
+    def test_saved_secret_is_owner_only(self) -> None:
+        import os
+        import stat
+
+        from src.python.server.hsm import SimulatedHSM
+
+        path = self.tmp / "hsm.json"
+        SimulatedHSM().save_secret(path)
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        if os.name == "posix":
+            self.assertEqual(mode, 0o600,
+                             f"secret file must be 0600, got {oct(mode)}")
+
+    def test_save_is_atomic_no_tmp_left(self) -> None:
+        from src.python.server.hsm import SimulatedHSM
+
+        path = self.tmp / "hsm.json"
+        SimulatedHSM().save_secret(path)
+        self.assertFalse(path.with_suffix(path.suffix + ".tmp").exists(),
+                         "atomic write must not leave a .tmp behind")
+        # Overwriting an existing secret must also succeed atomically.
+        SimulatedHSM().save_secret(path)
+        self.assertTrue(path.exists())
+
+
 class TestDeviceKeyStore(TempDirTest):
     def test_key_persistence_across_restart(self) -> None:
         path = self.tmp / "keys.json"
@@ -130,6 +172,49 @@ class TestDeviceKeyStore(TempDirTest):
         self.assertEqual(
             DeviceKeyStore(self.tmp / "keys.json").load().c2_history(7), []
         )
+
+    def test_external_store_change_detected(self) -> None:
+        """W4-P4 T5: another process rewriting the store must abort us.
+
+        Two servers (or a setkey in another shell) sharing one store would
+        otherwise clobber each other: our in-memory copy is stale and a
+        blind save() would silently drop the other process's key.
+        """
+        import os
+        import time as _t
+
+        path = self.tmp / "keys.json"
+        store = DeviceKeyStore(path)
+        store.key_for(7)
+        introspect = store._stamp()
+
+        # Simulate an external writer: rewrite the file and force a
+        # distinct mtime (coarse-granularity filesystems may not advance it).
+        path.write_text(json.dumps({
+            "schema": "puf-drone-auth/device-keys/v1",
+            "terminals": {"9": {"key_hex": "00" * 12, "c2_history": []}},
+        }), encoding="utf-8")
+        os.utime(path, (_t.time() + 10, _t.time() + 10))
+        self.assertNotEqual(store._stamp(), introspect)
+
+        with self.assertRaises(ValueError) as ctx:
+            store.key_for(8)
+        self.assertIn("modified by another process", str(ctx.exception))
+
+        # Same guard on the explicit mutators.
+        with self.assertRaises(ValueError):
+            store.set_key(8, W3_KEY)
+
+    def test_own_save_does_not_trip_the_guard(self) -> None:
+        """The guard must not fire on our own writes (no self-inflicted
+        DoS after the first mutation)."""
+        path = self.tmp / "keys.json"
+        store = DeviceKeyStore(path)
+        store.key_for(7)
+        store.key_for(8)                 # second mutation re-checks
+        store.set_c2_history(7, [W3_FIRST_C2])
+        store.clear_c2_history(7)
+        self.assertEqual(DeviceKeyStore(path).load().all_keys().keys(), {7, 8})
 
     def test_bad_schema_rejected(self) -> None:
         path = self.tmp / "keys.json"

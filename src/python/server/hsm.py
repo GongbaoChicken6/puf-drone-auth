@@ -124,14 +124,36 @@ class SimulatedHSM(HSM):
 
     # -- secret persistence ------------------------------------------------
     def save_secret(self, path: str | Path) -> None:
-        """Persist the secret to JSON so R2 values survive a restart."""
+        """Persist the secret to JSON so R2 values survive a restart.
+
+        W4-P4 T5: hardened to the same baseline as DeviceKeyStore --
+        owner-only permissions (0600) and an atomic tmp+replace write, so
+        a crash mid-write cannot leave a truncated secret file and the
+        secret is never world-readable.  This HSM's secret is a station
+        master secret; a half-written file previously meant a silent new
+        random identity on the next load.
+        """
+        import os
+
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            '{"schema": "%s", "secret_hex": "%s"}'
-            % (_HSM_SCHEMA, self.secret.hex()),
-            encoding="utf-8",
+        payload = (
+            '{"schema": "%s", "secret_hex": "%s"}\n'
+            % (_HSM_SCHEMA, self.secret.hex())
         )
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(payload)
+            os.replace(tmp, path)
+        except OSError:
+            tmp.unlink(missing_ok=True)
+            raise
+        try:  # enforce on platforms where replace keeps old permissions
+            os.chmod(path, 0o600)
+        except OSError:
+            pass  # best effort (e.g. some filesystems)
 
     @classmethod
     def load_secret(cls, path: str | Path) -> "SimulatedHSM":
