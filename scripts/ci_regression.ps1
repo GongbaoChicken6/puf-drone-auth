@@ -122,12 +122,13 @@ $tbs = @(
     "sim\tb\tb_byte_fifo.v", "sim\tb\tb_uart_tx.v", "sim\tb\tb_terminal_fsm.v",
     "sim\tb\tb_tx_chain.v", "sim\tb\tb_level3_protocol.v", "sim\tb\tb_w3_top.v",
     "sim\tb\ro_array_sim.v",
-    "sim\tb\tb_puf_path.v"
+    "sim\tb\tb_puf_path.v",
+    "sim\tb\tb_key_derive.v"
 )
 $tbNames = @("tb_speck", "tb_gap_regression",
              "tb_challenge_decode","tb_crc16","tb_mavlink_frame","tb_frame_parser",
              "tb_byte_fifo","tb_uart_tx","tb_terminal_fsm","tb_tx_chain","tb_level3_protocol",
-             "tb_w3_top", "tb_puf_path")
+             "tb_w3_top", "tb_puf_path", "tb_key_derive")
 # Test-only overrides (W4-P0 timeout experiment).  Deliberately plain
 # [string] + internal split: powershell.exe -File does NOT split commas
 # for array parameters (that is -Command behaviour), so accepting one

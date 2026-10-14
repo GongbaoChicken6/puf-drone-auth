@@ -230,7 +230,7 @@ module terminal_fsm # (
     // Speck plaintext 字节映射（pt[i] → plaintext_in[8*(i%4)+39-32*(i<4) +: 8]）
     // KEY_SEED 大端字节 6B 65 79 73 65 65 64 31 → 预换算为 wire 位序
     localparam [63:0] KDF_PT1 = 64'h7379_656B_3164_6565;  // KEY_SEED 逐字节映射
-    localparam [63:0] KDF_PT2 = 64'h2923_C0CE_5B3E_C0C0;  // (KEY_SEED^MASK) 映射
+    localparam [63:0] KDF_PT2 = 64'h2923_C0CE_6B3E_C0C0;  // (KEY_SEED^MASK) 映射（修正 5B→6B）
 
     // W4-T2 密钥选择 + W4-P4 T1 KDF mux
     // S_KEY_DERIVE 态：用 kdf_key12（从 k_boot_reg 派生 12B）
@@ -240,7 +240,7 @@ module terminal_fsm # (
     assign kdf_key12 = {
         k_boot_reg[39:32], k_boot_reg[47:40], k_boot_reg[55:48], k_boot_reg[63:56],  // bytes 11-8（= 3-0 重复）
         k_boot_reg[7:0],   k_boot_reg[15:8],  k_boot_reg[23:16],  k_boot_reg[31:24],  // bytes 7-4
-        k_boot_reg[63:56], k_boot_reg[55:48], k_boot_reg[47:40], k_boot_reg[39:32]   // bytes 3-0
+        k_boot_reg[39:32], k_boot_reg[47:40], k_boot_reg[55:48], k_boot_reg[63:56]   // bytes 3-0（同组序）
     };
     assign sp_key = (state == S_KEY_DERIVE) ? kdf_key12 :
                     use_ext_key ? device_key_in : DEVICE_KEY;
