@@ -36,8 +36,17 @@ module tb_key_derive;
 
     integer errors = 0, guard = 0, tx_byte_count = 0;
     reg [7:0] tx_captured [0:63];
+    // GJ/GK: 默认种子对应旧行为（A0..A7）；GK 改成另一熵值模拟换电重启
+    reg [63:0] c2_seed    = 64'hA7A6_A5A4_A3A2_A1A0;
+    reg        seed_pulse = 1'b0;
+    // 黄金 R2（Python Speck6496(derive_device_key()).encrypt(C2)）
+    localparam [63:0] R2_DEFAULT_K = 64'h730adaa96ee973e9;  // C2=a1..a8
+    localparam [63:0] R2_ENT1_K    = 64'hb5873d06281fff7f;  // C2=9358d308709af235
+    localparam [63:0] R2_ENT2_K    = 64'h3a57fb2ca0dda68b;  // C2=63b509207f3ec4a6
     reg [95:0] key_reg_snapshot = 96'd0;   // C2: T6 稳定性快照
     reg        reentered_derive  = 1'b0;   // C2: T6 重派生标志
+    reg [63:0] r2_obs            = 64'd0;   // GJ: r2_expected 观测值
+    reg [63:0] recorded_r2       = 64'd0;   // GK: 攻击者录制的旧 R2
     integer    tw_bits = 0;
 
     // 黄金 K（fixture 频率 → puf_model → 字节反转到 RTL 位序）
@@ -68,10 +77,10 @@ module tb_key_derive;
         .clk(clk), .rst(rst),
         .auth_start(auth_start), .terminal_id(terminal_id),
         .auth_busy(auth_busy), .auth_result(auth_result),
-        .c2_boot_seed(64'hA7A6_A5A4_A3A2_A1A0),
+        .c2_boot_seed(c2_seed),        // GJ/GK: 可控（模拟换电熵变化）
         .device_key_in(key_reg),       // 回环（同 w3_top）
         .use_ext_key(key_valid),       // 回环
-        .seed_load(1'b0),
+        .seed_load(seed_pulse),        // GJ/GK: 单拍脉冲重装载
         .key_valid(key_valid),
         .key_reg(key_reg),
         .cd_start(cd_start), .cd_seed(cd_seed),
@@ -151,6 +160,18 @@ module tb_key_derive;
         // 等 ACCESS 帧发完（密钥派生后正常进 S_CALC_R2→S_TX_ACCESS）
         guard = 0;
         while (tx_byte_count < 16 && guard < 5000) begin @(posedge clk); guard = guard + 1; end
+
+        //==================== GJ: 派生密钥认证 R2 黄金锁 ====================
+        // 端到端验证 Speck 真的用了派生密钥：S_CALC_R2 锁存的 r2_expected
+        // 必须等于 Speck(K, C2) 的黄金值（K=派生密钥, C2=a1..a8）
+        r2_obs = {dut.r2_expected[0], dut.r2_expected[1], dut.r2_expected[2], dut.r2_expected[3],
+                  dut.r2_expected[4], dut.r2_expected[5], dut.r2_expected[6], dut.r2_expected[7]};
+        if (r2_obs === R2_DEFAULT_K)
+            $display("[GJ PASS] 派生密钥认证: r2_expected=%h = Speck(K,%h) 黄金", r2_obs, 64'ha1a2a3a4a5a6a7a8);
+        else begin
+            errors = errors + 1;
+            $display("[GJ FAIL] r2_expected=%h != 黄金 %h (派生密钥未参与 Speck 或字节序错)", r2_obs, R2_DEFAULT_K);
+        end
 
         //==================== T6: 二次 auth 不重复派生 ====================
         // 等 FSM 回 IDLE（发 REJECT 帧退出）
@@ -248,9 +269,85 @@ module tb_key_derive;
         end
         while (dut.auth_busy) @(posedge clk);
 
+        //==================== GK: P1-5 换电重启重放拒止 ====================
+        // 场景：攻击者录制会话1的 RESULT 帧(含 R2=Speck(K,C2_ent1))；终端换电
+        // 重启 -> ro_entropy 给出新种子 -> C2 变 -> 终端期望 R2=Speck(K,C2_ent2)
+        // -> 重放旧 R2 必然不匹配 -> S_VERIFY_R2 拒止 -> BLOCKED。
+        // 这是 P1-5 的**终端侧**验收（与服务器重放窗 P1-2 无关）。
+        guard = 0;
+        while (dut.state !== 4'd0 && guard < 40000) begin @(posedge clk); guard = guard + 1; end
+
+        // --- 会话1：熵种子1，跑完整认证拿到 r2_expected（=攻击者录到的 R2） ---
+        c2_seed = 64'h34F1996F07D25792;
+        @(negedge clk); seed_pulse = 1'b1;
+        @(negedge clk); seed_pulse = 1'b0;
+        repeat (3) @(negedge clk);
+        tx_byte_count = 0;
+        @(negedge clk); auth_start = 1'b1;
+        @(negedge clk); auth_start = 1'b0;
+        guard = 0;
+        while (tx_byte_count < 16 && guard < 5000) begin @(posedge clk); guard = guard + 1; end
+        r2_obs = {dut.r2_expected[0], dut.r2_expected[1], dut.r2_expected[2], dut.r2_expected[3],
+                  dut.r2_expected[4], dut.r2_expected[5], dut.r2_expected[6], dut.r2_expected[7]};
+        if (r2_obs !== R2_ENT1_K) begin
+            errors = errors + 1;
+            $display("[GK FAIL] 会话1 r2_expected=%h != %h（熵种子未生效）", r2_obs, R2_ENT1_K);
+        end else
+            $display("[GK INFO] 会话1 熵种子1: C2 变 -> R2=%h (攻击者录制值)", r2_obs);
+        recorded_r2 = r2_obs;   // 攻击者手里录到的旧 R2
+
+        // 退出发帧态回 IDLE
+        fp_payload_buf[0] = 8'h01;
+        feed_frame(24'h0093, 8'd10);
+        guard = 0;
+        while (dut.state !== 4'd0 && guard < 40000) begin @(posedge clk); guard = guard + 1; end
+
+        // --- 换电重启：新熵种子2 ---
+        c2_seed = 64'hA5C33D7E1F08B462;
+        @(negedge clk); seed_pulse = 1'b1;
+        @(negedge clk); seed_pulse = 1'b0;
+        repeat (3) @(negedge clk);
+        // 新熵种子 0xA5C33D7E1F08B462 -> 低字节 0x62 装载到 c2_counter[0]
+        if (dut.c2_counter[0] !== 8'h62) begin
+            errors = errors + 1;
+            $display("[GK FAIL] 重启后 c2_counter[0]=%h != 8'h62（seed_load 未生效）", dut.c2_counter[0]);
+        end else
+            $display("[GK INFO] 换电重启后 c2_counter[0]=%h（熵种子2 已装载）", dut.c2_counter[0]);
+
+        // --- 会话2：终端用新 C2 算 R2，攻击者重放旧 R2 ---
+        tx_byte_count = 0;
+        @(negedge clk); auth_start = 1'b1;
+        @(negedge clk); auth_start = 1'b0;
+        guard = 0;
+        while (tx_byte_count < 16 && guard < 5000) begin @(posedge clk); guard = guard + 1; end
+        r2_obs = {dut.r2_expected[0], dut.r2_expected[1], dut.r2_expected[2], dut.r2_expected[3],
+                  dut.r2_expected[4], dut.r2_expected[5], dut.r2_expected[6], dut.r2_expected[7]};
+        if (r2_obs !== R2_ENT2_K) begin
+            errors = errors + 1;
+            $display("[GK FAIL] 会话2 r2_expected=%h != %h", r2_obs, R2_ENT2_K);
+        end
+
+        // 重放旧 R2（recorded_r2）→ 必须被拒
+        fp_payload_buf[0] = 8'h00;   // result=PASS
+        fp_payload_buf[1] = 8'h05;   // hd
+        fp_payload_buf[2] = recorded_r2[63:56]; fp_payload_buf[3] = recorded_r2[55:48];
+        fp_payload_buf[4] = recorded_r2[47:40]; fp_payload_buf[5] = recorded_r2[39:32];
+        fp_payload_buf[6] = recorded_r2[31:24]; fp_payload_buf[7] = recorded_r2[23:16];
+        fp_payload_buf[8] = recorded_r2[15:8];  fp_payload_buf[9] = recorded_r2[7:0];
+        feed_frame(24'h0093, 8'd10);
+        guard = 0;
+        while (auth_busy && guard < 20000) begin @(posedge clk); guard = guard + 1; end
+        if (auth_result === 2'd3)
+            $display("[GK PASS] P1-5 换电重启重放拒止: 旧 R2(%h) 被拒 -> BLOCKED(3)", recorded_r2);
+        else begin
+            errors = errors + 1;
+            $display("[GK FAIL] 重放旧 R2 未被拒 auth_result=%0d", auth_result);
+        end
+        while (dut.auth_busy) @(posedge clk);
+
         //==================== 汇总 ====================
         if (errors == 0)
-            $display("TB_KEY_DERIVE_PASS: 密钥派生端到端(黄金值+不重复+双看门狗) 全部通过");
+            $display("TB_KEY_DERIVE_PASS: T5/T6/T6b/T8/T9 + GJ(派生密钥 R2 黄金) + GK(P1-5 重放拒止) 全部通过");
         else
             $display("TB_KEY_DERIVE_FAIL: %0d 项错误", errors);
         $finish;
