@@ -182,5 +182,31 @@ class TestKeyDerivation(unittest.TestCase):
             "P1-1 regression: derived key equals public NSA vector")
 
 
+
+    def test_tb_golden_key_matches_wire_byte_order(self) -> None:
+        """C5: TB GOLDEN_KEY 与 derive_device_key() 必须互为 wire-byte 反序。
+
+        RTL 约定 key_in[8*i +: 8] = key_byte[i]，故 96-bit 十六进制显示
+        恰为 Python bytes 的反序。本测试锁定该跨侧约定，防止任一侧
+        '按文档直觉'改成大端整数而复活字节序缺陷（W4-P4 S4 实测踩过）。
+        """
+        import re
+        tb = (Path(__file__).resolve().parents[1] / 'sim' / 'tb' / 'tb_key_derive.v').read_text(encoding='utf-8')
+        m = re.search(r"GOLDEN_KEY\s*=\s*96'h([0-9A-Fa-f_]+)", tb)
+        self.assertIsNotNone(m, 'tb_key_derive.v 未找到 GOLDEN_KEY 常量')
+        tb_golden = m.group(1).replace('_', '').lower()
+
+        # 独立复算 Python 侧黄金值（fixture 频率）
+        import random
+        rng = random.Random(0x0044_3450)
+        freqs = sorted(rng.sample(range(DEFAULT_FREQ_MIN, DEFAULT_FREQ_MAX + 1), N_RINGS))
+        k_hex = derive_device_key(ROPairingPUF(freqs=freqs)).hex()
+        # wire-byte 反序 = 96-bit Verilog 字面量
+        expected_tb = bytes.fromhex(k_hex)[::-1].hex()
+        self.assertEqual(tb_golden, expected_tb,
+            f'TB GOLDEN_KEY({tb_golden}) != wire-byte 反序({expected_tb})'
+            f' — Python K={k_hex}; 两侧字节序约定已漂移')
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
