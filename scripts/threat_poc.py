@@ -3,8 +3,9 @@
 
 Three cases, each exit 0 = expected behaviour (defence holds):
   replay   : server replay window rejects duplicate ACCESS_REQUEST
-             (P1-2, already fixed; terminal-side P1-5 cross-power-cycle
-              replay requires ro_entropy — W4-P4 T2, not yet implemented)
+             (P1-2).  Terminal-side P1-5 cross-power-cycle replay is
+             RTL-implemented (ro_entropy + GK: old R2 rejected after
+             power-cycle with a new entropy seed).
   brute    : offline brute-force of R2 from known (C2, R2) pair
   inject   : protocol state violations via malformed frames
 

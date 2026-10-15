@@ -103,7 +103,22 @@ module w3_top # (
         end
     end
 
-    wire auth_start_pulse = btn_state & ~btn_prev;   // 上升沿单拍
+    // W4-P4 T2: 上电熵采样子系统声明（前移到脉冲生成之前，避免使用点
+    // 先于声明点的编译顺序错误；例化仍在下方 PUF 子系统区）
+    wire         re_measure_en, re_ring_en, re_busy, re_done;
+    wire [255:0] re_ring_freq;
+    wire         re_seed_valid;
+    wire [63:0]  re_boot_seed;
+    wire         re_start;
+    wire         re_start_valid;
+    reg          re_started    = 1'b0;
+    reg          seed_valid_d  = 1'b0;
+    reg          seed_load_r   = 1'b0;
+
+    // C-F2: 熵采样窗（~ENTROPY_CYCLES 拍）内压制认证启动——窗内 c2_counter
+    // 尚未装载熵种子（仍为复位 0），C2 确定性=可重放窗口。门控后首个认证
+    // 必然发生在 seed_valid 之后（对齐 W4_T1T2_design P2-3 的声明）。
+    wire auth_start_pulse = btn_state & ~btn_prev & re_seed_valid;   // 上升沿+熵就绪
 
     //========================================================================
     // LED 心跳（0.75Hz，实证时钟频率——不闪=时钟有问题）
@@ -150,16 +165,7 @@ module w3_top # (
     wire        cd_start, cd_done;
     wire        fsm_key_valid;             // W4-P4 T1: FSM 内密钥派生完成
     wire [95:0] fsm_key_reg;               // W4-P4 T1: FSM 内派生的 96-bit 密钥
-    // W4-P4 T2: 上电熵采样子系统（声明必须在 u_fsm 例化之前，避免隐式 net）
-    wire         re_measure_en, re_ring_en, re_busy, re_done;
-    wire [255:0] re_ring_freq;
-    wire         re_seed_valid;
-    wire [63:0]  re_boot_seed;
-    wire         re_start;
-    wire         re_start_valid;
-    reg          re_started    = 1'b0;
-    reg          seed_valid_d  = 1'b0;
-    reg          seed_load_r   = 1'b0;
+    // W4-P4 T2: 熵子系统声明已前移到按键消抖区（re_* 引用处）
     wire [63:0] cd_seed;
     wire [511:0] cd_pair_table;
     wire        ra_measure_en, ra_ring_en, ra_busy, ra_done;

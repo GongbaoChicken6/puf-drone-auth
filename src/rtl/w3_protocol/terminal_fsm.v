@@ -296,15 +296,6 @@ module terminal_fsm # (
         end
     end
 
-    // W4-P4 T2: seed_load 单拍脉冲同步重装载（ro_entropy 完成后由 w3_top 触发）
-    // TB 恒 0 → initial 值保持（黄金不变）；板上 ro_entropy seed_valid 上升沿触发
-    always @(posedge clk) begin
-        if (seed_load) begin
-            for (j = 0; j < 8; j = j + 1)
-                c2_counter[j] <= c2_boot_seed[8*j +: 8];
-        end
-    end
-
     assign auth_busy  = (state != S_IDLE) && (state != S_SESSION);
     // 载荷保护：S_PROC_SEEDS/S_PROC_EXTRA/S_VERIFY_R2 期间读 fp 载荷缓冲，
     // 阻止 frame_parser 接收新帧覆盖缓冲（并发竞态修复）
@@ -889,6 +880,16 @@ module terminal_fsm # (
 
                 default: state <= S_IDLE;
             endcase
+
+            // W4-P4 T2: seed_load 单拍脉冲同步重装载（ro_entropy 完成后由
+            // w3_top 触发）。必须住在主 FSM always 块内——c2_counter 被两个
+            // 独立过程块驱动 = multi-driven net（Vivado Synth 8-6859 CRITICAL，
+            // 硬件行为未定义；由 AMD Vivado MCP 综合检查发现）。放在 case 之后
+            // 确保同拍优先于 S_CALC_R2 的递增。TB 恒 0 → initial 值保持。
+            if (seed_load) begin
+                for (j = 0; j < 8; j = j + 1)
+                    c2_counter[j] <= c2_boot_seed[8*j +: 8];
+            end
         end
     end
 
