@@ -263,6 +263,13 @@ if ($interopCode -ne 0) {
 $outI | Select-Object -Last 4 | ForEach-Object { Write-Host "  $_" }
 # W4-P4 T4: DoS rate-limiting flood test.
 $outF = & cmd.exe /c "python tests\test_dos_flood.py 2>&1" | ForEach-Object { "$_" }
+$outM = & cmd.exe /c "python tests\test_ml_attack.py 2>&1" | ForEach-Object { "$_" }
+$mlCode = $LASTEXITCODE
+if ($mlCode -ne 0) {
+    $outM | Select-Object -Last 20 | ForEach-Object { Write-Host "  $_" }
+    Write-Host "ML ATTACK TESTS FAILED"; exit 1
+}
+$outM | Select-Object -Last 3 | ForEach-Object { Write-Host "  $_" }
 $floodCode = $LASTEXITCODE
 if ($floodCode -ne 0) {
     $outF | Select-Object -Last 20 | ForEach-Object { Write-Host "  $_" }

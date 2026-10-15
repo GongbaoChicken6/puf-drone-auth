@@ -1,0 +1,440 @@
+{
+  "repro_command": "python -m src.python.evaluation.ml_attack --exp B --out data\\ml_attack --seed 42",
+  "versions": {
+    "sklearn": "1.8.0",
+    "numpy": "2.2.6",
+    "scipy": "1.16.3",
+    "matplotlib": "3.11.1"
+  },
+  "seed": 42,
+  "n_sweep": [
+    3,
+    5,
+    8,
+    12,
+    20,
+    30,
+    50,
+    75,
+    100,
+    120,
+    150,
+    200,
+    300,
+    400
+  ],
+  "flip_levels": [
+    0.0,
+    0.02,
+    0.05,
+    0.1
+  ],
+  "n_trials": 20,
+  "rejection_count": 0,
+  "aggregated": {
+    "0.00": {
+      "3": {
+        "tau_mean": 0.9766666666666668,
+        "tau_std": 0.0213437474581095,
+        "exact_rate": 0.3,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "5": {
+        "tau_mean": 0.9908333333333335,
+        "tau_std": 0.011149240133549721,
+        "exact_rate": 0.55,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "8": {
+        "tau_mean": 0.9991666666666668,
+        "tau_std": 0.0036324157862839056,
+        "exact_rate": 0.95,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "12": {
+        "tau_mean": 0.9991666666666668,
+        "tau_std": 0.0036324157862839056,
+        "exact_rate": 0.95,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "20": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "30": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "50": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "75": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "100": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "120": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "150": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "200": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "300": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "400": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      }
+    },
+    "0.02": {
+      "3": {
+        "tau_mean": 0.9225000000000001,
+        "tau_std": 0.05433307770901015,
+        "exact_rate": 0.15,
+        "pair_acc_mean": 0.9833532518643718,
+        "cycles_mean": 1.2
+      },
+      "5": {
+        "tau_mean": 0.9725000000000001,
+        "tau_std": 0.034268141991586815,
+        "exact_rate": 0.4,
+        "pair_acc_mean": 0.9906769191783799,
+        "cycles_mean": 0.65
+      },
+      "8": {
+        "tau_mean": 0.9949999999999999,
+        "tau_std": 0.010671873729054752,
+        "exact_rate": 0.8,
+        "pair_acc_mean": 0.9974788120376357,
+        "cycles_mean": 0.05
+      },
+      "12": {
+        "tau_mean": 0.9991666666666668,
+        "tau_std": 0.0036324157862839056,
+        "exact_rate": 0.95,
+        "pair_acc_mean": 0.9991666666666668,
+        "cycles_mean": 0.05
+      },
+      "20": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "30": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "50": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "75": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "100": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "120": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "150": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "200": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "300": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "400": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      }
+    },
+    "0.05": {
+      "3": {
+        "tau_mean": 0.9016666666666667,
+        "tau_std": 0.062338680697550164,
+        "exact_rate": 0.05,
+        "pair_acc_mean": 0.959592316945922,
+        "cycles_mean": 3.65
+      },
+      "5": {
+        "tau_mean": 0.9466666666666665,
+        "tau_std": 0.05364492313143694,
+        "exact_rate": 0.3,
+        "pair_acc_mean": 0.9709441037341279,
+        "cycles_mean": 2.85
+      },
+      "8": {
+        "tau_mean": 0.9883333333333333,
+        "tau_std": 0.018333333333333313,
+        "exact_rate": 0.65,
+        "pair_acc_mean": 0.9865185959216367,
+        "cycles_mean": 1.15
+      },
+      "12": {
+        "tau_mean": 0.9983333333333334,
+        "tau_std": 0.005000000000000016,
+        "exact_rate": 0.9,
+        "pair_acc_mean": 0.9970833333333333,
+        "cycles_mean": 0.25
+      },
+      "20": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "30": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "50": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "75": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "100": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "120": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "150": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "200": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "300": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "400": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      }
+    },
+    "0.10": {
+      "3": {
+        "tau_mean": 0.8424999999999999,
+        "tau_std": 0.07609843771209908,
+        "exact_rate": 0.0,
+        "pair_acc_mean": 0.9210141997239196,
+        "cycles_mean": 8.2
+      },
+      "5": {
+        "tau_mean": 0.9116666666666665,
+        "tau_std": 0.05823801736552051,
+        "exact_rate": 0.1,
+        "pair_acc_mean": 0.9389336935768432,
+        "cycles_mean": 5.5
+      },
+      "8": {
+        "tau_mean": 0.9691666666666668,
+        "tau_std": 0.031302733284988254,
+        "exact_rate": 0.35,
+        "pair_acc_mean": 0.9654115981275263,
+        "cycles_mean": 3.3
+      },
+      "12": {
+        "tau_mean": 0.9916666666666668,
+        "tau_std": 0.012360330811826109,
+        "exact_rate": 0.65,
+        "pair_acc_mean": 0.9862394957983194,
+        "cycles_mean": 1.45
+      },
+      "20": {
+        "tau_mean": 0.9983333333333334,
+        "tau_std": 0.005000000000000016,
+        "exact_rate": 0.9,
+        "pair_acc_mean": 0.9979166666666666,
+        "cycles_mean": 0.15
+      },
+      "30": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "50": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "75": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "100": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "120": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "150": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "200": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "300": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      },
+      "400": {
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 1.0,
+        "cycles_mean": 0.0
+      }
+    }
+  },
+  "conclusion_B": "CRP 空间坠缩至 ~2×10^6 种配对构型，排序重构攻击在 ~120 次观测内可恢复完整排序——这是我们设计的已知边界，在报告中如实讨论",
+  "f2_footnote": "16! = 2.09e13 ~= 2^44; the frozen text 2x10^6 appears to be a typo for 2x10^13 (flagged for W6 adjudication)",
+  "note_iid": "per-bit iid flip is the attacker-favorable assumption; real ring jitter is cross-pair correlated and degrades majority voting faster",
+  "note_votes": "vote count per pair min/med/max = 19/48/419 at N=120 (non-uniform; error rate set by min=19 votes)"
+}
