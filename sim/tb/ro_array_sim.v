@@ -33,15 +33,21 @@ module ro_array_sim # (
     // scripts/gen_puf_fixtures.py --tb-mem 生成（puf_model 同源对拍）
     reg [8*256:1] freq_file;
     integer fi;
+    integer fh_chk;   // F7: fixture 文件存在性检查
     initial begin
         for (fi = 0; fi < N_RINGS; fi = fi + 1)
             sim_freq[fi] = 16'h1000 + fi * 16;   // 兜底：互不相同（若文件缺失）
-        if ($value$plusargs("PUF_FREQ_FILE=%s", freq_file)
-        ) begin
-            $readmemh(freq_file, sim_freq);
-        end else begin
-            $readmemh("sim/testvectors/puf_tb_freqs.mem", sim_freq);
-        end
+        // 先确定 freq_file（plusarg 或默认），再做 F7 存在性检查
+        if (!$value$plusargs("PUF_FREQ_FILE=%s", freq_file))
+            freq_file = "sim/testvectors/puf_tb_freqs.mem";
+        // F7: 相对路径 cwd 敏感——文件缺失时响亮告警而非静默回退
+        // （此前 $readmemh 对缺失文件仅 WARNING，黄金值会静默失配）
+        fh_chk = $fopen(freq_file, "r");
+        if (fh_chk == 0)
+            $display("RO_ARRAY_SIM WARNING: cannot open %0s (cwd-dependent) -- fallback freqs in use, goldens WILL mismatch", freq_file);
+        else
+            $fclose(fh_chk);
+        $readmemh(freq_file, sim_freq);
     end
 
     // 窗末检测（镜像真模块时序：measure_en 下降后一拍 done 脉冲 + 锁存）

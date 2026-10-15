@@ -289,12 +289,10 @@ module terminal_fsm # (
         .busy           (sp_busy       )
     );
     integer    j;
-    initial begin
-        for (j = 0; j < 8; j = j + 1) begin
-            c2_counter[j]  = c2_boot_seed[8*j +: 8];   // W4-T2：可注入（tie A0..A7 = 旧行为）
-            // r2_expected 不初始化——首次使用前必经 S_CALC_R2 写入
-        end
-    end
+    // B-P3 修复：c2_counter 初始化已移入主 FSM always 块的 rst 分支。
+    // 原 initial 块在 t=0 采样 c2_boot_seed 端口，与 TB 声明初始化器存在
+    // IEEE1364 未定义次序（iverilog 下 c2_counter=X -> GJ/T6 假失败）。
+    // rst 分支装载跨仿真器确定，且 TB 均先置 rst 后释放（行为等价）。
 
     assign auth_busy  = (state != S_IDLE) && (state != S_SESSION);
     // 载荷保护：S_PROC_SEEDS/S_PROC_EXTRA/S_VERIFY_R2 期间读 fp 载荷缓冲，
@@ -347,6 +345,9 @@ module terminal_fsm # (
             state       <= S_IDLE;
             timeout_cnt <= 32'd0;
             result_r    <= 2'd0;
+            // B-P3: C2 初值装载（原 initial 块，跨仿真器确定性修复）
+            for (j = 0; j < 8; j = j + 1)
+                c2_counter[j] <= c2_boot_seed[8*j +: 8];
             mf_start    <= 1'b0;
             mf_msg_id   <= 24'h0;
             mf_pay_len  <= 6'd0;

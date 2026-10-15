@@ -213,6 +213,15 @@ def derive_device_key(puf: ROPairingPUF) -> bytes:
     from src.python.common.speck import Speck6496
 
     k_boot = puf.ideal(KDF_KEY_SEED)         # 8 bytes big-endian
+    # F6b symmetric guard (mirrors the RTL S_KEY_DERIVE step0 0/FFFF check):
+    # a degenerate reading must fail on BOTH sides -- a station that installs
+    # K while the terminal blocks would be an asymmetric fail-closed.
+    if k_boot in (b"\x00" * 8, b"\xff" * 8):
+        raise ValueError(
+            "k_boot is degenerate (all-zeros/all-ones): the PUF reading "
+            "is invalid; refusing to derive a key (symmetric with the "
+            "RTL S_KEY_DERIVE guard)"
+        )
     key12 = k_boot + k_boot[:4]              # 12 bytes (8+4 concatenation)
 
     pt1 = KDF_KEY_SEED.to_bytes(8, "big")    # public constant

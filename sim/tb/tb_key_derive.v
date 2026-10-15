@@ -47,6 +47,7 @@ module tb_key_derive;
     reg        reentered_derive  = 1'b0;   // C2: T6 重派生标志
     reg [63:0] r2_obs            = 64'd0;   // GJ: r2_expected 观测值
     reg [63:0] recorded_r2       = 64'd0;   // GK: 攻击者录制的旧 R2
+    integer    gk_i              = 0;        // T15: 循环变量
     integer    tw_bits = 0;
 
     // 黄金 K（fixture 频率 → puf_model → 字节反转到 RTL 位序）
@@ -314,7 +315,7 @@ module tb_key_derive;
         end else
             $display("[GK INFO] 换电重启后 c2_counter[0]=%h（熵种子2 已装载）", dut.c2_counter[0]);
 
-        // --- 会话2：终端用新 C2 算 R2，攻击者重放旧 R2 ---
+        // --- 会话2：终端用新 C2 算 R2，攻击者重放旧 R2（完整协议交换）---
         tx_byte_count = 0;
         @(negedge clk); auth_start = 1'b1;
         @(negedge clk); auth_start = 1'b0;
@@ -326,8 +327,16 @@ module tb_key_derive;
             errors = errors + 1;
             $display("[GK FAIL] 会话2 r2_expected=%h != %h", r2_obs, R2_ENT2_K);
         end
-
-        // 重放旧 R2（recorded_r2）→ 必须被拒
+        // 完整交换：先喂 CHALLENGE 让 FSM 走完 PUF 管线到 WAIT_RESULT
+        guard = 0;
+        while (dut.state !== 4'd2 && guard < 5000) begin @(posedge clk); guard = guard + 1; end
+        @(negedge clk);
+        for (gk_i = 0; gk_i < 32; gk_i = gk_i + 1)
+            fp_payload_buf[gk_i] = 8'h50 + gk_i[7:0];
+        feed_frame(24'h0091, 8'd32);
+        guard = 0;
+        while (dut.state !== 4'd5 && guard < 30000) begin @(posedge clk); guard = guard + 1; end
+        // 现在在 WAIT_RESULT：重放旧 R2 → S_VERIFY_R2 逐字节失配 → BLOCKED
         fp_payload_buf[0] = 8'h00;   // result=PASS
         fp_payload_buf[1] = 8'h05;   // hd
         fp_payload_buf[2] = recorded_r2[63:56]; fp_payload_buf[3] = recorded_r2[55:48];
@@ -336,18 +345,87 @@ module tb_key_derive;
         fp_payload_buf[8] = recorded_r2[15:8];  fp_payload_buf[9] = recorded_r2[7:0];
         feed_frame(24'h0093, 8'd10);
         guard = 0;
-        while (auth_busy && guard < 20000) begin @(posedge clk); guard = guard + 1; end
-        if (auth_result === 2'd3)
-            $display("[GK PASS] P1-5 换电重启重放拒止: 旧 R2(%h) 被拒 -> BLOCKED(3)", recorded_r2);
+        while (dut.state !== 4'd11 && guard < 2000) begin @(posedge clk); guard = guard + 1; end
+        if (auth_result === 2'd3 && guard < 100)
+            $display("[GK PASS] P1-5 换电重放拒止: 旧R2(%h) R2失配 -> BLOCKED(3) (%0d拍)", recorded_r2, guard);
         else begin
             errors = errors + 1;
-            $display("[GK FAIL] 重放旧 R2 未被拒 auth_result=%0d", auth_result);
+            $display("[GK FAIL] auth_result=%0d guard=%0d（guard<100=失配路径; ~5000=超时路径）", auth_result, guard);
         end
         while (dut.auth_busy) @(posedge clk);
 
+
+        //==================== T14: k_boot 全零退化自检 ====================
+        // F6/T1b: force k_boot_reg=0 -> S_KEY_DERIVE step0 拦截 -> BLOCKED
+        guard = 0;
+        while (dut.state !== 4'd0 && guard < 40000) begin @(posedge clk); guard = guard + 1; end
+        // 必须同时清 key_valid 才能重入 S_KEY_MEASURE（否则直走 S_CALC_R2 超时）
+        force dut.key_valid_r = 1'b0;
+        force dut.k_boot_reg = 64'd0;
+        @(negedge clk); auth_start = 1'b1;
+        @(negedge clk); auth_start = 1'b0;
+        release dut.key_valid_r;   // S_IDLE 已决策，可释放
+        // k_boot_reg 保持 forced=0 直到 S_KEY_DERIVE step0 检查
+        guard = 0;
+        while (dut.state !== 4'd11 && guard < 40000) begin @(posedge clk); guard = guard + 1; end
+        release dut.k_boot_reg;
+        if (dut.state === 4'd11 && !key_valid)
+            $display("[T14 PASS] k_boot 全零 -> BLOCKED (%0d 拍) + key_valid=0", guard);
+        else begin
+            errors = errors + 1;
+            $display("[T14 FAIL] state=%0d key_valid=%b guard=%0d", dut.state, key_valid, guard);
+        end
+        while (dut.auth_busy) @(posedge clk);
+
+        //==================== T15: 坏 K 自愈 ====================
+        // F6/T1c: 完整协议交换中 R2 失配 -> key_valid 清零 -> 下次 auth 重入派生
+        guard = 0;
+        while (dut.state !== 4'd0 && guard < 40000) begin @(posedge clk); guard = guard + 1; end
+        // 若 GK/T14 后 key_valid 仍为 1，走完整交换触发一次明确失配
+        if (key_valid) begin
+            tx_byte_count = 0;
+            @(negedge clk); auth_start = 1'b1;
+            @(negedge clk); auth_start = 1'b0;
+            guard = 0;
+            while (tx_byte_count < 16 && guard < 5000) begin @(posedge clk); guard = guard + 1; end
+            // 完整交换：CHALLENGE -> R1 -> 错误 R2 RESULT
+            guard = 0;
+            while (dut.state !== 4'd2 && guard < 5000) begin @(posedge clk); guard = guard + 1; end
+            @(negedge clk);
+            for (gk_i = 0; gk_i < 32; gk_i = gk_i + 1)
+            fp_payload_buf[gk_i] = 8'h50 + gk_i[7:0];
+        feed_frame(24'h0091, 8'd32);
+            guard = 0;
+            while (dut.state !== 4'd5 && guard < 30000) begin @(posedge clk); guard = guard + 1; end
+            fp_payload_buf[0] = 8'h00; fp_payload_buf[1] = 8'h05;
+            for (gk_i = 0; gk_i < 8; gk_i = gk_i + 1)
+                fp_payload_buf[2+gk_i] = 8'hAA ^ gk_i[7:0];   // 错误 R2
+            feed_frame(24'h0093, 8'd10);
+            guard = 0;
+            while (dut.state !== 4'd11 && guard < 2000) begin @(posedge clk); guard = guard + 1; end
+            while (dut.auth_busy) @(posedge clk);
+        end
+        if (!key_valid)
+            $display("[T15a PASS] R2 失配后 key_valid 已清（坏 K 不缓存）");
+        else begin
+            errors = errors + 1; $display("[T15a FAIL] key_valid=%b", key_valid);
+        end
+        // 下次 auth 应重入 S_KEY_MEASURE（state=3）
+        guard = 0;
+        while (dut.state !== 4'd0 && guard < 40000) begin @(posedge clk); guard = guard + 1; end
+        @(negedge clk); auth_start = 1'b1;
+        @(negedge clk); auth_start = 1'b0;
+        guard = 0;
+        while (dut.state !== 4'd3 && dut.state !== 4'd11 && guard < 5000) begin @(posedge clk); guard = guard + 1; end
+        if (dut.state === 4'd3)
+            $display("[T15b PASS] 下次 auth 重入 S_KEY_MEASURE（自愈重派生）");
+        else begin
+            errors = errors + 1; $display("[T15b FAIL] state=%0d 应=3", dut.state);
+        end
+
         //==================== 汇总 ====================
         if (errors == 0)
-            $display("TB_KEY_DERIVE_PASS: T5/T6/T6b/T8/T9 + GJ(派生密钥 R2 黄金) + GK(P1-5 重放拒止) 全部通过");
+            $display("TB_KEY_DERIVE_PASS: T5/T6/T6b/T8/T9/T14/T15 + GJ + GK 全部通过");
         else
             $display("TB_KEY_DERIVE_FAIL: %0d 项错误", errors);
         $finish;

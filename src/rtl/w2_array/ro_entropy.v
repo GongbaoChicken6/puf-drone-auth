@@ -95,7 +95,15 @@ always @ ( posedge clk ) begin
             end
             E_DONE : begin
                 boot_seed  <= seed_acc;
-                seed_valid <= 1'b1;             // 锁存完成
+                // F4 健康检查：全零种子 = 16 环低4bit 全部相同（板上概率
+                // ~2^-64，但仿真 fallback 或极端退化可触发）= 零熵。
+                // 拒绝置 seed_valid（fail-closed，与 T1b k_boot 检查对称）；
+                // w3_top 的 F2 门控因此压制认证——宁可阻断也不带零熵运行。
+                if (seed_acc == 64'd0) begin
+                    seed_valid <= 1'b0;         // 保持无效（fail-closed）
+                end else begin
+                    seed_valid <= 1'b1;         // 锁存完成
+                end
             end
             default : st <= E_IDLE;
         endcase
