@@ -230,3 +230,54 @@ R1 语义（位级冻结，双侧唯一依据 = src/python/evaluation/puf_model.
 
 变更控制：任何一侧（puf_model.py / challenge_decode.v / 本节）改动都必须三方同步重生成并重跑 CI（§7 纪律同样适用）。
 
+## 9. 设备密钥派生 KDF（W4-P4 T1 冻结，2026-10-14）
+
+降级路径 KDF（唯一权威定义；双侧唯一依据 = `puf_model.derive_device_key()`，RTL 对拍锚 = `tb_key_derive` GJ 用例）：
+
+### 9.1 冻结常量
+
+| 常量 | 值 | 说明 |
+|---|---|---|
+| `KEY_SEED` | `64'h6B65_7973_6565_6431` | ASCII "keyseed1"（8B 全量） |
+| `KDF_MASK` | `64'hA5A5_5A5A_A5A5_5A5A` | 与 KEY_SEED 运算产生 pt2 |
+
+### 9.2 构造（拼接，非折叠）
+
+```
+K_boot = respond(KEY_SEED)                     # 8B，PUF 对固定种子的理想响应
+key12  = K_boot + K_boot[:4]                   # 8B+4B 拼接 = 12B（96bit）
+pt1    = KEY_SEED（大端 8B）
+pt2    = KEY_SEED XOR KDF_MASK（大端 8B）
+ct1    = Speck6496(key12).encrypt(pt1)         # 8B
+ct2    = Speck6496(key12).encrypt(pt2)         # 8B
+K      = ct1 + ct2[:4]                         # 12B = 96bit 设备密钥
+```
+
+### 9.3 字节序（wire-byte 约定，双侧冻结）
+
+- **key_in[8*i +: 8] = key12_byte[i]**、plaintext_in 同构（`speck64_96.v` ↔ `speck.py` 的 LE-word 解析天然一致）
+- 96-bit 十六进制**显示**恰为 Python bytes 的**反序**（例：Python K=`ee1d…c426` ⇔ RTL key_reg=`26c4…1dee`）。**两侧互为反序是正确约定，非 bug**
+- plaintext 字序：pt[39:32]=b0, [47:40]=b1, [55:48]=b2, [63:56]=b3, [7:0]=b4, [15:8]=b5, [23:16]=b6, [31:24]=b7（y 在前 x 在后，NSA 小端）
+- 密钥存储：`key_reg[8*i +: 8] = K_byte[i]`
+
+### 9.4 黄金向量（fixture 频率，master seed 0x00443450）
+
+| 量 | 值（Python bytes hex） | RTL 96-bit 显示（反序） | 锚点 |
+|---|---|---|---|
+| K_boot | `748df50d7035e05d` | 同值 | tb_key_derive 实测 |
+| key12 | `748df50d7035e05d748df50d` | `0df58d745de035700df58d74` | tb_key_derive T6b |
+| K | `ee1d0425f39f31ba61ecc426` | `26c4ec61ba319ff325041dee` | tb_key_derive T5 + test_puf_model 黄金 |
+| R2(K, C2=a1..a8) | `730adaa96ee973e9` | — | tb_key_derive GJ |
+
+### 9.5 跨侧一致性门禁
+
+- `tests/test_puf_model.py::test_tb_golden_key_matches_wire_byte_order`：从 tb_key_derive.v 正则提取 GOLDEN_KEY，与 `derive_device_key()` 反序逐字节比对（防任一侧改成大端整数而复活字节序缺陷）
+- `tests/test_interop_rtl_model.py::test_puf_derived_key_provisioning_full_chain`：PC 侧 enroll → `provision_device_key()` 派生安装 → 线级认证 PASS（demo 链闭合）
+
+### 9.6 部署前置（诚实边界）
+
+- RTL 路径已实现并仿真验证（S_KEY_MEASURE→S_KEY_DERIVE，`w3_top.ENABLE_KEY_DERIVE`，默认 **0 = fail-safe**）
+- 板上启用前提：站端 K 下发通道（0x0096 KEY_SEED 注册模式，主案未实现）+ K_boot 单次测量噪声可靠性（需纠错/多数表决）
+- 有效熵 ≈ **44bit**（PUF 根熵）；"非公开向量"（P1-1）在 RTL 层成立；熵混合目标未达成（无 station_random）——**不得声明板上 P1-1 达成**
+
+变更控制：任何一侧（puf_model.py / terminal_fsm.v / 本节）改动都必须三方同步重生成并重跑 CI（§7 纪律同样适用）。

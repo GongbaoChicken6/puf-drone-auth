@@ -69,7 +69,7 @@ svg.conn{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:no
 <body>
 <div class="wrap">
 <h1>PUF 无人机认证 · 竞赛全周期思维导图</h1>
-<div class="sub">从报名到决赛答辩 · 全部任务 · 依赖关系 · 当前状态 · 2026-10-12（A1 + 板级适配就绪）</div>
+<div class="sub">从报名到决赛答辩 · 全部任务 · 依赖关系 · 当前状态 · 2026-10-15（A1 + 板级适配就绪）</div>
 
 <div class="legend">
   <span><span class="sw" style="background:var(--green)"></span> 已完成</span>
@@ -132,10 +132,10 @@ svg.conn{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:no
     <h4 style="color:var(--green)">✅ W3 协议整合（含 A1 统一 R2）</h4>
     <div class="tags"><span class="tag g">B线完成 ✅</span><span class="tag g">A线完成 ✅</span><span class="tag a">上板待办</span></div>
     <div class="sub-items">
-      <div class="si ok">B线: protocol.py + crp_pool.py + hsm.py + main.py (44 单测)</div>
+      <div class="si ok">B线: protocol.py + crp_pool.py + hsm.py + main.py (93 单测)</div>
       <div class="si ok">A线: mavlink_frame + crc16 + frame_parser + terminal_fsm</div>
       <div class="si ok">A线: w3_top.v 顶层 (比特流验证)</div>
-      <div class="si ok">A1: Speck64/96 统一 R2 + 防重放窗 (12 TB + 金丝雀 ✅)</div>
+      <div class="si ok">A1: Speck64/96 统一 R2 + 防重放窗 (16 TB + 金丝雀 ✅)</div>
       <div class="si ok">契约化: protocol_contract.md + check_contract_sync (7 帧)</div>
       <div class="si no">上板: 时钟/复位/拨码已由 wrapper 解决; W4 B5a PUF 管线已上线(RTL 13TB 全绿); 待板卡电源修复 + XDC 取消注释 + clk_wiz_0 生成</div>
     </div>

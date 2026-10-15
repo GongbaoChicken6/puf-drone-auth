@@ -137,6 +137,17 @@ class SimulatedTerminal:
         """Noiseless response (deterministic for this device's freqs)."""
         return self._puf.ideal(seed)
 
+    @property
+    def derived_key(self) -> bytes:
+        """W4-P4 T1: the 96-bit key this terminal's RTL derives from its
+        PUF at power-up (same construction as S_KEY_MEASURE/S_KEY_DERIVE).
+
+        Used by the REPL 'provisionkey' command to hand the station the
+        same K at enrollment time (physical-proximity trust boundary).
+        """
+        from ..evaluation.puf_model import derive_device_key
+        return derive_device_key(self._puf)
+
     def respond(self, seeds: Sequence[bytes], flip_prob: float | None = None) -> list[bytes]:
         """Respond to challenges with realistic bit-flip noise applied."""
         prob = self.flip_prob if flip_prob is None else flip_prob
@@ -707,6 +718,45 @@ def cmd_setkey(
           f"persisted to {store.path}")
 
 
+def cmd_provisionkey(
+    protocol: HFIDAProtocol,
+    transport: LoopbackTransport | SerialTransport,
+    store: DeviceKeyStore,
+    args: list[str],
+) -> None:
+    """REPL 'provisionkey': derive the device key from the terminal's PUF.
+
+    W4-P4 T1 degraded-path provisioning: at enrollment time the station
+    derives the same K the terminal RTL derives from its PUF and installs
+    it (hsm + persistent store).  Loopback only -- a real hardware
+    terminal needs the 0x0096 KEY_SEED registration channel instead.
+    """
+    if len(args) != 1:
+        print("usage: provisionkey <terminal_id>")
+        print("        (loopback mode only; derives from the simulated PUF)")
+        return
+    try:
+        tid = int(args[0])
+    except ValueError:
+        print(f"[ERROR]  terminal id must be an integer, got {args[0]!r}")
+        return
+    if not isinstance(transport, LoopbackTransport):
+        print("[ERROR]  provisionkey needs loopback mode (the simulated "
+              "terminal's PUF); a real device needs the 0x0096 channel")
+        return
+    key = transport.terminal(tid).derived_key
+    store.set_key(tid, key)                 # persist
+    protocol.hsm.set_key(tid, key)          # live HSM
+    # 审计（同 setkey 基线）
+    import datetime
+    from pathlib import Path as _P
+    with open(_P(store.path).parent / "audit.log", "a") as fh:
+        fh.write(f"{datetime.datetime.now().isoformat()} PROVISIONKEY "
+                 f"tid={tid} key={key.hex()[:6]}...\n")
+    print(f"[KEY]    terminal {tid}: PUF-derived key installed "
+          f"({key.hex()[:6]}..., 96-bit, non-public)")
+
+
 def cmd_c2reset(
     protocol: HFIDAProtocol,
     store: DeviceKeyStore,
@@ -762,6 +812,7 @@ HELP_TEXT = """commands:
   spoof <terminal_id>         authenticate with an impostor device (demo)
   enroll <terminal_id> [n]    enroll device template (default n=100 CRPs)
   setkey <terminal_id> <hex>  install Speck64/96 device key (24 hex chars)
+  provisionkey <terminal_id>  derive device key from the terminal PUF (loopback)
   c2reset <terminal_id>       clear C2 replay window (power-cycle recovery)
   serve                       serial mode: terminal-initiated receive loop
                               (Ctrl-C returns to the prompt)
@@ -800,6 +851,8 @@ def repl(
                 cmd_enroll(protocol, transport, args, measurements, store)
             elif cmd == "setkey":
                 cmd_setkey(protocol, store, args)
+            elif cmd == "provisionkey":
+                cmd_provisionkey(protocol, transport, store, args)
             elif cmd == "c2reset":
                 cmd_c2reset(protocol, store, args)
             elif cmd == "serve":

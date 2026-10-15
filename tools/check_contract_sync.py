@@ -115,9 +115,43 @@ def contract_puf_vectors():
     return out
 
 
+
+
+def contract_kdf_vectors():
+    """W4 S9: parse the frozen KDF golden vector from the contract."""
+    md = (ROOT / "docs" / "protocol_contract.md").read_text(encoding="utf-8")
+    if "\n## 9." not in md:
+        return {}
+    # NB: anchor on "\n## 9." -- the bare "## 9." substring also occurs
+    # inside the "### 9.x" subsection headers and would over-split.
+    section = md.split("\n## 9.")[1].split("\n## ")[0]
+    out = {}
+    for row in re.finditer(r"\|\s*(K_boot|key12|K)\s*\|\s*`([0-9a-fA-F]+)`", section):
+        out[row.group(1)] = bytes.fromhex(row.group(2))
+    return out
+
+
+def build_kdf_vector():
+    """W4 S9: regenerate the KDF golden vector from puf_model (fixture freqs)."""
+    import random
+    sys.path.insert(0, str(ROOT))
+    from src.python.evaluation.puf_model import (
+        DEFAULT_FREQ_MAX, DEFAULT_FREQ_MIN, N_RINGS, ROPairingPUF,
+        KDF_KEY_SEED, derive_device_key,
+    )
+    rng = random.Random(0x0044_3450)
+    freqs = sorted(rng.sample(range(DEFAULT_FREQ_MIN, DEFAULT_FREQ_MAX + 1), N_RINGS))
+    puf = ROPairingPUF(freqs=freqs)
+    k_boot = puf.ideal(KDF_KEY_SEED)
+    return {
+        "K_boot": k_boot,
+        "key12": k_boot + k_boot[:4],
+        "K": derive_device_key(puf),
+    }
+
 def main() -> int:
-    gen = {**build_frames(), **build_puf_tables()}
-    doc = {**contract_vectors(), **contract_puf_vectors()}
+    gen = {**build_frames(), **build_puf_tables(), **build_kdf_vector()}
+    doc = {**contract_vectors(), **contract_puf_vectors(), **contract_kdf_vectors()}
     bad = 0
     for name, frame in gen.items():
         want = doc.get(name)
@@ -140,7 +174,7 @@ def main() -> int:
     if bad:
         print(f"\nDRIFT DETECTED: {bad} mismatch(es) -- update protocol.py AND contract/TB together!")
         return 1
-    print("\nCONTRACT SYNC OK: protocol.py + puf_model == contract S4 + S8 "
+    print("\nCONTRACT SYNC OK: protocol.py + puf_model == contract S4 + S8 + S9 "
           "(TB golden arrays are manually mirrored -- this tool does not read them)")
     return 0
 
