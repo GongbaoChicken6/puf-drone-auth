@@ -54,3 +54,16 @@
 ## 待办（W4-P6 上板前）
 - 带 XDC 约束的综合（当前无约束 → timing 报告无 WNS 意义）
 - report_drc 完整检查（本次仅确认 TOP_PORTS=17）
+## 2026-10-15 追加：T2 ro_entropy 全量综合 + multi-driven P1 修复验证
+
+| 项 | 修复前 | 修复后 |
+|---|---|---|
+| Critical warnings | **128**（multi-driven c2_counter × 全部位） | **0** |
+| Slice LUTs | 4190 (S4 时代) | **4443 (8.35%)**（+ro_entropy+第二阵列+253） |
+| Slice Registers | 6133 | **6545 (6.15%)** |
+| 覆盖 | HEAD 92ff202 | **HEAD e0c395d**（T2 完整版 + F2 门控） |
+
+> **发现过程**：T1/T2 功能验证（用户要求用 AMD MCP）触发对当前 HEAD 的综合检查，暴露 128 条 Synth 8-6859 CRITICAL——seed_load 独立 always 块与主 FSM always 块双驱动 c2_counter。CI 仅跑 xvlog/xelab/xsim（仿真器良性解析多驱动）故 16/16 TB 全绿掩盖了该板级阻断缺陷。agent C 代码走查独立确认（双源）。修复 = 合并进主 FSM 块（endcase 后，末次赋值优先）。**这是"CI 全绿 ≠ 硬件正确"的又一实例，与 W4-P2 clk bug 同类。**
+
+### F2 附带验证
+w3_top auth_start_pulse 现与 re_seed_valid 相与（熵就绪门控）；综合含此改动，0 错误。
