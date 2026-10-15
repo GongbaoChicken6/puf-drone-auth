@@ -65,7 +65,21 @@
 | B 安全/合规 | 1（同上，独立复现） | 1（K 下发通道缺失） | 2 | P1 采纳 fail-safe 默认 0 + 文档诚实标注 |
 | C 静默失败 | 0 | 1（TODO 步骤号 + T2 未闭环） | 6 | TODO 修正 + T1/T2 状态诚实化 |
 
-**关键教训（W5 复用）**：声明"完成"前必须验证**顶层集成**（w3_top 级 TB），单元/子模块 TB 全绿不能替代——本次 P0 正是子模块 TB 自接回环掩盖的。
+**关键教训（W5 复用）**：
+1. 声明"完成"前必须验证**顶层集成**（w3_top 级 TB）——P0 正是子模块 TB 自接回环掩盖的。
+2. **CI 全绿 ≠ 硬件正确**——multi-driven P1（128 条 Synth 8-6859）只被 Vivado 综合暴露。每阶段 RTL 交付必须跑 MCP 综合。
+3. **测试走完整协议交换**——GK 曾只是 WAIT_CHALL 超时。用拍数区分路径（失配=3 拍 vs 超时=5000 拍）。
+
+### W4-P4 T1/T2 功能验证轮（2026-10-15，3 代理 + Vivado MCP）
+| 来源 | 判定 | 关键发现 |
+|---|---|---|
+| 我（第一性原理） | PASS | 7/7 黄金值独立复算命中 |
+| A（端到端执行） | PASS | 3 TB + 2 Python 实跑；FSM 轨迹实证 |
+| B（全独立复算） | PASS | 自写 LFSR/Speck；五方零不一致 |
+| C（对抗攻击） | FAIL→闭环 | multi-driven P1 + 熵窗 P2 + brute P2 |
+| **Vivado MCP** | **决定性** | **128 条 multi-driven CRITICAL**（CI 无法发现）|
+
+**本轮修复（e0c395d + a83c83a + 80d7bb8）**：multi-driven P1 + 熵窗 P2 + brute P2 + 全零种子检查 + Python 对称检查 + 响亮回退 + iverilog 竞争 + GK 测试设计缺陷 + T14/T15。**全部 P0/P1/P2/P3 清零。**
 
 ### W4-P5 ML 攻击实验（1.5 天，纯 PC）
 实验 A 合成 arbiter+LR（sklearn 已装）／实验 B 排序重构（puf_model 数据）；产出 data/ml_attack/*.json + 图。

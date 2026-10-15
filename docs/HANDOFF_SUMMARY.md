@@ -259,6 +259,13 @@ Git：57 commits（截至 A1 收官提交 a678274）· 144 files · tag w3-compl
    - **T4 暂存-释放 + SOP**（8073cc6）：CRPPool.unuse() + protocol 暂存/提交/释放 + 停滞 30s 清扫 → **池只在认证成功时缩小**（B-P2 F5 闭环）；docs/crp_pool_sop.md
    - **T5 运维加固**（a4d8ff8）：DeviceKeyStore mtime 外部变更检测（4 mutator 全覆盖）+ SimulatedHSM 决策=对齐 0600 原子写 + 5 项单测
    - **状态**：CI 16/16 TB + 93 单测全绿；T2/T3/T4/T5/T6 ✅，T1 🔶（板上前提未满足，fail-safe 默认 0）
+   - **【2026-10-15 追加】T1/T2 功能验证轮（3 代理 + Vivado MCP）→ 全部清零（110 commits）**：
+     - P1 multi-driven（MCP 综合 + C 代理双源）：seed_load 独立 always 块双驱动 c2_counter = 128 条 Synth 8-6859 = 板级未定义。修复=合并主块，MCP 复检 128→0
+     - P2 熵窗门控：auth_start_pulse &= re_seed_valid（设计书声明对齐）
+     - P2 brute 叙事过期：对齐现状 + ~2^44 诚实口径
+     - P3×5 全清：ro_entropy 全零检查 / Python 对称检查 / 响亮回退 / iverilog t=0 竞争（init→rst）/ T14+T15 补齐
+     - GK 测试设计缺陷（自查发现）：曾跳过 CHALLENGE → PASS 实为超时（5000 拍）非 R2 失配（3 拍）。已改完整交换
+     - MCP 综合证据：修复后 0 critical / 4443 LUT (8.35%) / 6545 FF (6.15%)
 
 1. **B5 PUF 真实接入**（W4 核心创新，最高优先）：替换种子直通占位 → challenge_decode + ro_array 真实测量；同时处理 W4 安全项（P1-1 真密钥 / P1-4 PUF / P1-5 终端重放三选一 / 44-bit 熵混合 / CI 超时作业化）
 2. **B6 ML 攻击实验**（W4 交付物，20 分）：实验 A 合成 arbiter 基线 + 实验 B 排序重构攻击（设计见 project_design.md §W4）
