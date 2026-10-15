@@ -7,6 +7,7 @@
     "matplotlib": "3.11.1"
   },
   "seed": 42,
+  "signal_std": 0.7893606383589531,
   "train_sizes": [
     1000,
     5000,
@@ -58,6 +59,12 @@
     }
   },
   "conclusion_A": "文献基线在我们的评估框架中复现成功",
+  "security_declarations": [
+    "✅ 可声明：“抗逻辑回归建模攻击”（对 XOR 合并后的响应）",
+    "❌ 不可声明：“抗机器学习攻击”（排序重构对 RO 结构有效）",
+    "✅ 可声明：“已量化安全边界：有效熵 ≈44 bit，排序重构需 ~120 CRP”",
+    "✅ 可声明（未来工作）：“增加环数至 64+ 可将有效熵提升至 ~296 bit”"
+  ],
   "frozen_floor": 0.95,
   "self_target": 0.99,
   "note": "relative noise alpha*signal_std; train/test share the same device w and the same noise"

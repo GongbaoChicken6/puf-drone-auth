@@ -30,34 +30,34 @@
     0.1
   ],
   "n_trials": 20,
-  "rejection_count": 0,
+  "rejection_count": 1,
   "aggregated": {
     "0.00": {
       "3": {
-        "tau_mean": 0.9766666666666668,
-        "tau_std": 0.0213437474581095,
-        "exact_rate": 0.3,
+        "tau_mean": 0.9725000000000001,
+        "tau_std": 0.023731718109830227,
+        "exact_rate": 0.25,
         "pair_acc_mean": 1.0,
         "cycles_mean": 0.0
       },
       "5": {
-        "tau_mean": 0.9908333333333335,
-        "tau_std": 0.011149240133549721,
-        "exact_rate": 0.55,
+        "tau_mean": 0.9891666666666667,
+        "tau_std": 0.010897247358851695,
+        "exact_rate": 0.45,
         "pair_acc_mean": 1.0,
         "cycles_mean": 0.0
       },
       "8": {
-        "tau_mean": 0.9991666666666668,
-        "tau_std": 0.0036324157862839056,
-        "exact_rate": 0.95,
+        "tau_mean": 0.9974999999999999,
+        "tau_std": 0.00595119035711906,
+        "exact_rate": 0.85,
         "pair_acc_mean": 1.0,
         "cycles_mean": 0.0
       },
       "12": {
-        "tau_mean": 0.9991666666666668,
-        "tau_std": 0.0036324157862839056,
-        "exact_rate": 0.95,
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
         "pair_acc_mean": 1.0,
         "cycles_mean": 0.0
       },
@@ -134,32 +134,32 @@
     },
     "0.02": {
       "3": {
-        "tau_mean": 0.9399999999999998,
-        "tau_std": 0.04841946348777987,
-        "exact_rate": 0.05,
-        "pair_acc_mean": 0.9860938799980392,
-        "cycles_mean": 0.85
+        "tau_mean": 0.9566666666666667,
+        "tau_std": 0.04294699575575043,
+        "exact_rate": 0.2,
+        "pair_acc_mean": 0.9841428082476211,
+        "cycles_mean": 1.7
       },
       "5": {
-        "tau_mean": 0.9758333333333333,
-        "tau_std": 0.023258809561588104,
-        "exact_rate": 0.3,
-        "pair_acc_mean": 0.9906919304082182,
-        "cycles_mean": 0.5
+        "tau_mean": 0.9875000000000002,
+        "tau_std": 0.012774758097296574,
+        "exact_rate": 0.4,
+        "pair_acc_mean": 0.9893744928170983,
+        "cycles_mean": 1.15
       },
       "8": {
-        "tau_mean": 0.99,
-        "tau_std": 0.02068278940998476,
-        "exact_rate": 0.7,
-        "pair_acc_mean": 0.9949614252480654,
-        "cycles_mean": 0.2
+        "tau_mean": 0.9983333333333334,
+        "tau_std": 0.005000000000000016,
+        "exact_rate": 0.9,
+        "pair_acc_mean": 0.9974859943977592,
+        "cycles_mean": 0.25
       },
       "12": {
-        "tau_mean": 0.9974999999999999,
-        "tau_std": 0.007949493345141218,
-        "exact_rate": 0.9,
-        "pair_acc_mean": 0.99875,
-        "cycles_mean": 0.05
+        "tau_mean": 1.0,
+        "tau_std": 0.0,
+        "exact_rate": 1.0,
+        "pair_acc_mean": 0.9983298319327731,
+        "cycles_mean": 0.2
       },
       "20": {
         "tau_mean": 1.0,
@@ -234,37 +234,37 @@
     },
     "0.05": {
       "3": {
-        "tau_mean": 0.9075,
-        "tau_std": 0.061570871540219604,
-        "exact_rate": 0.05,
-        "pair_acc_mean": 0.9659798732245191,
-        "cycles_mean": 2.65
+        "tau_mean": 0.9233333333333332,
+        "tau_std": 0.04870546398734153,
+        "exact_rate": 0.0,
+        "pair_acc_mean": 0.9531175812258283,
+        "cycles_mean": 5.8
       },
       "5": {
-        "tau_mean": 0.9549999999999998,
-        "tau_std": 0.04317277948996205,
-        "exact_rate": 0.25,
-        "pair_acc_mean": 0.9790488927842322,
-        "cycles_mean": 2.0
+        "tau_mean": 0.9758333333333333,
+        "tau_std": 0.01934697794373984,
+        "exact_rate": 0.2,
+        "pair_acc_mean": 0.9728737115450283,
+        "cycles_mean": 3.25
       },
       "8": {
-        "tau_mean": 0.9908333333333333,
-        "tau_std": 0.0153432938662683,
-        "exact_rate": 0.7,
-        "pair_acc_mean": 0.9903287162322556,
-        "cycles_mean": 0.85
+        "tau_mean": 0.9925,
+        "tau_std": 0.009824855102126346,
+        "exact_rate": 0.6,
+        "pair_acc_mean": 0.9856636561621608,
+        "cycles_mean": 1.45
       },
       "12": {
         "tau_mean": 0.9966666666666667,
-        "tau_std": 0.008498365855987981,
-        "exact_rate": 0.85,
-        "pair_acc_mean": 0.9966666666666667,
-        "cycles_mean": 0.2
+        "tau_std": 0.006666666666666688,
+        "exact_rate": 0.8,
+        "pair_acc_mean": 0.9954131652661065,
+        "cycles_mean": 0.35
       },
       "20": {
-        "tau_mean": 1.0,
-        "tau_std": 0.0,
-        "exact_rate": 1.0,
+        "tau_mean": 0.9991666666666668,
+        "tau_std": 0.0036324157862839056,
+        "exact_rate": 0.95,
         "pair_acc_mean": 0.9991666666666668,
         "cycles_mean": 0.05
       },
@@ -334,38 +334,38 @@
     },
     "0.10": {
       "3": {
-        "tau_mean": 0.8291666666666666,
-        "tau_std": 0.07376294613301602,
-        "exact_rate": 0.0,
-        "pair_acc_mean": 0.9198164806082932,
-        "cycles_mean": 8.85
+        "tau_mean": 0.8874999999999998,
+        "tau_std": 0.08008242281827171,
+        "exact_rate": 0.05,
+        "pair_acc_mean": 0.9204503253274989,
+        "cycles_mean": 8.9
       },
       "5": {
-        "tau_mean": 0.9341666666666667,
-        "tau_std": 0.048440972097778735,
-        "exact_rate": 0.05,
-        "pair_acc_mean": 0.9393694088717448,
-        "cycles_mean": 6.2
+        "tau_mean": 0.9583333333333333,
+        "tau_std": 0.03050500869620521,
+        "exact_rate": 0.1,
+        "pair_acc_mean": 0.9423108328798013,
+        "cycles_mean": 7.8
       },
       "8": {
-        "tau_mean": 0.9733333333333334,
-        "tau_std": 0.025495097567963927,
-        "exact_rate": 0.3,
-        "pair_acc_mean": 0.9687941775353452,
-        "cycles_mean": 2.65
+        "tau_mean": 0.9875,
+        "tau_std": 0.020327184862750806,
+        "exact_rate": 0.6,
+        "pair_acc_mean": 0.9701094183870854,
+        "cycles_mean": 3.65
       },
       "12": {
-        "tau_mean": 0.9900000000000002,
-        "tau_std": 0.015275252316519456,
-        "exact_rate": 0.6,
-        "pair_acc_mean": 0.9866561624649861,
-        "cycles_mean": 1.25
-      },
-      "20": {
         "tau_mean": 0.9983333333333334,
         "tau_std": 0.005000000000000016,
         "exact_rate": 0.9,
-        "pair_acc_mean": 0.9970833333333333,
+        "pair_acc_mean": 0.986642156862745,
+        "cycles_mean": 1.6
+      },
+      "20": {
+        "tau_mean": 0.9991666666666668,
+        "tau_std": 0.0036324157862839056,
+        "exact_rate": 0.95,
+        "pair_acc_mean": 0.9979166666666668,
         "cycles_mean": 0.2
       },
       "30": {
@@ -434,7 +434,19 @@
     }
   },
   "conclusion_B": "CRP 空间坍缩至 ~2×10^6 种配对构型，排序重构攻击在 ~120 次观测内可恢复完整排序——这是我们设计的已知边界，在报告中如实讨论",
+  "security_declarations": [
+    "✅ 可声明：“抗逻辑回归建模攻击”（对 XOR 合并后的响应）",
+    "❌ 不可声明：“抗机器学习攻击”（排序重构对 RO 结构有效）",
+    "✅ 可声明：“已量化安全边界：有效熵 ≈44 bit，排序重构需 ~120 CRP”",
+    "✅ 可声明（未来工作）：“增加环数至 64+ 可将有效熵提升至 ~296 bit”"
+  ],
   "f2_footnote": "16! = 2.09e13 ~= 2^44; the frozen text 2x10^6 appears to be a typo for 2x10^13 (flagged for W6 adjudication)",
   "note_iid": "per-bit iid flip is the attacker-favorable assumption; real ring jitter is cross-pair correlated and degrades majority voting faster",
-  "note_votes": "vote count per pair min/med/max = 19/48/419 at N=120 (non-uniform; error rate set by min=19 votes)"
+  "note_votes": "computed at runtime from actual data",
+  "vote_stats_N120": {
+    "n_pairs": 120,
+    "min": 42,
+    "median": 64,
+    "max": 84
+  }
 }

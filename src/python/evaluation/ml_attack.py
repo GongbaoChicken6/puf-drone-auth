@@ -46,6 +46,14 @@ from src.python.evaluation.puf_model import (
 # ------------------------------------------------------------------
 
 CONCLUSION_A = "\u6587\u732e\u57fa\u7ebf\u5728\u6211\u4eec\u7684\u8bc4\u4f30\u6846\u67b6\u4e2d\u590d\u73b0\u6210\u529f"
+
+# Security declaration (frozen, project_design.md L399-402, four items verbatim)
+SECURITY_DECLARATIONS = [
+    "\u2705 \u53ef\u58f0\u660e\uff1a\u201c\u6297\u903b\u8f91\u56de\u5f52\u5efa\u6a21\u653b\u51fb\u201d\uff08\u5bf9 XOR \u5408\u5e76\u540e\u7684\u54cd\u5e94\uff09",
+    "\u274c \u4e0d\u53ef\u58f0\u660e\uff1a\u201c\u6297\u673a\u5668\u5b66\u4e60\u653b\u51fb\u201d\uff08\u6392\u5e8f\u91cd\u6784\u5bf9 RO \u7ed3\u6784\u6709\u6548\uff09",
+    "\u2705 \u53ef\u58f0\u660e\uff1a\u201c\u5df2\u91cf\u5316\u5b89\u5168\u8fb9\u754c\uff1a\u6709\u6548\u71b5 \u224844 bit\uff0c\u6392\u5e8f\u91cd\u6784\u9700 ~120 CRP\u201d",
+    "\u2705 \u53ef\u58f0\u660e\uff08\u672a\u6765\u5de5\u4f5c\uff09\uff1a\u201c\u589e\u52a0\u73af\u6570\u81f3 64+ \u53ef\u5c06\u6709\u6548\u71b5\u63d0\u5347\u81f3 ~296 bit\u201d",
+]
 CONCLUSION_B = (
     "CRP \u7a7a\u95f4\u574D\u7f29\u81f3 ~2\u00d710^6 \u79cd\u914d\u5bf9\u6784\u578b\uff0c"
     "\u6392\u5e8f\u91cd\u6784\u653b\u51fb\u5728 ~120 \u6b21\u89c2\u6d4b\u5185"
@@ -57,6 +65,21 @@ F2_FOOTNOTE = (
     "16! = 2.09e13 ~= 2^44; the frozen text 2x10^6 appears to be a "
     "typo for 2x10^13 (flagged for W6 adjudication)"
 )
+
+def _compute_vote_stats(seeds, responses, target_n=120):
+    """B-P2-3 fix: compute vote stats from actual data instead of hardcoding."""
+    obs = extract_unordered_observations(seeds[:target_n], responses[:target_n])
+    counts = sorted(len(v) for v in obs.values())
+    if not counts:
+        return None
+    n = len(counts)
+    return {
+        "n_pairs": n,
+        "min": counts[0],
+        "median": counts[n // 2],
+        "max": counts[-1],
+    }
+
 
 def _versions() -> dict:
     return {
@@ -151,12 +174,14 @@ def run_exp_a(out_dir: Path, seed: int = 42) -> dict:
         "repro_command": f"python -m src.python.evaluation.ml_attack --exp A --out {out_dir} --seed {seed}",
         "versions": _versions(),
         "seed": seed,
+        "signal_std": signal_std,
         "train_sizes": train_sizes,
         "noise_rel": alphas,
         "n_test": n_test,
         "bayes_acc": {f"{a:.2f}": _bayes_acc(a) for a in alphas},
         "accuracy": acc,
         "conclusion_A": CONCLUSION_A,
+        "security_declarations": SECURITY_DECLARATIONS,
         "frozen_floor": 0.95,
         "self_target": 0.99,
         "note": "relative noise alpha*signal_std; train/test share the same device w and the same noise",
@@ -176,14 +201,20 @@ def gen_distinct_freq_puf(rng, flip_prob: float = 0.0) -> tuple[ROPairingPUF, in
     device's ground-truth ordering is undefined (exact-match would be
     permanently 0 for ~0.9% of devices).
     """
+    import random as _r
     rejections = 0
+    _dev_rng = _r.Random(int(rng.integers(0, 2**31)))
     while True:
-        import random as _r
-        freqs = _r.Random(int(rng.integers(0, 2**31))).sample(
-            range(3100, 9601), N_RINGS)
+        # P3-1 fix: randint with real rejection (sample() is without-replacement
+        # making the old rejection branch dead code; randint matches the
+        # 1.75% birthday collision the TECH review measured)
+        freqs = [_dev_rng.randint(3100, 9600) for _ in range(N_RINGS)]
         if len(set(freqs)) == N_RINGS:
+            # P1-2 fix: seeded noise RNG derived from the numpy rng --
+            # SystemRandom() is non-deterministic, breaking --seed reproducibility
+            noise_rng = _r.Random(int(rng.integers(0, 2**31)))
             return ROPairingPUF(freqs=freqs, flip_prob=flip_prob,
-                             rng=_r.SystemRandom()), rejections
+                             rng=noise_rng), rejections
         rejections += 1
 
 
@@ -289,7 +320,12 @@ def topo_sort_with_cycle_break(votes: dict):
                         return
             path.pop()
             visited_on_path.discard(u)
-        find_cycle(0, [], set())
+        # P2-1 fix: try ALL roots, not just node 0 (a cycle unreachable from 0
+        # would be silently missed, falling through to Copeland with cycles=0)
+        for _start in range(N_RINGS):
+            if cycle:
+                break
+            find_cycle(_start, [], set())
         if not cycle:
             break
         # Delete the weakest edge in the cycle
@@ -411,9 +447,11 @@ def run_exp_b(out_dir: Path, seed: int = 42) -> dict:
         "rejection_count": total_rejections,
         "aggregated": agg,
         "conclusion_B": CONCLUSION_B,
+        "security_declarations": SECURITY_DECLARATIONS,
         "f2_footnote": F2_FOOTNOTE,
         "note_iid": "per-bit iid flip is the attacker-favorable assumption; real ring jitter is cross-pair correlated and degrades majority voting faster",
-        "note_votes": "vote count per pair min/med/max = 19/48/419 at N=120 (non-uniform; error rate set by min=19 votes)",
+        "note_votes": "computed at runtime from actual data",
+        "vote_stats_N120": _compute_vote_stats(seeds, responses) if n_max >= 120 else None,
     }
     _save_json(out_dir / "exp_b_results.json", result)
     print(f"  -> {out_dir}/exp_b_results.json + exp_b_reconstruction.png")

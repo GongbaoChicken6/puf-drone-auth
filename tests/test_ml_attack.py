@@ -85,23 +85,32 @@ class TestTopoSort(unittest.TestCase):
         self.assertEqual(cyc, 0)
 
     def test_cycle_break(self) -> None:
-        """A 3-cycle must be broken and still produce a valid ordering."""
+        """A 3-cycle (0>1>2>0) must be detected, broken, and produce a valid
+        ordering with cycle_breaks >= 1 (P2-2 fix: real assertions)."""
         votes = {}
-        # 0>1, 1>2, 2>0 forms a cycle; strength varies
-        votes[(0, 1)] = (0, 8, 2)
-        votes[(1, 2)] = (1, 6, 4)
-        votes[(2, 0)] = (0, 5, 5)  # weak: 2 beats 0 narrowly -> this is the weak edge
-        # ... wait, key is (min,max)=(0,2), winner stored
-        # redo: (0,2) with winner=2, c0=5, c1=5
-        votes[(0, 2)] = (2, 5, 5)  # tie -> lower index wins in vote, but we force 2
-        # Fill remaining pairs to make it a complete tournament
-        for lo in range(3):
-            for hi in range(lo + 1, 3):
+        # Construct a 3-cycle among rings 0,1,2 with known strengths:
+        #   0 beats 1 (8-2), 1 beats 2 (6-4), 2 beats 0 (5-5 tie -> weak)
+        # The weakest edge (2>0, strength 0) should be deleted.
+        votes[(0, 1)] = (0, 8, 2)  # 0 beats 1, strong
+        votes[(1, 2)] = (1, 6, 4)  # 1 beats 2, medium
+        votes[(0, 2)] = (2, 5, 5)  # 2 beats 0, weakest (tie)
+        # Fill remaining pairs (3..15): linear order 3>4>...>15, and
+        # 0,1,2 each beat 3..15
+        for lo in range(N_RINGS):
+            for hi in range(lo + 1, N_RINGS):
                 if (lo, hi) not in votes:
-                    votes[(lo, hi)] = (lo, 10, 0)
+                    if lo < 3:
+                        votes[(lo, hi)] = (lo, 10, 0)  # 0/1/2 beat all higher
+                    else:
+                        votes[(lo, hi)] = (lo, 10, 0)  # linear among 3..15
         rec, cyc = topo_sort_with_cycle_break(votes)
-        self.assertEqual(len(rec), N_RINGS)
-        self.assertGreaterEqual(cyc, 0)  # may or may not need breaking depending on impl
+        # After breaking the weakest edge (2>0), order should be 0>1>2>3>...>15
+        self.assertEqual(rec[:3], [0, 1, 2],
+                         f'first 3 should be [0,1,2] after cycle break, got {rec[:3]}')
+        self.assertEqual(rec, list(range(N_RINGS)),
+                         f'full ordering should be linear, got {rec}')
+        self.assertGreaterEqual(cyc, 1,
+                                f'at least 1 cycle break needed, got {cyc}')
 
 
 class TestKendallTau(unittest.TestCase):
