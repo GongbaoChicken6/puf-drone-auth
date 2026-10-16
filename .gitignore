@@ -80,3 +80,11 @@ data/device_keys/
 
 # Vivado workspace (repo-internal; artifacts never committed)
 build/vivado/
+
+# Frontend session (managed separately)
+web/
+docs/FRONTEND_HANDOFF.md
+
+# Vivado MCP session state
+build/vivado_mcp/.vivado-ai/
+build/vivado_mcp/mcp_cmd.json
