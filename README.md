@@ -24,6 +24,7 @@ This project implements a complete PUF-based drone authentication system:
 | report/ | Competition report (D13) |
 | skill/ | Reusable skill scripts (D14) |
 | external/ | Third-party references (MAVLink C library, PUF projects) |
+| metrics/ | Competition metrics tables |
 
 ## Quick Start
 
@@ -50,6 +51,10 @@ python -m src.python.server.main
 | Effective entropy | ~44 bits (16-ring total ordering) |
 | ML attack (LR baseline) | 99.9% accuracy at alpha=0 |
 | ML attack (ranking recon) | 100% exact at 120 CRPs (flip=0.02) |
+
+## Documentation
+
+See [docs/DIRECTORY_STRUCTURE.md](docs/DIRECTORY_STRUCTURE.md) for the complete directory mapping to competition requirements.
 
 ## License
 
