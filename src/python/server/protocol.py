@@ -542,6 +542,13 @@ class HFIDAProtocol:
                 )
             session.extra_seeds = list(extra)
             session.state = "GRAY"
+            # INTEG-F1 fix: gray-zone extras must join the staging pool too --
+            # previously only the initial 4 were staged, so a gray-zone
+            # REJECT permanently burned 3 extra seeds (net pool loss per
+            # failed gray-zone auth = 7 not 4, violating the T4 invariant
+            # "failed auth must not burn the challenge permanently").
+            self._staged[tid] = self._staged.get(tid, []) + list(extra)
+            self._staged_at[tid] = time.monotonic()
             return self.pack(self.MSG_EXTRA_CHALLENGE, seeds=extra)
 
     def on_extra_response(

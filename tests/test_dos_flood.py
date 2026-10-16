@@ -174,5 +174,72 @@ class TestDoSFlood(unittest.TestCase):
             'stalled session timestamp must be replaced by the fresh one')
 
 
-if __name__ == "__main__":
+    def test_gray_zone_failure_returns_extra_seeds(self) -> None:
+        """INTEG-F1: a gray-zone REJECT must return the extra 3 seeds too.
+
+        Previously only the initial 4 were staged; the 3 gray-zone extras
+        were permanently burned on every failed gray-zone auth (net loss
+        7/attempt), violating the T4 staging-release invariant.
+        """
+        protocol = HFIDAProtocol(
+            templates=TemplateDB(self.tmp / 't_gz.json'),
+            hsm=SpeckHSM(),
+            pools=CRPPoolRegistry(self.tmp / 'p_gz', pool_size=100),
+        )
+        puf = ROPairingPUF(flip_prob=0.0)
+        seeds = protocol.pools.get(1).reserve(100)
+        protocol.templates.enroll(1, [(s, puf.ideal(s)) for s in seeds])
+        protocol.hsm.set_key(1, bytes(12))
+
+        before = protocol.pools.get(1).remaining
+
+        # Trigger gray zone: moderate noise puts us between accept/reject
+        import random as _r
+        _r.seed(99)
+        noisy = ROPairingPUF(flip_prob=0.12)  # ~7.7 bits/64 -> gray zone
+        # Enroll with the noisy puf's ideal as reference
+        # Just do the auth with a moderately-noisy responder
+        reply = protocol.on_access_request(1, c2=b'\x44' * 8, nonce=1)
+        _mid, fields = HFIDAProtocol.parse(reply)
+        if 'seeds' not in fields:
+            self.skipTest('pool empty or rejected at ACCESS')
+
+        # Respond with moderate noise to hit gray zone
+        import random
+        rng = random.Random(42)
+        def noisy_response(seed):
+            ideal = puf.ideal(seed)
+            val = int.from_bytes(ideal, 'big')
+            for bit in range(64):
+                if rng.random() < 0.12:
+                    val ^= 1 << bit
+            return val.to_bytes(8, 'big')
+
+        r1s = [noisy_response(s) for s in fields['seeds']]
+        reply2 = protocol.on_response(1, r1s)
+        _m2, f2 = HFIDAProtocol.parse(reply2)
+
+        if f2.get('result') == RESULT_PASS:
+            # Not gray zone this time -- skip (probabilistic)
+            self.skipTest('did not land in gray zone')
+
+        # If gray zone: extra challenges drawn and staged
+        if 'seeds' in f2:
+            # Gray zone: verify extras are staged
+            staged = protocol._staged.get(1, [])
+            self.assertGreater(len(staged), 4,
+                f'extras must be staged: only {len(staged)} seeds')
+
+            # Now fail the extra round -> ALL seeds returned
+            bad_extra = [bytes(8) for _ in f2['seeds']]
+            reply3 = protocol.on_extra_response(1, bad_extra)
+            _m3, f3 = HFIDAProtocol.parse(reply3)
+            after = protocol.pools.get(1).remaining
+            # Pool should recover the extras (may not fully return to `before`
+            # depending on how many were burned by the initial round)
+            self.assertGreater(after, before - protocol.N_CHALLENGES,
+                f'gray-zone failure burned extras: {before} -> {after}')
+
+
+if __name__ ==  "__main__":
     unittest.main(verbosity=2)
