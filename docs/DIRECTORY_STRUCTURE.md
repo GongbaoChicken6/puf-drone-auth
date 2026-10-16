@@ -136,6 +136,26 @@ board/
 └── radio/README.md             # 433MHz radio module
 ```
 
+### `build/reports/` — Synthesis Evidence (W1-W3)
+Historical synthesis/timing reports (6 .rpt/.txt files from early feasibility runs).
+
+### `build/ps1/` — PowerShell Build Helpers
+Quick-build scripts for W2/W3 xvlog/xsim runs (6 scripts, superseded by ci_regression.ps1).
+
+### `sim/results/` — Simulation Verification Scripts
+Protocol checker + Speck test-vector verifier (2 Python scripts).
+
+### `sim/scripts/` — Simulation Helper Scripts (placeholder)
+
+### `data/bitstreams/` — Pre-generated Bitstreams
+W1 RO ratio bitstreams (2 .bit files, gitignored except these two).
+
+### `data/templates/` — CRP Template Data (placeholder, populated at enrollment)
+
+### `data/w1_readings/` — W1 Board Readings (placeholder, populated in P6)
+
+### `src/constraints/` — Additional Constraints Documentation
+
 ### `external/` — Third-Party References
 ```
 external/
