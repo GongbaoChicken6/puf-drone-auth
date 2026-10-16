@@ -177,7 +177,7 @@ footer{text-align:center;color:var(--dim);font-size:12px;margin-top:64px;padding
       <div class="track"><div class="fill" style="width:85%;background:var(--blue,#4da3ff)"></div></div>
       <div class="dot" style="background:var(--blue,#4da3ff)"></div>
       <h4 style="color:var(--blue,#4da3ff)">W4 · 实验周</h4>
-      <div class="desc">B5a PUF 管线(16TB) + 安全包(T1-T6) + 威胁PoC + DoS 暂存释放<br>M1 提前 4 天；剩 ML 实验(P5) + 板上(P6)</div>
+      <div class="desc">B5a PUF 管线(16TB) + 安全包(T1-T6) + 威胁PoC + DoS 暂存释放<br>M1/M2/M3 全部达成(10-15)；剩 ML 实验(P5) + 板上(P6)</div>
       <div class="stat" style="background:#0a2540;color:var(--blue,#4da3ff)">🚀 85%</div>
     </div>
     <div class="tstep">
@@ -185,14 +185,14 @@ footer{text-align:center;color:var(--dim);font-size:12px;margin-top:64px;padding
       <div class="dot" style="background:var(--border)"></div>
       <h4 style="color:var(--muted)">W5 · 冻结周</h4>
       <div class="desc">全量指标 + 报告初稿</div>
-      <div class="stat" style="background:var(--bg3);color:var(--dim)">待开始</div>
+      <div class="stat" style="background:var(--bg3);color:var(--dim)">P0-P5 完成</div>
     </div>
     <div class="tstep">
       <div class="track"><div class="fill" style="width:0%"></div></div>
       <div class="dot" style="background:var(--border)"></div>
       <h4 style="color:var(--muted)">W6 · 交付周</h4>
       <div class="desc">终稿 + 视频 + 提交</div>
-      <div class="stat" style="background:var(--bg3);color:var(--dim)">待开始</div>
+      <div class="stat" style="background:var(--bg3);color:var(--dim)">P0-P5 完成</div>
     </div>
   </div>
 </section>
@@ -221,7 +221,7 @@ footer{text-align:center;color:var(--dim);font-size:12px;margin-top:64px;padding
     </div>
     <div class="mod done">
       <div class="head"><span class="ico">🖥️</span><h3>认证服务器</h3><span class="badge done">完成</span></div>
-      <p>protocol + crp_pool + template_db + threshold + hsm + main + serial_server + enroll，93 单测 + 契约同步 S4/S8/S9 + threat_poc + DoS 暂存释放</p>
+      <p>protocol + crp_pool + template_db + threshold + hsm + main + serial_server + enroll，109 单测 + 契约同步 S4/S8/S9 + threat_poc + DoS 暂存释放</p>
       <div class="bar"><div class="fill" style="width:100%;background:var(--green)"></div></div>
       <div class="files"><b>7</b> 文件 · <b>2,030</b> 行</div>
     </div>
@@ -270,7 +270,7 @@ footer{text-align:center;color:var(--dim);font-size:12px;margin-top:64px;padding
     <div class="lang">
       <div class="head"><h4>Python (Server + Eval)</h4><span class="lines">~4,400</span></div>
       <ul>
-        <li><b>protocol.py</b> — HF-IDA + 防重放 + DoS 限速 + 暂存释放 <span class="ok">✅ 93 单测</span></li>
+        <li><b>protocol.py</b> — HF-IDA + 防重放 + DoS 限速 + 暂存释放 <span class="ok">✅ 109 单测</span></li>
         <li><b>hsm.py</b> — SpeckHSM + DeviceKeyStore <span class="ok">✅ 黄金向量</span></li>
         <li><b>speck.py (common)</b> — 密码参考实现 <span class="ok">✅ NSA KAT</span></li>
         <li><b>crp_pool.py</b> — 线程安全池 <span class="ok">✅ 64-thread test</span></li>
@@ -320,7 +320,7 @@ footer{text-align:center;color:var(--dim);font-size:12px;margin-top:64px;padding
   <div class="next">
     <div class="nx"><div class="n">1</div><div class="txt"><h4>W4-P5 · ML 攻击实验</h4><p>合成 arbiter 基线 + RO 排序重构攻击（纯 Python，M3 判据）</p><span class="need free">无需板子</span></div></div>
     <div class="nx"><div class="n">2</div><div class="txt"><h4>W4-P6 · 板上实验</h4><p>温度/唯一性/多终端/无线（DS13 电源修复后）</p><span class="need board">需板子</span></div></div>
-    <div class="nx"><div class="n">3</div><div class="txt"><h4>W4-P7 · W5 前置</h4><p>D13 报告骨架 + D14 Skill 打包（利用 M1 提前 4 天的松弛）</p><span class="need free">无需板子</span></div></div>
+    <div class="nx"><div class="n">3</div><div class="txt"><h4>W4-P7 · W5 前置</h4><p>D13 报告骨架 + D14 Skill 打包（利用 M1/M2/M3 全部达成(10-15)的松弛）</p><span class="need free">无需板子</span></div></div>
     <div class="nx"><div class="n">4</div><div class="txt"><h4>0x0096 KEY_SEED 注册通道</h4><p>T1 板上启用的前置（站端 K 下发主案 + K_boot 稳定性）</p><span class="need free">设计可先行</span></div></div>
   </div>
 </section>
@@ -338,7 +338,7 @@ footer{text-align:center;color:var(--dim);font-size:12px;margin-top:64px;padding
 
 <footer>
   PUF Drone Auth · 2026-10-15 · W4 实验周 95%（P0-P5 完成，P6 待板卡）<br>
-  116 commits · 204 files · 220+ review findings closed · CI 16 TB + 109 单测全绿
+  118 commits · 204 files · 220+ review findings closed · CI 16 TB + 109 单测全绿
 </footer>
 </div>
 </body>
