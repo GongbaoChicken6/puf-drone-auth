@@ -4,7 +4,7 @@
 
 | 发现 | 修复 |
 |---|---|
-| P0-1 fold 三侧矛盾 | 冻结单一构造（§1.1），双侧字节序对齐 NSA 小端 wire-byte |
+| P0-1 fold 三侧矛盾 | 冻结单一构造：key12 = K_boot + K_boot[:4] 拼接（非折叠），pt1/pt2 见 §1.1 权威定义 |
 | P0-2 sp_key mux 毁黄金 | mux 不动；新增 ENABLE_KEY_DERIVE 参数（默认 0=旧行为） |
 | P0-3 ro_entropy 到不了 c2_counter | c2_counter 加同步装载（seed_load 脉冲门控） |
 | P1-1 KDF 偏离设计书 | 对齐 §5v2 降级路径：key=fold(K_boot⊕MASK), pt=fold(key_seed) |
