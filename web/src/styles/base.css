@@ -1,0 +1,107 @@
+/* ============================================================
+ * 基础样式 —— 卡片/徽章/按钮/滚动条等通用件(报告 §4.3 组件模式)
+ * 动效约束:仅 transform/opacity;prefers-reduced-motion 全关
+ * R1 升级(登记 §5 D13):color-scheme、负字距、焦点环、面板顶部微光
+ * ============================================================ */
+*,*::before,*::after{ box-sizing:border-box; }
+/* 深色表单控件(下拉/滚动条)走 UA 深色渲染,select 弹出的选项列表
+ * 不再是白底 —— color-scheme 必须在 :root 上,而不是 body 上。 */
+:root{ color-scheme:dark; }
+html,body{ margin:0; padding:0; }
+body{
+  background:var(--bg); color:var(--text);
+  font-family:var(--font); font-size:var(--fs-base); line-height:1.55;
+  min-height:100vh; -webkit-font-smoothing:antialiased;
+}
+a{ color:var(--cyan); text-decoration:none; }
+a:hover{ text-decoration:underline; }
+/* 大标题负字距:暗底大字号下正字距会显得松散(Linear 实践) */
+h1,h2,h3,h4{ margin:0; font-weight:600; letter-spacing:-.012em; }
+button{ font-family:inherit; }
+
+/* 键盘焦点环(2026-10 前缺失 —— 键盘走查时焦点不可见)。
+ * 只用 :focus-visible:鼠标点击不出现,Tab 走查才亮。outline 不会被
+ * 元素自身的 box-shadow 覆盖(选中卡片/弹层都带 shadow)。 */
+:focus-visible{ outline:2px solid var(--focus-ring); outline-offset:1px; }
+
+/* hidden 属性必须压得住组件自己的 display —— 作者样式无条件胜过 UA 样式,
+ * 于是 .chip{display:inline-flex} 会让 <span class="chip" hidden> 照样显示。
+ * 这正是右栏「黄金 R2」角标的实际翻车方式:该藏的时候没藏,反过来给了一个
+ * 假的通过态。凡本模块用 el.hidden 控制的元素都依赖这条兜底。 */
+[hidden]{ display:none !important; }
+
+/* ---------- 卡片(顶部 3px 状态条可选) ---------- */
+.card{
+  position:relative; background:var(--bg2);
+  border:1px solid var(--border); border-radius:var(--radius);
+  overflow:hidden;
+  /* 抬升面板顶部一道微光:暗色下分层靠表面提亮而非投影;
+   * 有 3px 状态条的卡会被 ::before 盖住顶缘,纯卡受益 */
+  box-shadow:inset 0 1px 0 var(--edge-hi);
+}
+.card.done::before,.card.active::before,.card.wait::before{
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+}
+.card.done::before{ background:var(--green); }
+.card.active::before{ background:var(--cyan); }
+.card.wait::before{ background:var(--dim); }
+/* R7:入口卡的悬停上浮(index.html 导航卡)。transform-only,合规 */
+.card.hoverlift{ transition:transform .15s ease; }
+.card.hoverlift:hover{ transform:translateY(-2px); border-color:var(--border2); }
+
+/* ---------- 徽章/chip ---------- */
+.chip{
+  display:inline-flex; align-items:center; gap:4px;
+  padding:2px 8px; border-radius:999px;
+  font-size:var(--fs-sm); font-weight:600; letter-spacing:.3px;
+  border:1px solid var(--border2); color:var(--muted);
+  background:var(--bg3); white-space:nowrap;
+}
+.chip.green{ color:var(--green); border-color:var(--green); background:var(--green-bg); }
+.chip.cyan{ color:var(--cyan); border-color:var(--cyan); background:var(--cyan-bg); }
+.chip.amber{ color:var(--amber); border-color:var(--amber); background:var(--amber-bg); }
+.chip.red{ color:var(--red); border-color:var(--red); background:var(--red-bg); }
+.chip.purple{ color:var(--purple); border-color:var(--purple); background:var(--purple-bg); }
+.chip.mock{ color:var(--amber); border-color:var(--amber); border-style:dashed; background:transparent; }
+.chip .dot{ width:6px; height:6px; border-radius:50%; background:currentColor; }
+
+/* ---------- 按钮 ---------- */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  padding:6px 14px; border-radius:var(--radius-sm); cursor:pointer;
+  border:1px solid var(--border2); background:var(--bg3); color:var(--text);
+  font-size:var(--fs-md); font-weight:600;
+  /* R5 收窄为 transform/opacity:原先把 border-color 与 color 也放进过渡,
+   * 而报告 §4.3 的动效约束是「仅 transform/opacity」。变色是状态反馈、不是
+   * 动画,去掉过渡只是让它**立刻**生效,反馈一点没少;留下的 .1s 是按下
+   * 缩放的形变。§4.3 立这条是为了 60fps 录屏,那就按字面守住。 */
+  transition:opacity .15s,transform .1s;
+}
+.btn:hover{ border-color:var(--cyan); color:var(--cyan); }
+.btn:active{ transform:scale(.97); }
+.btn:disabled{ opacity:.4; cursor:not-allowed; }
+.btn.primary{ border-color:var(--cyan); color:var(--cyan); background:var(--cyan-bg); }
+.btn.green{ border-color:var(--green); color:var(--green); background:var(--green-bg); }
+.btn.red{ border-color:var(--red); color:var(--red); background:var(--red-bg); }
+.btn.amber{ border-color:var(--amber); color:var(--amber); background:var(--amber-bg); }
+.btn.ghost{ background:transparent; }
+
+/* ---------- 等宽(hex/帧数据) ---------- */
+.mono{ font-family:'Cascadia Code',Consolas,'Courier New',monospace; }
+
+/* ---------- 滚动条 ---------- */
+::-webkit-scrollbar{ width:8px; height:8px; }
+::-webkit-scrollbar-track{ background:transparent; }
+::-webkit-scrollbar-thumb{ background:var(--border2); border-radius:4px; }
+::-webkit-scrollbar-thumb:hover{ background:var(--muted); }
+
+/* ---------- 通用动画(PASS 呼吸脉冲/REJECT 抖动由组件挂类) ---------- */
+@keyframes pulse-glow{ 0%,100%{ opacity:1; } 50%{ opacity:.55; } }
+@keyframes shake-x{ 0%,100%{ transform:translateX(0); } 20%{ transform:translateX(-6px); } 40%{ transform:translateX(5px); } 60%{ transform:translateX(-3px); } 80%{ transform:translateX(2px); } }
+.pulse{ animation:pulse-glow 1.6s ease-in-out infinite; }
+.shake{ animation:shake-x .45s ease-in-out 1; }
+
+/* ---------- 动效豁免(报告 §4.3) ---------- */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{ animation:none !important; transition:none !important; }
+}

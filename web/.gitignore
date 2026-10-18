@@ -1,0 +1,18 @@
+# 依赖与本地沙箱不入库;dist 构建产物入库(离线交付链,见报告 §3/§12)
+node_modules/
+.dev-data/
+
+# 探针页由 .dev-data/mkp_r5.py 生成到 dist/ 才好在桥上跑,
+# 但它**不是产物**:交付/提交前须删掉(见 README §2「构建」末条)。
+# 这条规则只挡 git,挡不住目录拷贝 —— 所以删除是必须的,忽略只是保险。
+dist/_probe_*.html
+
+# 桥接层运行痕迹(bridge/ 下直接跑过 python 就会有)
+__pycache__/
+*.py[cod]
+
+# 系统杂项
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.tmp

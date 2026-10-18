@@ -1,0 +1,260 @@
+/* ============================================================
+ * viz.html 样式 —— 报告 §7 数据可视化页
+ *
+ * 与 console.css 的分工:console 是五区定高栅格(演示时不允许滚动),
+ * viz 是**长文档式**滚动页(图表要能放大看、要能导出),故这里不用栅格定高,
+ * 只有 max-width 与两栏自适应。
+ *
+ * 所有 SVG 图元样式集中在本文件下半部分(.pl-*)。它们必须写在 CSS 里而不是
+ * 内联属性:导出 SVG 时 export.ts 会把 getComputedStyle 的结果内联进克隆体,
+ * 因此「页内所见」与「导出所得」由同一份规则决定,不会两处漂移。
+ * ============================================================ */
+
+.viz-page{
+  max-width:1680px; margin:0 auto; padding:18px 22px 48px;
+  display:flex; flex-direction:column; gap:16px;
+}
+
+/* ---------- 页头 ---------- */
+.viz-head{
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:12px 16px; background:var(--bg2);
+  border:1px solid var(--border); border-radius:var(--radius);
+}
+.vh-title{ font-size:17px; font-weight:600; letter-spacing:.3px; }
+.vh-sub{ font-size:var(--fs-md); color:var(--muted); }
+.vh-spacer{ flex:1 1 auto; }
+.vh-group{ display:flex; align-items:center; gap:8px; }
+.vh-label{ font-size:var(--fs-sm); color:var(--muted); }
+
+/* 数据源三态选择器(§7.2):运行实测 / 导入文件 / 内置样例 MOCK */
+.src-seg{ display:flex; border:1px solid var(--border2); border-radius:8px; overflow:hidden; }
+.src-seg button{
+  background:transparent; border:0; color:var(--muted);
+  font:inherit; font-size:var(--fs-md); padding:6px 12px; cursor:pointer;
+  border-right:1px solid var(--border2);
+}
+.src-seg button:last-child{ border-right:0; }
+.src-seg button:hover{ color:var(--text); background:var(--bg3); }
+.src-seg button.on{ color:var(--cyan); background:var(--cyan-bg); font-weight:600; }
+.src-seg button[data-src="sample"].on{ color:var(--amber); background:var(--amber-bg); }
+
+.viz-status{
+  font-size:var(--fs-md); padding:6px 10px; border-radius:6px; color:var(--muted);
+  background:var(--bg3); border:1px solid var(--border);
+}
+.viz-status.err{ color:var(--red); border-color:var(--red); background:var(--red-bg); }
+.viz-status.ok{ color:var(--green); border-color:var(--green); background:var(--green-bg); }
+
+/* ---------- 指标卡 ---------- */
+.viz-metrics{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.metric{ padding:12px 14px; }
+.m-head{ display:flex; align-items:center; gap:8px; }
+.m-label{ font-size:var(--fs-md); color:var(--muted); flex:1 1 auto; }
+.m-prov-btn{
+  background:transparent; border:1px solid var(--border2); border-radius:6px;
+  color:var(--muted); font:inherit; font-size:var(--fs-xs); padding:2px 7px; cursor:pointer;
+}
+.m-prov-btn:hover{ color:var(--cyan); border-color:var(--cyan); }
+.m-value{ font-size:26px; font-weight:600; color:var(--text); margin-top:6px; line-height:1.1; }
+.m-value .m-unit{ font-size:var(--fs-md); color:var(--muted); margin-left:6px; font-weight:400; }
+.m-sub{ font-size:var(--fs-sm); color:var(--muted); margin-top:4px; }
+.m-prov{
+  margin-top:10px; padding-top:10px; border-top:1px dashed var(--border2);
+  display:flex; flex-direction:column; gap:6px;
+}
+.mp-row{ display:grid; grid-template-columns:62px 1fr; gap:8px; font-size:var(--fs-sm); }
+/* 溯源面板是 §9 的落点:每个数字的来源字段都要能读。键名从 dim 提到 muted,
+ * 值名从 muted 提到 text —— 这十来个字就是「这个数字凭什么可信」的全部答案。 */
+.mp-k{ color:var(--muted); }
+.mp-v{ color:var(--text); word-break:break-word; }
+.mp-caveat .mp-v{ color:var(--amber); }
+
+/* ---------- 阈值控制条 ---------- */
+.viz-tau{
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:10px 16px; background:var(--bg2);
+  border:1px solid var(--border); border-radius:var(--radius);
+}
+.vt-title{ font-size:var(--fs-md); font-weight:600; }
+.vt-range{ flex:1 1 320px; display:flex; align-items:center; gap:10px; min-width:280px; }
+.vt-range input[type=range]{ flex:1 1 auto; accent-color:var(--cyan); }
+.vt-val{ font-size:var(--fs-md); color:var(--cyan); min-width:74px; }
+.vt-note{ font-size:var(--fs-sm); color:var(--muted); flex:2 1 380px; line-height:1.5; }
+.vt-note b{ color:var(--text); font-weight:600; }
+.vt-quick{ display:flex; gap:6px; }
+
+/* ---------- 图卡 ---------- */
+.viz-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.viz-grid .wide{ grid-column:1 / -1; }
+.viz-fig{ padding:12px 14px 14px; display:flex; flex-direction:column; }
+/* 悬停提亮边框是状态反馈,不做过渡:报告 §4.3 的动效约束是「仅 transform/
+ * opacity」,而 border-color 是绘制属性。R4 初版给过 .16s 过渡,R5 按字面收回。 */
+.viz-fig:hover{ border-color:var(--border2); }
+.fig-head{ display:flex; align-items:center; gap:8px; }
+.fig-title{
+  font-size:var(--fs-base); font-weight:600; margin:0;
+  letter-spacing:.02em;
+}
+.fig-grade{ cursor:help; }
+/* IMPORTED 徽章:base.css 的 .chip 变体只到 purple,导入态用蓝以示与
+ * REAL-LIVE(青)/REAL-STATIC(紫)/MOCK(琥珀虚线)四者可一眼区分 */
+.chip.blue{ color:var(--blue); border-color:var(--blue); background:var(--blue-bg); }
+/* MODEL 徽章(B2):琥珀实线 —— 与 MOCK 虚线同色系但可区分(实线=有推演数据,虚线=占位) */
+.chip.amber{ color:var(--amber); border-color:var(--amber); background:var(--amber-bg); }
+/* B1/B2 图表基元:折线/数据点(V6/V7 复用;与 V1/V2 基元同族) */
+.pl-line{ fill:none; stroke:var(--cyan); stroke-width:1.6; opacity:.9; }
+.pl-line-hl{ stroke-width:2.4; }
+.pl-dot{ fill:var(--bg2); stroke:var(--cyan); stroke-width:1.2; }
+.fig-spacer{ flex:1 1 auto; }
+.fig-btn{ font-size:var(--fs-sm); padding:3px 9px; }
+/* 副标题写的是「数据源 + 采样/捕获时机」,是这张图的出处 —— 出处属于信息,
+ * 不属于装饰。D14 把它从 --dim(对最亮表面 3.28:1)提到 --muted(4.75:1):
+ * 一张说不出自己从哪来的图,在答辩里就是一张不能引用的图。 */
+.fig-sub{
+  font-size:var(--fs-sm); color:var(--muted); margin-top:5px; word-break:break-all;
+  font-family:'Cascadia Code',Consolas,monospace;
+}
+.fig-body{ margin-top:8px; }
+/* touch-action 只放行纵向滚动:V1/V2 的图内拖 τ 是水平手势,不声明的话
+ * 触屏上第一下就会被浏览器当成滚屏吃掉,拖拽只剩桌面可用。 */
+.fig-body svg{ display:block; width:100%; height:auto; touch-action:pan-y; }
+.fig-note{
+  margin-top:8px; font-size:var(--fs-sm); line-height:1.6; color:var(--muted);
+  border-left:2px solid var(--border2); padding-left:8px;
+}
+.fig-note b{ color:var(--text); }
+.fig-note .warn{ color:var(--amber); }
+.fig-mock{ border:1px dashed var(--amber); }
+.fig-mock .fig-title::after{
+  content:'MOCK'; margin-left:8px; font-size:9px; letter-spacing:1px;
+  color:var(--amber); border:1px solid var(--amber); border-radius:3px; padding:0 4px;
+  vertical-align:middle;
+}
+
+/* ============================================================
+ * SVG 图元样式(.pl-*)
+ * ============================================================ */
+.pl-gridline{ stroke:var(--border); stroke-width:1; }
+.pl-frame{ fill:none; stroke:var(--border2); stroke-width:1; }
+
+/* D14:轴标签从 --dim(3.28:1)提到 --muted(4.75:1)。
+ * 层次感**不能靠读不清的字去买** —— 网格线、坐标框、极淡的判定带已经足够把
+ * 数据推到前景,刻度数字却要被真的读出数值,它属于信息性文字。同一轮里
+ * --dim 的适用范围收紧为「纯补充:占位图、参照基线、镜像重复的注记」。 */
+.pl-tick{ fill:var(--muted); font-size:var(--fs-xs); font-family:'Cascadia Code',Consolas,monospace; }
+.pl-axis-title{ fill:var(--muted); font-size:var(--fs-sm); }
+.pl-title{ fill:var(--text); font-size:var(--fs-base); font-weight:600; }
+.pl-sec-title{ fill:var(--text); font-size:var(--fs-md); font-weight:600; letter-spacing:.02em; }
+.pl-sec-sub{ fill:var(--muted); font-size:var(--fs-sm); }
+.pl-rowlab{ fill:var(--muted); font-size:var(--fs-xs); }
+.pl-hit{ fill:transparent; cursor:crosshair; }
+.pl-diag{ stroke:var(--dim); stroke-width:1; stroke-dasharray:4 4; }
+
+/* 统一悬停高亮层(D14)。由 tooltip.ts 惰性建出,靠 [x]/[cx] 属性有无来
+ * 控制显隐 —— 用属性而不是类,是因为内联导出时类名会被摘掉,属性不会。 */
+.pl-hoverband{
+  fill:rgba(148,178,255,.10); stroke:var(--border2); stroke-width:1;
+  pointer-events:none;
+}
+.pl-hoverband:not([x]){ display:none; }
+.pl-hoverdot{
+  fill:none; stroke:var(--cyan); stroke-width:1.6; opacity:.9;
+  pointer-events:none;
+}
+.pl-hoverdot:not([cx]){ display:none; }
+
+/* SVG 里的数字一律等宽对齐:刻度、计数值、图例注记里的 n= —— 变宽字体会让
+ * 相邻刻度的小数点对不齐,纵轴看起来像歪的。console 面板 R2 已统一,此处补齐。 */
+.pl-tick, .pl-mx-val, .pl-legend-note, .pl-vlabel, .pl-mean-lab,
+.m-value, .vt-val{
+  font-variant-numeric:tabular-nums;
+}
+
+.pl-legend-label{ fill:var(--muted); font-size:var(--fs-sm); }
+.pl-legend-note{ fill:var(--muted); font-size:var(--fs-xs); }
+
+/* V1 三段判定带:极淡的底色,只为给出「哪一段是哪个判决」的空间感。
+ * 标签统一用 dim 色 —— 早先想让标签随带子取色,但三段的 rect 与 text 是
+ * 平铺在同一层里的兄弟节点,`~` 兄弟选择器会把三种颜色都套到每个标签上,
+ * 最终由出现顺序决定,等于没写。底色的语义已足够,标签保持中性。 */
+.pl-band-pass{ fill:var(--green); opacity:.05; }
+.pl-band-gray{ fill:var(--amber); opacity:.07; }
+.pl-band-reject{ fill:var(--red); opacity:.05; }
+/* 带标签(「PASS HD ≤6」)是这张图里唯一说明「哪一段算哪个判决」的文字。
+ * 语料上它和带子底色互为冗余,但那正是色觉冗余的定义 —— 冗余的一方必须
+ * 是**读得清**的那一方,不然两条线索一起失效。 */
+.pl-band-lab{ fill:var(--muted); font-size:var(--fs-xs); }
+
+.pl-vline{ stroke-width:2; }
+.vl-tau{ stroke:var(--cyan); }
+/* R7:τ 拖进灰区(7–15)时线与标签一起转琥珀 —— 与滑杆读数、V2 工作点同判,
+ * V1 不再以青色附和「这也是个合法门限」。 */
+.vl-tau.vl-tau-gray{ stroke:var(--amber); }
+.pl-vlabel.vl-tau.vl-tau-gray{ fill:var(--amber); }
+.pl-vlabel{ font-size:var(--fs-xs); font-family:'Cascadia Code',Consolas,monospace; }
+.pl-vlabel.vl-tau{ fill:var(--cyan); }
+
+/* V2 */
+.pl-grayband{ opacity:.75; }
+.pl-grayband-lab{ fill:var(--amber); font-size:var(--fs-xs); }
+.pl-eer-lab{ fill:var(--amber); font-size:var(--fs-sm); font-weight:600; }
+.pl-op-lab{ fill:var(--text); font-size:var(--fs-sm); font-weight:600; }
+.pl-graywarn{ fill:var(--amber); font-size:var(--fs-sm); }
+.pl-mx{ stroke-width:1; }
+.pl-mx-ok{ fill:var(--green-bg); stroke:var(--green); }
+.pl-mx-bad{ fill:var(--red-bg); stroke:var(--red); }
+.pl-mx-warn{ fill:var(--amber-bg); stroke:var(--amber); }
+.pl-mx-lab{ fill:var(--muted); font-size:var(--fs-xs); letter-spacing:.02em; }
+.pl-mx-val{ fill:var(--text); font-size:19px; font-weight:600;
+  font-family:'Cascadia Code',Consolas,monospace; }
+
+/* V4 / V1 均值线。
+ * 这里**故意不写颜色**:均值线要跟随所属系列取色(V1 的绿色 genuine 线与红色
+ * impostor 线,V4 的青色实测线与灰色参照线)。CSS 规则的优先级高于 SVG 表现
+ * 属性,若在此写死 stroke,各图内联的 stroke 会被静默吃掉 —— 两条语义相反的
+ * 均值线会画成同一种颜色,而这不会报错,只会让图悄悄说错话。颜色一律由各图
+ * 以内联属性给出,本层只管线型与字号。 */
+.pl-mean{ stroke-width:1.6; stroke-dasharray:6 4; }
+.pl-mean-lab{ font-size:var(--fs-sm); }
+.pl-mean-ref{ stroke:var(--dim); stroke-width:1.2; stroke-dasharray:2 4; }
+.pl-mean-ref-lab{ fill:var(--muted); font-size:var(--fs-xs); }
+
+/* V5–V7 占位 */
+.pl-mockframe{ fill:none; stroke:var(--amber); stroke-width:1.5; stroke-dasharray:7 6; opacity:.7; }
+.pl-mockchip{ fill:var(--amber); font-size:var(--fs-sm); }
+.pl-mocksub{ fill:var(--muted); font-size:var(--fs-sm); }
+.pl-mockmark{
+  fill:var(--amber); opacity:.1; font-size:64px; font-weight:700; letter-spacing:6px;
+}
+.pl-mockcell{ fill:var(--bg4); stroke:var(--border2); }
+.pl-mockcell-lab{ fill:var(--muted); font-size:var(--fs-xs); }
+.pl-mockplot{ fill:none; stroke:var(--border); stroke-dasharray:4 4; }
+.pl-mockline{ fill:none; stroke:var(--dim); stroke-width:2; stroke-dasharray:6 5; opacity:.6; }
+
+/* tooltip(单例,挂 body)
+ * 表面语言与 console 的 .tb-popup(R2)对齐:bg4 载体 + 发丝边 + 顶边内发光 +
+ * 大范围投影 —— 悬浮层要能明确地说出「我在你正在看的那一层之上」。
+ * 这里**不加**入场动画:tip 靠 hidden 属性切换显隐,而 hidden 会走 display:none,
+ * 每次悬停都会重放一遍动画,指针一移动就抖一下。 */
+.pl-tip{
+  position:fixed; z-index:99; pointer-events:none; max-width:320px;
+  background:var(--bg4); border:1px solid var(--border2); border-radius:var(--radius-sm);
+  color:var(--text); font-size:var(--fs-sm); line-height:1.5; padding:7px 10px;
+  box-shadow:0 16px 44px rgba(0,0,0,.6), inset 0 1px 0 var(--edge-hi);
+  white-space:pre-line; font-variant-numeric:tabular-nums;
+}
+
+/* 入场过渡:只在 transform/opacity 上做(报告 §6 动效约束沿用到 viz) */
+.viz-fig, .metric{ animation:viz-in .34s ease-out both; }
+@keyframes viz-in{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
+
+@media (max-width:1400px){
+  .viz-metrics{ grid-template-columns:repeat(2,1fr); }
+}
+@media (max-width:1100px){
+  .viz-grid{ grid-template-columns:1fr; }
+}
+@media (prefers-reduced-motion:reduce){
+  .viz-fig, .metric{ animation:none; }
+}

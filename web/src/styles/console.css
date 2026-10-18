@@ -1,0 +1,676 @@
+/* ============================================================
+ * console.html 五区布局 —— 报告 §6.1
+ *
+ *   顶栏(auto) ｜ 左栏 260px · 中央 flex:1 · 右栏 300px ｜ 底栏 264px
+ *
+ * 断点(§6.1 括号内两条,与 §4.3 分辨率基线对应):
+ *   <1280px 右栏折叠为抽屉(默认隐藏,顶栏按钮/快捷键拉开)
+ *   <1024px 整页 zoom .9 —— 1280×720 演示机的兜底
+ *
+ * 动效约束沿用 base.css:仅 transform/opacity,prefers-reduced-motion 全关。
+ * ============================================================ */
+
+/* 审计日志行高。audit-log.ts 的 ROW_H 常量必须等于此值 —— 虚拟滚动靠它定位,
+ * 两处一旦不一致,滚动条会把行错位(此处显式声明并交叉注释)。 */
+:root{ --log-row:22px; --topbar-h:48px; --bottom-h:264px; }
+
+#app{
+  display:grid;
+  /* 列必须显式钉成 minmax(0,1fr)。缺省是隐式 auto 列,而 auto 的下限是
+   * **min-content** —— 顶栏那一排 nowrap 控件的最小宽度(实测 1407px)会因此
+   * 变成 #app 自己的最小宽度:1280×720 视口下格栅被撑到 1407,再被下面的
+   * overflow:hidden **裁掉**右侧 157px(时钟与 run 计数消失,且没有滚动条
+   * 可以够到它)。钉死之后格栅恒等于视口宽,顶栏放不下时是顶栏自己的事,
+   * 不会连累左右栏与底栏。 */
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:var(--topbar-h) 1fr var(--bottom-h);
+  height:100vh; overflow:hidden;
+}
+
+/* ============================ 顶栏 ============================ */
+.topbar{
+  display:flex; align-items:center; gap:14px;
+  padding:0 14px; height:var(--topbar-h);
+  background:linear-gradient(180deg,var(--bg3),var(--bg2));
+  border-bottom:1px solid var(--border);
+  position:relative; z-index:30;
+  transition:transform .18s ease;
+}
+/* H 键隐藏:留出 8px 触条,鼠标移入自动回位(否则隐藏后无法用鼠标恢复) */
+.topbar.hidden{ transform:translateY(calc(-100% + 8px)); }
+.topbar.hidden:hover{ transform:translateY(0); }
+
+.tb-brand{ display:flex; align-items:center; gap:9px; }
+.tb-logo{
+  width:18px; height:18px; border-radius:5px;
+  background:conic-gradient(from 210deg,var(--puf),var(--comm),var(--purple),var(--puf));
+  box-shadow:0 0 12px rgba(34,211,238,.45);
+}
+.tb-title{ font-size:var(--fs-lg); font-weight:700; letter-spacing:.3px; white-space:nowrap; }
+.tb-title em{ font-style:normal; color:var(--muted); font-weight:600; }
+
+.tb-link{
+  display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  padding:4px 11px; border-radius:999px; white-space:nowrap;
+  border:1px solid var(--border2); background:var(--bg3);
+  color:var(--text); font-size:var(--fs-md); font-weight:600;
+  transition:transform .12s ease;
+}
+/* 状态药丸可点(弹详情浮层),悬停给 1px 上浮作可点暗示;
+ * 颜色不换 —— 状态色语义不参与悬停游戏 */
+.tb-link:hover,.tb-source:hover{ transform:translateY(-1px); }
+.tb-link .dot{ width:7px; height:7px; border-radius:50%; background:currentColor; }
+.tb-link.st-loopback{ color:var(--cyan); border-color:var(--cyan); background:var(--cyan-bg); }
+.tb-link.st-serial{ color:var(--cyan); border-color:var(--cyan); background:var(--cyan-bg); }
+.tb-link.st-reconnecting{ color:var(--amber); border-color:var(--amber); background:var(--amber-bg); }
+.tb-link.st-offline{ color:var(--red); border-color:var(--red); background:var(--red-bg); }
+.tb-link.blink{ animation:pulse-glow 1.1s ease-in-out infinite; }
+
+.tb-pool{ display:flex; align-items:center; gap:8px; font-size:var(--fs-sm); }
+.tb-pool .k{ color:var(--muted); white-space:nowrap; }
+.tb-pool .v{ font-size:var(--fs-md); font-weight:700; font-variant-numeric:tabular-nums; }
+.tb-bar{
+  width:78px; height:6px; border-radius:3px; overflow:hidden;
+  background:var(--bg4); border:1px solid var(--border);
+}
+/* 填充条用 scaleX 而非 width(报告 §4.3:动效仅 transform/opacity)。
+ * width 是布局属性,池水位每个帧事件都可能变,每次都会让顶栏/终端卡重排;
+ * scaleX 只走合成层。transform-origin 必须在左,否则条子从中心向两边长。 */
+.tb-bar>i{
+  display:block; height:100%; width:100%; background:var(--green);
+  transform-origin:left center; transform:scaleX(0);
+  transition:transform .3s ease;
+}
+.tb-bar.warn>i{ background:var(--amber); }
+.tb-bar.flash{ animation:pulse-glow .9s ease-in-out infinite; }
+
+.tb-slider{ display:flex; align-items:center; gap:8px; font-size:var(--fs-sm); }
+.tb-slider .k{ color:var(--muted); }
+.tb-slider input[type=range]{ width:110px; accent-color:var(--cyan); }
+.tb-slider .v{ font-size:var(--fs-sm); color:var(--cyan); min-width:52px; }
+
+.tb-scripts{ display:flex; align-items:center; gap:6px; }
+.tb-scripts .k{ color:var(--muted); font-size:var(--fs-sm); }
+.tb-scripts .btn{ padding:3px 9px; font-size:var(--fs-sm); }
+.tb-scen-stat{ font-size:var(--fs-sm); color:var(--muted); min-width:118px; font-variant-numeric:tabular-nums; }
+
+.tb-spacer{ flex:1; }
+
+.tb-source{
+  display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  padding:4px 11px; border-radius:999px; white-space:nowrap;
+  border:1px solid var(--border2); background:var(--bg3);
+  color:var(--text); font-size:var(--fs-sm); font-weight:700; letter-spacing:.4px;
+  transition:transform .12s ease;
+}
+.tb-source .dot{ width:7px; height:7px; border-radius:50%; background:currentColor; }
+.tb-source.st-live{ color:var(--green); border-color:var(--green); background:var(--green-bg); }
+.tb-source.st-static{ color:var(--cyan); border-color:var(--cyan); background:var(--cyan-bg); }
+.tb-source.st-mock{ color:var(--amber); border-color:var(--amber); border-style:dashed; background:transparent; }
+
+.tb-clock{ display:flex; gap:10px; font-size:var(--fs-sm); color:var(--muted); font-variant-numeric:tabular-nums; }
+.tb-hint{
+  width:20px; height:20px; border-radius:5px; display:grid; place-items:center;
+  border:1px solid var(--border2); color:var(--muted); font-size:var(--fs-xs); font-weight:700;
+}
+/* R7:「?」是快捷键浮层的可见入口,做成与 H 小方块同形的真按钮 */
+.tb-help{
+  width:20px; height:20px; border-radius:5px; display:grid; place-items:center;
+  border:1px solid var(--border2); color:var(--muted); font-size:var(--fs-xs); font-weight:700;
+  background:var(--bg3); cursor:pointer; padding:0;
+  transition:transform .12s ease;
+}
+.tb-help:hover{ transform:translateY(-1px); color:var(--cyan); border-color:var(--cyan); }
+
+/* 顶栏浮层(链路详情/池概览/数据源清单)—— 全页最高层表面:
+ * 用最亮一级 bg4 + 顶部微光 + 加深投影,与面板(bg2)拉开完整四级梯度 */
+@keyframes pop-in{ from{ opacity:0; transform:translateY(-4px); } to{ opacity:1; transform:none; } }
+.tb-popup{
+  position:fixed; z-index:200; min-width:230px; max-width:380px;
+  background:var(--bg4); border:1px solid var(--border2); border-radius:var(--radius);
+  box-shadow:0 16px 44px rgba(0,0,0,.6), inset 0 1px 0 var(--edge-hi);
+  padding:11px 13px; font-size:var(--fs-md); color:var(--text);
+  animation:pop-in .16s ease-out;
+}
+.tp-title{ font-weight:700; margin-bottom:8px; color:var(--cyan); font-size:var(--fs-md); }
+.tb-popup dl{ display:grid; grid-template-columns:auto 1fr; gap:3px 12px; margin:0; }
+.tb-popup dt{ color:var(--muted); font-size:var(--fs-sm); }
+.tb-popup dd{ margin:0; font-size:var(--fs-sm); }
+.tp-note{ margin-top:8px; font-size:var(--fs-sm); color:var(--muted); line-height:1.5; }
+.tp-warn{
+  margin-top:8px; padding:6px 9px; border-radius:6px; font-size:var(--fs-sm);
+  color:var(--amber); background:var(--amber-bg); border:1px solid var(--amber);
+}
+.tp-src{ list-style:none; margin:0; padding:0; }
+.tp-src li{ display:flex; align-items:baseline; gap:8px; padding:5px 0; }
+.tp-src-d{ color:var(--muted); font-size:var(--fs-sm); flex:1; }
+.tp-src-cur{ color:var(--green); font-size:var(--fs-sm); font-weight:700; }
+.tp-pool{ list-style:none; margin:0; padding:0; }
+.tp-pool li{ display:flex; align-items:center; gap:9px; padding:4px 0; font-size:var(--fs-sm); }
+
+/* ============================ 三栏 ============================ */
+#console-layout{
+  display:grid; grid-template-columns:260px 1fr 300px;
+  min-height:0; overflow:hidden;
+}
+
+/* ---------- 左栏 ---------- */
+.left-panel{
+  display:flex; flex-direction:column; min-height:0;
+  background:var(--bg2); border-right:1px solid var(--border);
+}
+.lp-head{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:9px 12px; border-bottom:1px solid var(--border);
+  font-size:var(--fs-md); font-weight:700; color:var(--muted);
+  letter-spacing:.06em;
+  position:sticky; top:0; background:var(--bg2); z-index:2;
+}
+.lp-head-scen{ border-top:1px solid var(--border); }
+.lp-count{ color:var(--cyan); }
+.lp-list{ flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:10px; }
+.lp-empty{ padding:14px 12px; font-size:var(--fs-sm); color:var(--muted); line-height:1.7; }
+
+/* 终端卡在 bg2 面板上抬一级到 bg3 —— 悬停上浮 1px,选中青框+内环+顶部微光 */
+.term-card{
+  cursor:pointer; padding:10px 11px; background:var(--bg3);
+  transition:transform .12s;
+}
+.term-card:hover{ border-color:var(--border2); transform:translateY(-1px); }
+.term-card.selected{
+  border-color:var(--cyan);
+  box-shadow:0 0 0 1px var(--cyan-bg) inset, inset 0 1px 0 var(--edge-hi);
+}
+.term-card.selected::before{ content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--cyan); }
+.term-card.warn-card{ border-color:var(--amber); }
+.term-card.sent{ transform:scale(.985); }
+/* R8 D19:最近判定左轨 —— 状态外显到卡边缘,列表里扫一眼即知哪台刚 PASS/被拒。
+ * 用绝对定位 ::after 而非 border-left:不占布局(卡宽零位移),且与选中态的
+ * box-shadow/顶部青条天然叠加。色随 decChip 同一映射:0=绿 / 3、4=琥珀 / 其余=红。 */
+.term-card::after{
+  content:''; position:absolute; top:9px; bottom:9px; left:0; width:2px;
+  border-radius:0 2px 2px 0; background:transparent;
+}
+.term-card.tc-ok::after{ background:var(--green); }
+.term-card.tc-warn::after{ background:var(--amber); }
+.term-card.tc-fail::after{ background:var(--red); }
+.tc-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; }
+.tc-id{ font-size:var(--fs-base); font-weight:700; color:var(--cyan); }
+.tc-rows{ display:flex; flex-direction:column; gap:3px; }
+.tc-row{ display:flex; align-items:center; gap:6px; font-size:var(--fs-sm); }
+.tc-row .k{ color:var(--muted); min-width:44px; }
+.tc-row .v{ margin-right:auto; }
+.tc-row .v.ok{ color:var(--green); }
+.tc-bar{
+  height:5px; border-radius:3px; overflow:hidden; margin:5px 0 6px;
+  background:var(--bg4); border:1px solid var(--border);
+}
+.tc-bar>i{
+  display:block; height:100%; width:100%; background:var(--green);
+  transform-origin:left center; transform:scaleX(0);
+  transition:transform .3s ease;
+}
+.tc-bar.warn>i{ background:var(--amber); }
+.tc-bar.flash{ animation:pulse-glow .9s ease-in-out infinite; }
+.tc-actions{ display:flex; gap:6px; margin-top:8px; }
+.tc-actions .btn{ flex:1; padding:5px 0; font-size:var(--fs-sm); }
+
+.spin{
+  width:9px; height:9px; border-radius:50%; display:inline-block;
+  border:2px solid var(--muted); border-top-color:transparent;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{ to{ transform:rotate(360deg); } }
+
+.lp-scen{ display:grid; grid-template-columns:1fr 1fr; gap:7px; padding:10px; }
+/* R8 D19 修订:S1–S7 七键 2 列网格必落单 —— 让 S7 假基站独占整行,
+ * 死区变特殊场景的强调位。 */
+.lp-scen .scen-btn:last-child{ grid-column:1 / -1; }
+/* R8 D19:场景键升级 —— 圆角走体系小档、内边距放宽;悬停给青色描边+青底
+ * +1px 上浮(与终端卡同一悬停语言)。变色是状态反馈(非动画),过渡仍只
+ * opacity/transform。 */
+.scen-btn{
+  flex-direction:column; gap:1px; padding:8px 5px; overflow:hidden; position:relative;
+  border-radius:var(--radius-sm);
+}
+.scen-btn:hover{ border-color:var(--cyan); background:var(--cyan-bg); transform:translateY(-1px); }
+.scen-btn:hover span{ color:var(--text); }
+.scen-btn b{ font-size:var(--fs-md); color:var(--cyan); }
+.scen-btn span{ font-size:var(--fs-xs); color:var(--muted); font-weight:500; }
+.scen-btn.running{ border-color:var(--amber); background:var(--amber-bg); }
+.scen-btn.running b{ color:var(--amber); }
+/* R7:运行中的场景键加一道横向扫光(纯 transform)—— 静态的琥珀边框在
+ * 连播时不够「活着」,扫光让「正在跑」成为余光可辨的状态。 */
+.scen-btn.running::after{
+  content:''; position:absolute; top:0; bottom:0; left:0; width:34%;
+  background:linear-gradient(100deg,transparent,rgba(245,158,11,.16),transparent);
+  animation:scen-sweep 1.5s linear infinite;
+}
+@keyframes scen-sweep{ from{ transform:translateX(-110%); } to{ transform:translateX(400%); } }
+
+/* ---------- 中央舞台 ---------- */
+#center-stage{ display:flex; min-height:0; min-width:0; overflow:hidden; }
+.stage{ display:flex; flex-direction:column; flex:1; min-width:0; min-height:0; }
+.stage-title{
+  display:flex; align-items:center; gap:12px;
+  padding:8px 14px; border-bottom:1px solid var(--border);
+  background:var(--bg2); font-size:var(--fs-md);
+}
+.st-name{ font-weight:700; }
+.st-run{ color:var(--muted); font-size:var(--fs-sm); }
+.st-dur{ color:var(--cyan); font-size:var(--fs-sm); font-variant-numeric:tabular-nums; }
+.st-hud{ font-size:var(--fs-sm); color:var(--muted); }
+/* R7:相机按钮组与拖拽暗示。按钮只随 3D 接管出现(2D 保底下点了没人应答);
+ * 光标 grab/grabbing 只挂在 #stage-3d 的 canvas 上 —— 3D 失败时该容器没有
+ * canvas,2D 保底不会被「可拖」的光标误导。 */
+.st-cams{ display:flex; gap:4px; }
+.st-cam{ padding:2px 8px; font-size:var(--fs-xs); }
+/* R8 D19:相机键 active 态 —— 当前预设常亮青(与键盘 1–4 同源联动,
+ * stage2d.ts 里两条通道都会刷新此类)。 */
+.st-cam.active{ border-color:var(--cyan); color:var(--cyan); background:var(--cyan-bg); }
+#stage-3d canvas{ cursor:grab; }
+#stage-3d:active canvas{ cursor:grabbing; }
+.stage-hint{
+  position:absolute; right:14px; bottom:12px; z-index:5;
+  padding:5px 11px; border-radius:999px; white-space:nowrap;
+  background:var(--bg4); border:1px solid var(--border2); color:var(--muted);
+  font-size:var(--fs-xs); letter-spacing:.03em;
+  box-shadow:0 8px 26px rgba(0,0,0,.5), inset 0 1px 0 var(--edge-hi);
+  animation:pop-in .3s ease-out;
+  transition:opacity .6s ease;
+  pointer-events:none;         /* 暗示条不挡拖拽:它的第一下指针就是要交给相机的 */
+}
+.stage-hint.off{ opacity:0; }
+.stage-view{
+  position:relative; flex:1; min-height:0;
+  background:radial-gradient(circle at 50% 45%,var(--bg3),var(--bg) 72%);
+}
+/* R8 D19:舞台取景框角标 —— 四角 L 形发丝线(蓝白系,与 --border2 同族),
+ * 给中央区一个「视口」的读法,2D 保底与 3D 画布上都成立。z-index 压过
+ * 无 z-index 的 #stage-3d 画布、低于 stage-hint(5);pointer-events:none,
+ * 不挡相机的拖拽/滚轮。纯静态绘制,零动效。 */
+.stage-view::before{
+  content:''; position:absolute; inset:9px; z-index:4; pointer-events:none;
+  /* R8 D19 修订(评审:存在感不足):角线 16→22px、粗 1→1.5px、alpha .30→.5,
+   * 仍是 border2-blue 家族的 recessive HUD,不升主强调青。 */
+  --stage-corner:rgba(148,178,255,.5);
+  background:
+    linear-gradient(var(--stage-corner),var(--stage-corner)) left 0 top 0/22px 1.5px,
+    linear-gradient(var(--stage-corner),var(--stage-corner)) left 0 top 0/1.5px 22px,
+    linear-gradient(var(--stage-corner),var(--stage-corner)) right 0 top 0/22px 1.5px,
+    linear-gradient(var(--stage-corner),var(--stage-corner)) right 0 top 0/1.5px 22px,
+    linear-gradient(var(--stage-corner),var(--stage-corner)) left 0 bottom 0/22px 1.5px,
+    linear-gradient(var(--stage-corner),var(--stage-corner)) left 0 bottom 0/1.5px 22px,
+    linear-gradient(var(--stage-corner),var(--stage-corner)) right 0 bottom 0/22px 1.5px,
+    linear-gradient(var(--stage-corner),var(--stage-corner)) right 0 bottom 0/1.5px 22px;
+  background-repeat:no-repeat;
+}
+/* three.js 挂载点铺满;2D 保底叠在其下,接管后由 .hidden 让位 */
+#stage-3d{ position:absolute; inset:0; }
+/* WebGL 上下文丢失时盖在画布上的说明层。必须 position:absolute ——
+ * 画布是 100% 高的块级元素,覆盖层若走常规流会被挤到画布下方、整个跑出视口。 */
+.stage3d-overlay{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  padding:24px; text-align:center; font-size:var(--fs-base); line-height:1.6;
+  color:var(--amber); background:rgba(7,11,20,.88);
+}
+/* .stage3d-overlay 自带 display:flex,会盖掉 hidden 属性的默认 display:none,
+ * 故必须显式补这条 —— 否则 hidden=true 的覆盖层照样挡在画布前面。 */
+.stage3d-overlay[hidden]{ display:none; }
+.stage-fallback{ position:absolute; inset:0; display:flex; padding:12px; overflow:auto; }
+.stage-fallback.hidden{ display:none; }
+.stage-hex{ max-height:42%; overflow-y:auto; border-top:1px solid var(--border); background:var(--bg2); }
+
+/* ---------- 2D 五帧时序(frame-timeline.ts) ---------- */
+.frame-timeline{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; flex:1; min-width:0; padding:14px;
+}
+.ft-main{ display:flex; align-items:stretch; gap:0; flex-wrap:wrap; justify-content:center; }
+.ft-node{
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  /* R8 D19 修订:等宽伸展(flex-basis 0) —— 原来只有 min-width,
+   * 五节点随 28B/44B 字样宽窄不齐,评审点名。 */
+  flex:1 1 0; min-width:104px; max-width:168px; padding:10px 12px; border-radius:10px;
+  border:1px solid var(--border2); background:var(--bg3);
+  box-shadow:inset 0 1px 0 var(--edge-hi);
+  transition:opacity .2s,transform .15s;
+}
+.ft-name{ font-size:var(--fs-md); font-weight:700; color:var(--muted); }
+.ft-dir{ font-size:var(--fs-xs); color:var(--muted); }
+.ft-dir-up{ color:var(--comm); }
+.ft-dir-down{ color:var(--server); }
+.ft-st{ font-size:var(--fs-sm); color:var(--muted); }
+.ft-node.ft-tx{ border-color:var(--cyan); background:var(--cyan-bg); }
+.ft-node.ft-tx .ft-name{ color:var(--cyan); }
+.ft-node.ft-rx{ border-color:var(--purple); background:var(--purple-bg); }
+.ft-node.ft-rx .ft-name{ color:var(--purple); }
+.ft-node.ft-ok{ border-color:var(--green); background:var(--green-bg); }
+.ft-node.ft-ok .ft-name,.ft-node.ft-ok .ft-st{ color:var(--green); }
+.ft-node.ft-fail{ border-color:var(--red); background:var(--red-bg); }
+.ft-node.ft-fail .ft-name,.ft-node.ft-fail .ft-st{ color:var(--red); }
+.ft-node.ft-fail.shake{ animation:shake-x .45s ease-in-out 1; }
+/* 箭头承载方向语义(谁发给谁),用 muted 而非 dim —— 信息不吃低对比 */
+.ft-arrow{ display:grid; place-items:center; flex:0 0 auto; padding:0 10px; color:var(--muted); font-size:15px; }
+
+/* 灰区分叉:仅在 EXTRA_CHALLENGE 实际到达时 .open */
+.ft-fork{
+  position:relative; display:flex; align-items:flex-start; gap:0;
+  opacity:.28; transition:opacity .2s;
+}
+.ft-fork.open{ opacity:1; }
+.ft-fork-label{
+  position:absolute; top:-15px; left:0; font-size:var(--fs-xs); color:var(--amber);
+  letter-spacing:.5px;
+}
+.ft-fork-link{ width:0; }
+.ft-fork.open .ft-node-fork{ border-color:var(--amber); background:var(--amber-bg); }
+.ft-fork.open .ft-node-fork .ft-name{ color:var(--amber); }
+.ft-note{ font-size:var(--fs-sm); color:var(--muted); text-align:center; max-width:640px; }
+
+/* ---------- hex 结构查看器(hex-viewer.ts) ---------- */
+.hex-viewer{ display:flex; flex-direction:column; gap:8px; padding:10px 14px; }
+.hv-head{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.hv-title{ font-size:var(--fs-md); font-weight:700; color:var(--muted); letter-spacing:.06em; }
+.hv-modes{ display:flex; gap:6px; }
+.hv-modes .btn{ padding:3px 10px; font-size:var(--fs-sm); }
+.hv-note{ font-size:var(--fs-sm); color:var(--muted); margin-left:auto; }
+.hv-select{
+  background:var(--bg3); color:var(--text); border:1px solid var(--border2);
+  border-radius:6px; padding:2px 6px; font-size:var(--fs-sm); font-family:inherit;
+}
+.hv-pick{ display:flex; flex-wrap:wrap; gap:6px; }
+.hv-chip{ cursor:pointer; font-family:'Cascadia Code',Consolas,monospace; font-size:var(--fs-sm); }
+.hv-empty{ font-size:var(--fs-sm); color:var(--muted); margin:6px 0; }
+.hv-frame{ display:flex; flex-direction:column; gap:7px; }
+.hv-frame-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:var(--fs-sm); }
+/* 两套东西都在 hex-viewer 里,类名相近但结构不同,勿混:
+ *   .hv-grid > .hv-seg.hv-<tone>  —— 逐字节分段格(label 在上、字节在下)
+ *   .hv-fields > .hv-field        —— 逐帧"人话"字段注记(.k / .v 两列) */
+.hv-grid{ display:flex; flex-wrap:wrap; gap:7px; align-items:flex-start; }
+.hv-seg{
+  display:flex; flex-direction:column; gap:2px;
+  padding:4px 8px; border-radius:6px; border:1px solid var(--border);
+  background:var(--bg3);
+}
+.hv-seg .hv-label{ font-size:var(--fs-xs); color:var(--muted); }
+.hv-seg .hv-bytes{ display:flex; gap:3px; font-size:var(--fs-md); }
+.hv-seg .hv-bytes>i{ font-style:normal; }
+/* 分段着色(§6.2「按字段结构对齐着色展示」):帧头冷灰 / 载荷字段青 / CRC 琥珀 */
+.hv-seg.hv-header{ border-color:var(--border2); background:var(--bg4); }
+.hv-seg.hv-payload,.hv-seg.hv-field{
+  border-color:var(--comm); background:var(--cyan-bg);
+}
+.hv-seg.hv-payload .hv-label,.hv-seg.hv-field .hv-label{ color:var(--comm); }
+.hv-seg.hv-crc{ border-color:var(--amber); background:var(--amber-bg); }
+.hv-seg.hv-crc .hv-label{ color:var(--amber); }
+.hv-fields{ display:flex; flex-direction:column; gap:3px; border-left:2px solid var(--border2); padding-left:8px; }
+.hv-fields .hv-field{ display:flex; gap:8px; font-size:var(--fs-sm); }
+.hv-fields .hv-field .k{ color:var(--muted); min-width:92px; }
+.hv-fields .hv-field .v{ color:var(--text); word-break:break-all; }
+.hint{ color:var(--muted); font-size:var(--fs-sm); }
+.hv-goldnote{ font-size:var(--fs-sm); color:var(--muted); }
+.hv-diff{ display:flex; flex-direction:column; gap:9px; }
+.hv-diff.diff{ border-top:1px solid var(--border); padding-top:9px; }
+.hv-cmpbar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:var(--fs-sm); }
+.hv-rdiff{ display:flex; flex-direction:column; gap:4px; padding:6px 8px; border-radius:6px; }
+.hv-rdiff.has-diff{ background:var(--red-bg); border:1px solid rgba(239,68,68,.35); }
+.hv-rdiff-head{ display:flex; align-items:center; gap:8px; font-size:var(--fs-sm); }
+.hv-bitrow{ display:flex; align-items:center; gap:5px; font-size:var(--fs-sm); }
+.hv-bitrow-head{ color:var(--muted); font-size:var(--fs-xs); }
+.hv-bittag{ width:38px; color:var(--muted); font-size:var(--fs-xs); }
+.hv-bitline{ letter-spacing:1px; font-size:var(--fs-sm); }
+.hv-diffgrid{ display:flex; flex-direction:column; gap:3px; }
+
+/* ---------- 右栏 ---------- */
+.right-panel{
+  display:flex; flex-direction:column; gap:10px; min-height:0; overflow-y:auto;
+  padding:11px; background:var(--bg2); border-left:1px solid var(--border);
+}
+.rp-verdict{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:4px; padding:18px 10px 16px; border-radius:var(--radius);
+  background:var(--bg3); border:1px solid var(--border);
+  box-shadow:inset 0 1px 0 var(--edge-hi);
+  margin-bottom:12px; /* R8 D19 修订:判定卡与下方仪表卡的主从间距(原 5px,注释与值不符一并修正) */
+}
+/* R8 D19:判定卡承载判定 —— 卡体随结果着色(状态色渐变+描边),「PASS」不再
+ * 是灰卡上单独发光的一张贴纸;色相沿用语义色 token,未新造颜色。 */
+/* R8 D19 修订(视觉模型四区评审):状态场要压得住「全页最重要的一瞬间」——
+ * 顶部发光式分层(高 alpha→低 alpha 双停)替代平铺 -bg 渐变,描边 alpha
+ * 提到 .55 档,外加同色系外辉光(静态阴影,不动 §4.3 动效约束)。 */
+.rp-verdict.st-pass{
+  border-color:rgba(0,214,143,.55);
+  background:linear-gradient(180deg,rgba(0,214,143,.16),rgba(0,214,143,.05) 55%,var(--bg3) 78%);
+  box-shadow:inset 0 1px 0 var(--edge-hi),0 12px 34px -18px rgba(0,214,143,.5);
+}
+.rp-verdict.st-reject,.rp-verdict.st-error{
+  border-color:rgba(239,68,68,.58);
+  background:linear-gradient(180deg,rgba(239,68,68,.16),rgba(239,68,68,.05) 55%,var(--bg3) 78%);
+  box-shadow:inset 0 1px 0 var(--edge-hi),0 12px 34px -18px rgba(239,68,68,.5);
+}
+.rp-verdict.st-drain,.rp-verdict.st-replay{
+  border-color:rgba(245,158,11,.55);
+  background:linear-gradient(180deg,rgba(245,158,11,.15),rgba(245,158,11,.05) 55%,var(--bg3) 78%);
+  box-shadow:inset 0 1px 0 var(--edge-hi),0 12px 34px -18px rgba(245,158,11,.45);
+}
+.rp-idle{
+  margin-top:12px; padding:8px 10px; border-radius:8px; text-align:center;
+  font-size:var(--fs-sm); color:var(--muted); line-height:1.7;
+  border:1px dashed var(--border2); background:var(--bg2);
+  animation:pulse-glow 2.4s ease-in-out infinite;
+}
+.rp-idle b{ color:var(--cyan); font-weight:700; }
+.rp-idle .mono{ color:var(--text); }
+.rp-big{
+  font-size:52px; line-height:1.05; font-weight:800; letter-spacing:2px;
+  color:var(--muted);
+}
+/* R8 D19:辉光收敛一半(26px/.5 → 16px/.35)—— 荧光感来自过大的模糊半径,
+ * 卡体已带状态底色,文字自己不必再喊。 */
+.rp-big.pass{ color:var(--green); text-shadow:0 0 16px rgba(0,214,143,.35); animation:pulse-glow 1.8s ease-in-out infinite; }
+.rp-big.reject{ color:var(--red); animation:shake-x .45s ease-in-out 1; }
+.rp-big.error{ color:var(--red); }
+.rp-big.drain{ color:var(--amber); }
+.rp-big.replay{ color:var(--amber); animation:shake-x .45s ease-in-out 1; }
+.rp-sub{ font-size:var(--fs-md); color:var(--text); text-align:center; }
+.rp-meta{ font-size:var(--fs-sm); color:var(--muted); text-align:center; }
+/* R8 D19 修订:阈值是判定依据,绿/红两词上语义色(仍是既有 token,非新色) */
+.rp-meta .th-ok{ color:var(--green); font-weight:600; }
+.rp-meta .th-no{ color:var(--red); font-weight:600; }
+
+.rp-block{
+  padding:10px 12px; border-radius:var(--radius);
+  border:1px solid var(--red); background:var(--red-bg);
+  animation:pulse-glow 1.4s ease-in-out infinite;
+}
+.rp-block-t{ font-size:var(--fs-xl); font-weight:800; color:var(--red); letter-spacing:1px; }
+.rp-block-d{ font-size:var(--fs-sm); color:var(--text); margin-top:4px; line-height:1.55; }
+
+.rp-card{
+  background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
+  padding:10px 11px; box-shadow:inset 0 1px 0 var(--edge-hi);
+}
+.rp-card-h{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  font-size:var(--fs-sm); font-weight:700; color:var(--muted); margin-bottom:7px;
+  letter-spacing:.06em;
+}
+.rp-note{ font-size:var(--fs-sm); color:var(--muted); line-height:1.55; margin-top:6px; }
+.rp-r2{ display:flex; align-items:center; gap:8px; }
+/* R8 D19 修订:16 位 hex + 徽章挤一行时 break-all 会切出孤字节 —— 降半档
+ * 字号收窄字距求单行,break-all 保留为窄屏兜底。 */
+.rp-r2 code{ flex:1; font-size:var(--fs-sm); letter-spacing:.5px; color:var(--cyan); word-break:break-all; }
+.chip.gold{
+  color:#ffd45e; border-color:#ffd45e; background:rgba(255,212,94,.12);
+  font-weight:800; letter-spacing:.4px;
+}
+.rp-pool-bar{ width:100%; height:8px; }
+/* R8 D19:关键数字提级 —— 池水位读数是右栏第二个「读数担当」,从 11px 灰
+ * 提到 14px 实重;会话计数值 11→12px 半粗。数字穿 text 色,不穿系列色。 */
+#rp-pool-text{ font-size:var(--fs-lg); font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
+.rp-kv{ display:flex; flex-direction:column; gap:3px; }
+.rp-kv-row{ display:flex; justify-content:space-between; gap:10px; font-size:var(--fs-sm); }
+.rp-kv-row .k{ color:var(--muted); }
+.rp-kv-row .v{ color:var(--text); font-size:var(--fs-md); font-weight:600; font-variant-numeric:tabular-nums; }
+
+/* HD 仪表 */
+.hd-gauge{ display:flex; flex-direction:column; gap:6px; }
+.hg-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.hg-title{ font-size:var(--fs-sm); font-weight:700; color:var(--muted); letter-spacing:.06em; }
+.hg-caption{ font-size:var(--fs-xs); }
+.hg-track{
+  position:relative; height:22px; border-radius:5px; overflow:hidden;
+  background:var(--bg4); border:1px solid var(--border);
+}
+.hg-band{ position:absolute; top:0; bottom:0; }
+.hg-pass{ background:rgba(0,214,143,.20); }
+.hg-gray{ background:rgba(245,158,11,.20); }
+.hg-reject{ background:rgba(239,68,68,.20); }
+.hg-pointer{ position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--text); transform:translateX(-1px); }
+.hg-pointer>i{ position:absolute; top:-1px; left:-4px; width:10px; height:10px; transform:rotate(45deg); background:var(--text); }
+/* 刻度行(数字贴刻度)＋图例行(阈值语义)。两行分开,避免短栏宽下标签互叠。 */
+.hg-scale{ position:relative; min-height:13px; padding-bottom:20px; }
+.hg-tick{ position:absolute; font-size:var(--fs-xs); color:var(--muted); white-space:nowrap; }
+.hg-tick-0{ left:0; }
+.hg-tick-max{ color:var(--muted); }
+.hg-tick-pass{ color:var(--green); }
+.hg-tick-reject{ color:var(--red); }
+.hg-legend{
+  position:absolute; left:0; right:0; bottom:0;
+  display:flex; flex-wrap:wrap; gap:4px 8px; font-size:var(--fs-xs);
+}
+.hg-legend .lg{ white-space:nowrap; }
+.hg-legend .lg-pass{ color:var(--green); }
+.hg-legend .lg-gray{ color:var(--amber); }
+.hg-legend .lg-reject{ color:var(--red); }
+.hg-legend .lg-dim{ color:var(--muted); }
+.hg-bars{ display:flex; flex-direction:column; gap:5px; }
+.hg-bars-head{ font-size:var(--fs-sm); color:var(--muted); letter-spacing:.06em; }
+.hg-bars-row{ display:flex; align-items:flex-end; gap:5px; height:56px; }
+.hg-bar{
+  position:relative; flex:1; height:100%; display:flex; align-items:flex-end;
+  background:var(--bg4); border-radius:4px; overflow:hidden;
+}
+.hg-bar>i{ display:block; width:100%; background:var(--muted); }
+.hg-bar.ok>i{ background:var(--green); }
+.hg-bar.gray>i{ background:var(--amber); }
+.hg-bar.bad>i{ background:var(--red); }
+.hg-bar>span{ position:absolute; top:1px; left:0; right:0; text-align:center; font-size:var(--fs-xs); color:var(--text); }
+
+/* ============================ 底栏·审计日志 ============================ */
+.audit-log{
+  display:flex; flex-direction:column; min-height:0;
+  background:var(--bg2); border-top:1px solid var(--border);
+}
+.al-head{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  padding:6px 12px; border-bottom:1px solid var(--border); font-size:var(--fs-sm);
+}
+.al-title{ font-weight:700; color:var(--muted); letter-spacing:.06em; }
+.al-filter{ display:inline-flex; align-items:center; gap:5px; color:var(--muted); }
+.al-filter select{
+  background:var(--bg3); color:var(--text); border:1px solid var(--border2);
+  border-radius:6px; padding:2px 6px; font-size:var(--fs-sm); font-family:inherit;
+}
+.al-count{ color:var(--cyan); }
+.al-spacer{ flex:1; }
+.al-head .btn{ padding:3px 9px; font-size:var(--fs-sm); }
+.al-viewport{ flex:1; min-height:0; overflow-y:auto; position:relative; }
+/* 虚拟滚动:al-scroll 的高度由 JS 设为 行数×var(--log-row) 撑出滚动条,
+ * al-layer 绝对定位在视口原点并 translateY 到窗口起点 —— 它随滚动内容一起平移。 */
+.al-scroll{ position:relative; width:100%; }
+.al-layer{ position:absolute; top:0; left:0; right:0; will-change:transform; }
+.al-row{
+  display:flex; align-items:center; gap:9px; padding:0 12px;
+  font-size:var(--fs-sm); white-space:nowrap; overflow:hidden;
+  border-bottom:1px solid var(--border);
+  /* R8 D19:severity 左缘条占位 —— 所有行统一 2px 透明左边框,告警/错误行
+   * 只换颜色,不产生横向位移(行与行对齐不跳动)。 */
+  border-left:2px solid transparent;
+}
+.al-row:hover{ background:var(--bg3); }
+/* 时间戳/类型列等宽:时间戳数字不抖,类型名(frame.tx 这类代码词)用码表字体 */
+.al-ts{ color:var(--muted); flex:0 0 84px; font-variant-numeric:tabular-nums; }
+.al-type{ flex:0 0 104px; color:var(--muted); font-family:'Cascadia Code',Consolas,monospace; font-size:var(--fs-xs); }
+.al-tid{ flex:0 0 36px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.al-text{ flex:1; overflow:hidden; text-overflow:ellipsis; }
+.tone-info .al-text{ color:var(--muted); }
+.tone-frame .al-text{ color:var(--cyan); }
+.tone-ok .al-text{ color:var(--green); }
+.tone-bad .al-text{ color:var(--red); }
+.tone-gray .al-text{ color:var(--amber); }
+.tone-replay .al-text{ color:var(--amber); }
+.tone-error .al-text{ color:var(--red); }
+/* R8 D19:左缘条只在「异常」行点亮(warn=琥珀 / error=红);正常行保持
+ * 透明 —— 状态色留给信号,不给噪音,异常行在余光里就能跳出来。 */
+.sev-warn{ background:rgba(245,158,11,.05); border-left-color:var(--amber); }
+.sev-error{ background:rgba(239,68,68,.07); border-left-color:var(--red); }
+.tone-ok .al-type{ color:var(--green); }
+.tone-bad .al-type,.tone-error .al-type{ color:var(--red); }
+.tone-gray .al-type,.tone-replay .al-type{ color:var(--amber); }
+.tone-frame .al-type{ color:var(--cyan); }
+
+/* ============================ 快捷键帮助浮层(R7) ============================ */
+.help-ov{
+  position:fixed; inset:0; z-index:300;
+  background:rgba(4,7,13,.62);
+  display:flex; align-items:center; justify-content:center;
+  animation:help-fade .16s ease-out;
+}
+@keyframes help-fade{ from{ opacity:0; } to{ opacity:1; } }
+.help-card{
+  width:min(430px, calc(100vw - 48px));
+  padding:16px 18px; background:var(--bg3);
+  outline:none;               /* 可聚焦以承接 Esc 后的焦点归还 */
+  animation:pop-in .18s ease-out;
+}
+.help-title{
+  font-size:var(--fs-lg); font-weight:700; color:var(--cyan);
+  letter-spacing:.04em; margin-bottom:10px;
+}
+.help-list{ display:grid; grid-template-columns:auto 1fr; gap:7px 14px; margin:0; }
+.help-list dt{ display:flex; gap:3px; align-items:center; }
+.help-list dd{ margin:0; font-size:var(--fs-md); color:var(--text); align-self:center; }
+.help-list kbd{
+  font-family:'Cascadia Code',Consolas,monospace; font-size:var(--fs-xs);
+  padding:1px 6px; border-radius:5px;
+  border:1px solid var(--border2); border-bottom-width:2px;
+  background:var(--bg4); color:var(--text);
+}
+.help-foot{
+  margin-top:12px; padding-top:10px; border-top:1px solid var(--border);
+  font-size:var(--fs-sm); color:var(--muted); line-height:1.6;
+}
+
+/* ============================ 断点 ============================ */
+/* <1280px:右栏折叠为抽屉(默认隐藏,顶栏/快捷键拉开) */
+@media (max-width:1280px){
+  #console-layout{ grid-template-columns:240px 1fr; }
+
+  /* 顶栏瘦身:1280×720 的演示机上,顶栏那一排的 min-content 是 1407px,
+   * 而视口只有约 1250 —— 不裁就一定有东西够不着。裁的原则是**留信息、去点缀**:
+   *   品牌副标题「· 演示控制台」(79px)、池标签「池最低水位」(55px)、
+   *   快捷键提示 H(16px)—— 三者都不是数据,池与品牌的 title 提示仍在。
+   * 数据类(链路徽章/池数值/帧速/剧本/数据源/时钟)一个不动。
+   * 池数值与品牌标题另给 ellipsis:文字比预期长时宁可截断,也不要把右边的
+   * 时钟挤出视口 —— 被裁掉的数字不会报错,只会默默不存在。 */
+  .topbar{ gap:10px; }
+  .tb-title em{ display:none; }
+  .tb-title,.tb-pool{ min-width:0; }
+  .tb-title,.tb-pool .v{ overflow:hidden; text-overflow:ellipsis; }
+  .tb-pool .k{ display:none; }
+  .tb-hint{ display:none; }
+  .right-panel{
+    position:fixed; top:var(--topbar-h); right:0; bottom:var(--bottom-h);
+    width:320px; z-index:25; box-shadow:-14px 0 34px rgba(0,0,0,.55);
+    transform:translateX(100%); transition:transform .18s ease;
+    border-left:1px solid var(--border2);
+  }
+  body.drawer-open .right-panel{ transform:translateX(0); }
+}
+/* <1024px:整页缩放 .9(演示机 1280×720 兜底) */
+@media (max-width:1024px){
+  #app{ zoom:.9; height:calc(100vh / .9); }
+  #console-layout{ grid-template-columns:220px 1fr; }
+}

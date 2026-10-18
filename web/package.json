@@ -1,0 +1,21 @@
+{
+  "name": "puf-drone-auth-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "PUF 无人机认证 · 前端模块(演示控制台 + 数据可视化 + Python 桥接),可整体拷入 puf-drone-auth 仓库根目录",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "three": "^0.186.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8"
+  }
+}
