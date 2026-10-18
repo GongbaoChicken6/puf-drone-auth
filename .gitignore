@@ -40,7 +40,7 @@ __pycache__/
 *.pyo
 .venv/
 *.egg-info/
-dist/
+/dist/
 
 # NOTE: bare "build/" pattern REMOVED - it would exclude our build/tcl/, build/ps1/, build/reports/
 # Python build output is covered by "dist/" above; if using setuptools add:
@@ -81,9 +81,11 @@ data/device_keys/
 # Vivado workspace (repo-internal; artifacts never committed)
 build/vivado/
 
-# Frontend session (managed separately)
-web/
+# Frontend: teammate workspace blob (merged & tracked copy lives in web/)
+web-over/
+# Handoff doc stays session-local
 docs/FRONTEND_HANDOFF.md
+# web/dist/ is the offline deliverable -- MUST be tracked (un-ignored via /dist/ anchor above)
 
 # Vivado MCP session state
 build/vivado_mcp/.vivado-ai/
