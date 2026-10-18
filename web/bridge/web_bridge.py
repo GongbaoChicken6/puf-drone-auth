@@ -518,9 +518,13 @@ class Orchestrator:
         return job
 
     def submit_sync(self, job: Job, timeout: float = 30.0) -> Job:
+        """同步提交。**注意(P2-2 fix)**:超时仅放弃等待——Job 已入队,必然执行,
+        其副作用(store.set_key/hsm.set_key/pool reset 等)稍后照常落盘。调用方
+        不应将超时误读为「操作失败且已回滚」;真正需要原子性的操作(如 setkey)
+        应在下一轮 Job 中查状态确认,而非依赖超时返回值。"""
         self.q.put(job)
         if not job.done.wait(timeout):
-            job.error = job.error or "orchestrator timeout"
+            job.error = job.error or "orchestrator timeout (job still queued; side effects will apply)"
         return job
 
     # ---------- 事件构造(§8.3 逐字段) ----------
@@ -643,6 +647,26 @@ class Orchestrator:
                     frame: bytes, fields: dict, c2: bytes) -> tuple[bool, str]:
         """一轮 CHALLENGE→RESPONSE→(EXTRA→RESPONSE)→RESULT→(代演 CONFIRM)。
         返回 (本轮是否进入灰区分叉, run_id)。"""
+        # P2-1(fix):gray 模式的 flip_prob=0.13 会永久突变共享器件的 _puf.flip_prob
+        # (main.py:156-159 的单线程假设被桥接多场景打破)。轮末显式恢复到默认,
+        # 否则后续 S1 normal 期望 HD≈8.3>TAU_PASS,会意外进灰区甚至 REJECT。
+        _saved_flip = None
+        if mode == "gray":
+            try:
+                _saved_flip = self.transport.inner.terminal(tid)._puf.flip_prob
+            except Exception:
+                pass
+        try:
+            return self._auth_round_inner(run_id, tid, mode, frame, fields, c2)
+        finally:
+            if _saved_flip is not None:
+                try:
+                    self.transport.inner.terminal(tid)._puf.flip_prob = _saved_flip
+                except Exception:
+                    pass
+
+    def _auth_round_inner(self, run_id: str, tid: int, mode: str,
+                          frame: bytes, fields: dict, c2: bytes) -> tuple[bool, str]:
         seeds = fields["seeds"]
         self._emit_frame(run_id, tid, self.P.MSG_CHALLENGE, frame, outgoing=True)
         r1s = self.transport.respond(
@@ -1258,7 +1282,8 @@ class MockApp:
                 self.hub.publish(etype, payload)
                 time.sleep(0.4)
 
-    def _script_auth(self, run_id: str) -> list[tuple[str, dict]]:
+    def _script_auth(self, run_id: str, tid: int = 7,
+                     mode: str = "normal") -> list[tuple[str, dict]]:
         """一条 S1 事件脚本(HD 值与黄金帧 §4 的 RESULT hd=5 对齐)。"""
         tid = 7
         script = [
