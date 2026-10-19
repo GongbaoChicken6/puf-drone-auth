@@ -1,0 +1,128 @@
+[
+  {
+    "severity": "critical",
+    "category": "C-步骤可操作性/E-硬件依赖",
+    "description": "UART 引脚（radio_txd/radio_rxd）在 ZC706 迁移信息中完全缺失。摘要第四节引脚表和 Step 1/Step 2 只覆盖时钟/LED/拨码/按键/复位 12 颗板载引脚，未给串口引脚。ZC702 会话选定的 FMC1_LPC LA02=L21/L22 是 ZC702 专属引脚，ZC706 不能沿用；wrapper 端口 radio_txd/radio_rxd 若无约束，综合会报 UCIO-1/NSTD-1 直接失败。已验证 ZC706 part0_pins.xml 中 FMC 引脚齐全（fmc_lpc_la02_p=AE12/n=AF12、fmc_hpc_la02_p=AK17/n=AK18，均 LVCMOS25），数据源可用但选 LPC 还是 HPC、物理接插件与走线方案均未决。migration_assess.json 还明确提示：FMC LA 走 LVCMOS25 依赖 VADJ=2.5V，ZC706 的 VADJ 出厂值需查 UG954 核实（本机无 UG954，未验证）。",
+    "suggestion": "在摘要和 w3_top_zc706.xdc 任务中补 UART 引脚决策：建议选 FMC LPC LA02（AE12/AF12，LVCMOS25，与 ZC702 叙事对齐），Step 2 前先按 UG954 确认 ZC706 VADJ 出厂值与 LVCMOS25 匹配；否则换 HPC 或改 IOSTANDARD。同时注明物理引出方案（FMC 转接板/杜邦线 + USB-UART 适配器）。"
+  },
+  {
+    "severity": "high",
+    "category": "B-遗漏风险限制",
+    "description": "摘要未提示 wrapper 不在 CI 编译清单这一盲区。已核实 scripts/ci_regression.ps1 的 $rtl 列表（15 文件）不含 w3_top_zc702.v（设计如此，wrapper 头注释第 2 条与 HANDOFF 均写明『本文件不在 ci_regression.ps1 的编译清单内』）。因此新建 w3_top_zc706.v 的语法/端口错误不会被 CI 抓到，CI 全绿也不代表 wrapper 可编译，最早要到 Step 3 Vivado 综合（慢反馈）或 Step 4 手工 xvlog 才暴露。摘要只说『CI 全绿/不改』，把这个坑完全略去了。",
+    "suggestion": "摘要补一句『wrapper 不在 CI 清单内，语法错误 CI 抓不到，Step 4 的 xvlog+xelab 手工验证是唯一门禁，不可跳过』；长期可在 CI 增加一个 wrapper 编译 job（配 clk_wiz stub），不影响 16 个 TB 的现有语义。"
+  },
+  {
+    "severity": "high",
+    "category": "C-步骤可操作性",
+    "description": "Step 4 依赖的 clk_wiz stub 在仓库中不存在，验证方法也没有脚本化记载。全仓 grep 确认无任何 clk_wiz stub 文件；w3_top_zc702.v 头注释写『Clk Wizard IP（clk_wiz_0）不在仓库里』；build/reviews/todo-recheck/consensus.md F8 同样确认『仓库无该 IP 文件』。HANDOFF 只留一句『clk_wiz 用临时 stub』（10-19 恢复版补了『需临时写在 TEMP』）。摘要写『同 ZC702 验证方法』，但那个『方法』只存在于已丢失的会话上下文中，新对话执行者拿不到现成 stub 也没有命令行模板（build/ps1/run_xvlog_w3.ps1 是旧的 11 文件语法检查脚本，连 w3_top.v 都不含）。",
+    "suggestion": "交接摘要中直接给出 stub 代码（空模块 clk_wiz_0，端口 clk_in1_p/clk_in1_n/reset/clk_out1/locked）与 xvlog/xelab 命令序列；建议把 stub 和一个 build/ps1/verify_wrapper.ps1 入库，ZC706 与 PYNQ-Z2 两次迁移都能复用。"
+  },
+  {
+    "severity": "high",
+    "category": "A-遗漏代码资产",
+    "description": "Step 5~8 的核心 Python 资产未在摘要资产清单中点名。src/python/server/serial_server.py（PC 串口接收循环、REPL serve 命令、CONFIRM 接线，19 单测入 CI）和 src/python/server/enroll.py（注册语义配对——HANDOFF 明确警告：注册语义与终端不一致则 PUF 评分必 REJECT、易误判为协议缺陷）只被『protocol/hsm/main/crp_pool/template_db 等』一个『等』字带过。tests/ 六个测试文件、tools/check_contract_sync.py（CI 契约门禁）、scripts/gen_puf_fixtures.py + sim/testvectors/*.mem（CI 新鲜度门禁）也未列。这些恰是新对话 Step 5（串口回环）、Step 7（双 COM）、Step 8（注册）要改/要跑的东西。",
+    "suggestion": "资产清单补 serial_server.py、enroll.py、tests/（6 文件）、tools/check_contract_sync.py、scripts/gen_puf_fixtures.py、sim/testvectors/{speck_random.mem,puf_tb_freqs.mem}，并各注一句在哪个 Step 起作用。"
+  },
+  {
+    "severity": "high",
+    "category": "A-遗漏代码资产",
+    "description": "Step 8（PUF 真接入）的范围边界未传递。docs/process/plans/ 下有 w4_plan.md、w4_design.md、w4_t1t2_design.md、w4_p5_ml_attack_plan.md 四份 W4 计划/设计书，其中记录了关键状态：w3_top.ENABLE_KEY_DERIVE 默认 0（fail-safe）、站端密钥下发通道 KEY_SEED(0x0096) 未实现、T1 状态『板上未可用，勿声明达成』、T2 真实熵只在板上成立。摘要 Step 8 只有一句『PUF 真接入 + 模板注册（W4 核心）』，执行者无从判断已做/未做边界，容易重复实现或错误声明完成度。",
+    "suggestion": "Step 8 改为显式引用 W4 计划书章节，并附三行状态摘要（ENABLE_KEY_DERIVE=0、KEY_SEED 通道未做、T1 板上未验证）；同时把 docs/process/crp_pool_sop.md 挂为 Step 8 的配套 SOP。"
+  },
+  {
+    "severity": "high",
+    "category": "E-硬件依赖",
+    "description": "换板后 PUF 必须重新 enrollment 这一最大工作量项未提示。build/reviews/board_diff/migration_assess.json 明确结论：『RO-PUF(16 环) CRP/阈值强依赖具体板卡物理特性——换任何板都强制重新 enrollment + 服务器端 fuzzy 阈值复核』，估时 8~12h，是 ZC706 迁移 14~23h 总量中最大的单项。摘要 Step 8 的『模板注册』四个字完全体现不出 CRP 池重采、阈值复核、双板（ZC706+PYNQ-Z2 各一套身份）的规模，排期时会被严重低估。",
+    "suggestion": "Step 8 拆出显式子项：ZC706 重采 CRP → 阈值复核 → 模板注册；PYNQ-Z2 重复一遍；引用 crp_pool_sop.md；按 migration_assess 的 8~12h/板 估时。"
+  },
+  {
+    "severity": "medium",
+    "category": "F-交接文档一致性",
+    "description": "摘要称 build_w3_board.tcl 为『top=wrapper + clk_wiz IP + XDC + 零豁免』，与仓库现状矛盾。当前脚本（W4 B5a 起）加载 src/rtl/w2_array/w2_waiver.xdc 豁免环振组合环 DRC LUTLP-1，头注释明写『这是唯一保留的 DRC 豁免；其余全约束、全把关』；migration_assess.json 也注明『w2_waiver.xdc(环振 LUTLP-1 豁免)原样有效』。若执行者按『零豁免』字面理解删掉该加载，比特流会被 LUTLP-1 阻断，白耗数小时排查。",
+    "suggestion": "摘要更正为『仅保留 w2_waiver.xdc（LUTLP-1 环振豁免，设计使然）』；Step 3 明确要求保留该行 add_files。"
+  },
+  {
+    "severity": "medium",
+    "category": "F-交接文档一致性",
+    "description": "『全部 12 个 testbench ✅ 不改』计数过时。CI 现为 16 个 TB（W4 新增 tb_puf_path、tb_key_derive、tb_w3top_keyloop、tb_ro_entropy；ci_regression.ps1 $tbNames 实数 16，docs/DIRECTORY_STRUCTURE.md 与 HANDOFF 均写 16/16）；src/rtl 共 17 个 .v（CI 编 15 个 + wrapper + ro_ratio_top）。新执行者跑 CI 看到『16/16 PASS』会与摘要的 12 对不上，怀疑基线漂移。",
+    "suggestion": "摘要更正为『16 TB + 109 单测 + 契约/金丝雀门禁全绿』；RTL 计数区分『CI 编译 15 个』与『仓库 17 个（含 wrapper 与 W1 顶层 ro_ratio_top）』。"
+  },
+  {
+    "severity": "medium",
+    "category": "C-步骤可操作性",
+    "description": "Step 3（更新 build_w3_board.tcl）不完整：脚本需要改的不止 part 和 wrapper 文件名——(a) 约束文件引用要从 w3_top.xdc 改为新 w3_top_zc706.xdc；(b) w2_waiver.xdc 加载必须保留；(c) clk_wiz IP 配置（200MHz 差分→100MHz+locked）两板相同、无需改——这点最好写明，否则执行者可能多余地重配 IP。摘要只提了 part + wrapper 文件名两处。",
+    "suggestion": "Step 3 改为四处核对清单：part=xc7z045ffg900-2、wrapper 文件名、XDC 文件名、w2_waiver.xdc 保留；并注明 clk_wiz 配置项零改动（migration_assess 已验证两板时钟拓扑相同）。"
+  },
+  {
+    "severity": "medium",
+    "category": "C-步骤可操作性",
+    "description": "Step 1 的端口语义改动未说明白：(a) ZC706 板文件有专用 reset=A8（LVCMOS15）和 3 颗 gpio_sws 按键（AK25/K15/R27），摘要未说 sys_rst_btn_n 接 A8 还是某颗 gpio_sw，也未说 auth_btn 接哪颗——migration_assess 只提示『auth_btn 需改接 dip_switches 或 gpio_sws 之一』但没定案；(b) ZC706 拨码 4 位，wrapper 的 term_id_dip 要从 [1:0] 扩到 [3:0]，且 .term_id_sw({6'h00,...}) 的 tie 要同步改 {4'h00,...}——这是端口宽度+连接语义改动，不是摘要说的单纯『改引脚』；(c) ZC702 按键低有效的假设需对 A8 复位极性复核（wrapper 里 rst_n=btn&locked，若 A8 极性相反会常复位）。",
+    "suggestion": "Step 1 补三条：sys_rst_btn_n←A8（先按 UG954 核极性，必要时取反）；auth_btn←建议 AK25（LVCMOS25，避免增加第 5 颗 LVCMOS15）；term_id_dip[3:0]←AB17/AC16/AC17/AJ13 且 tie 改 {4'h00, term_id_dip}。"
+  },
+  {
+    "severity": "medium",
+    "category": "E-硬件依赖",
+    "description": "ZC706 侧线缆/接口硬件信息为零。仓库对 ZC702 有完整记录（J17 Mini-B=UART、U23 Micro-B=JTAG、J1 Mini-B=PS USB、6 针 mini-fit 电源、严禁 ATX），但 ZC706 的 JTAG 连接器形态（是否板载 USB-JTAG）、需要的 USB 线型（Micro-B/Mini-B/Type-C）、电源适配器规格、启动模式拨码位置全部无记载，board_diff 三份审查 JSON 也只查了引脚/器件未查接口外设。新对话带着 ZC702 的线缆认知去接 ZC706 可能直接插错口。",
+    "suggestion": "上板前先查 UG954（或板卡丝印）确认：ZC706 JTAG/USB-UART 端口与线型、电源适配器规格与接口、启动模式开关默认位；把结论写进 board/ 目录新建 zc706/README.md。"
+  },
+  {
+    "severity": "medium",
+    "category": "E-硬件依赖",
+    "description": "『433MHz 电台一对尚未购买』的事实未传递。HANDOFF 上板清单第 4 条明确『购买 433MHz 电台一对 ⬜ 待做』，board/radio/README.md 的接线表也还是『to be completed W2』状态。摘要架构写『UART/电台通信』，若电台未到位，Step 5 串口回环和 Step 7 双终端演示实际都依赖 USB-UART 适配器直连（每板一个），这个降级路径和所需硬件摘要完全没提。",
+    "suggestion": "摘要注明电台采购状态；给出降级方案：2×USB-UART 适配器（CP210x/FTDI，3.3V TTL）+ 杜邦线接 FMC UART 引脚，PC 双 COM 口联调不依赖电台；电台到货后再替换链路层。"
+  },
+  {
+    "severity": "medium",
+    "category": "D-竞赛上下文",
+    "description": "交付物矩阵与评分权重缺失。仓库记载：W5 冻结周=设计报告（D13，15 分，report/ 目前是空壳）+ Skill 打包（D14，15 分，队友负责，skill/ 仅占位 README）+ ≤3 分钟视频；W6 交付周=11-03 提交（比 11-04 18:00 截止提前一天）+ GitHub/Gitee 开源 push；docs/FRONTEND_HANDOFF.md 还定义了 G5 门禁（互斥演示/ROC-EER/报告）。摘要只给了截止日和『PYNQ Skill 加分』一句，报告/视频/开源这些硬交付物只字未提，而它们恰恰要与板级迁移并行排期。",
+    "suggestion": "摘要补交付物矩阵（报告 15 分/Skill 15 分/视频≤3min/开源 push）与 11-03 提交日；板级排期（14~23h 迁移 + 8~12h/板 enrollment）与 W5 冻结周倒排对齐。"
+  },
+  {
+    "severity": "medium",
+    "category": "D-竞赛上下文",
+    "description": "『余约 22 天』已过时。该数字对应摘要落款 10-13；但仓库 board_diff 三份审查 JSON 生成于 2026-10-19T05:15，恢复 HANDOFF 的提交 e03cb38 是 10-19 20:07，今天是 10-19——距 11-04 18:00 截止实际约 16 天、距 11-03 提交约 15 天。摘要若被当作现状阅读，会让执行者高估 6 天缓冲。",
+    "suggestion": "摘要头部写明基准日期并按当前日期刷新剩余天数；后续每次更新交接时同步重算。"
+  },
+  {
+    "severity": "medium",
+    "category": "D-竞赛上下文",
+    "description": "中间检查点与 PYNQ Skill 加分细则均无法从仓库证实。全 docs 目录 grep『中期/检查点/初赛/答辩』零命中（用户假设的『10-13 中期报告』在仓库无任何记录——10-13 前后是 W4-P0~P3 代码提交）；摘要说『PYNQ Skill 是加分项（推荐不强制）』但仓库无竞赛通知原文，skill/README.md 是 W5 占位（列了 puf_eval.py/mavlink_loopback.py/build_automation 计划，无评分标准），『ZC706 也可跑 PYNQ（社区镜像）』也无仓库证据。这些若影响排期优先级，缺失会误导。",
+    "suggestion": "向用户/队友核实竞赛通知中的中间节点（中期报告、注册、区域赛时间）与 Skill 评分细则原文，补入摘要；未证实前不要在摘要里默认『无中期节点』或『Skill 推荐不强制』。"
+  },
+  {
+    "severity": "medium",
+    "category": "A-遗漏代码资产",
+    "description": "前端演示链路整体缺席。仓库有完整的 web 演示资产：web/（已构建 dist 控制台+可视化、bridge/web_bridge.py 与服务器桥接）、docs/FRONTEND_HANDOFF.md（明说『演示与数据可视化零硬件依赖可推进、直接服务答辩与 G5 门禁』，且要求离线静态形态）、web-over/ 探索版与多份未提交的 web/reviews 审查记录。双终端编队演示（Step 7~8 的展示层）大概率用这套控制台，摘要完全没提，且 web 侧还有未提交变更在工作区。",
+    "suggestion": "摘要补 web 资产清单与 FRONTEND_HANDOFF.md 入口；Step 7 演示形态二选一（web 控制台 vs 纯 REPL）尽早定，避免联调时再补前端；提醒处理 web/ 未提交文件。"
+  },
+  {
+    "severity": "low",
+    "category": "F-交接文档一致性",
+    "description": "保姆教程路径写错（两处）。实际文件在 docs/process/tutorials/w1_tutorial.md（实测 527 行），docs/tutorials/ 目录不存在；摘要与 HANDOFF 旧节均引用 docs/tutorials/w1_tutorial.md。518 行的计数也已漂移到 527。",
+    "suggestion": "更正路径为 docs/process/tutorials/w1_tutorial.md；教程按 ZC706 更新板级节时同步刷新行数引用，并考虑统一全部旧引用，避免第三种路径分裂。"
+  },
+  {
+    "severity": "low",
+    "category": "F-交接文档一致性",
+    "description": "仓库状态快照不完整且存在双交接文档。摘要写 HEAD 594c8ad，但审查期间 HEAD 已推进到 e03cb38（恢复 HANDOFF_SUMMARY.md，10-19）；工作区不干净：删除 build/reviews/board_diff/msg.txt、修改 web/前端适配与整合计划.md、未跟踪 build/{create_repo,cred2,cred_test,gh_auth}.ps1、web-offline.zip、web/reviews/*。另外仓库同时存在 docs/HANDOFF_SUMMARY.md（新权威）与 docs/process/handoff_summary.md（旧版，内容大段重叠）两份交接文档，历史审查 JSON 里对两者的引用本身就混用。",
+    "suggestion": "摘要注明『以 git log 实时状态为准』；明确 docs/HANDOFF_SUMMARY.md 为唯一权威入口并给 docs/process/handoff_summary.md 加 SUPERSEDED 标注；未跟踪的凭据类脚本（cred*/gh_auth）提醒所有者处理，避免误提交泄露。"
+  },
+  {
+    "severity": "low",
+    "category": "F-交接文档一致性",
+    "description": "粘贴版与仓库版的取舍规则未写明，两者实际是互补而非一致。仓库版迁移节是缩略版：没有『为什么选 ZC706』4 条理由、没有 PYNQ-Z2 迁移要点、没有资产清单；但比粘贴版多出关键句『clk_wiz stub 需临时写在 TEMP，仓库无现成 stub』。粘贴版则含仓库版没有的会话终验事实（断电重启+拔外设后 DS13 仍不亮的故障定性实验）。两者冲突处以谁为准没有约定。",
+    "suggestion": "约定规则：仓库提交版为基线、粘贴版为会话增量；把粘贴版独有事实（ZC702 终验结论、选板 4 理由）回写进仓库版，摘要头部声明『冲突以仓库最新提交为准』。"
+  },
+  {
+    "severity": "low",
+    "category": "A-遗漏代码资产",
+    "description": "次级相关资产未列：docs/DIRECTORY_STRUCTURE.md（竞赛提交要求 §3.3.5 到仓库目录的权威映射表，10-19 新入库，含 16TB/109 单测/技能包/报告等状态）、scripts/setup_external.ps1 + external/ 四个参考仓（c_library_v2/fpga_puf/puf-esp32-auth/PUF-lab）、build/ps1/run_*.ps1（注意 run_xvlog_w3.ps1 已过时：11 文件清单不含 w3_top.v，不能当 Step 4 工具）、data/bitstreams/（旧 ZC702 比特流，注意勿误烧到 ZC706）、report/（D13 报告空壳 + llm_log）、metrics/（竞赛指标表）。",
+    "suggestion": "摘要至少挂 docs/DIRECTORY_STRUCTURE.md 作为资产总索引；标注 run_xvlog_w3.ps1 过时；data/bitstreams 旧比特流注明『仅 ZC702 历史，勿用于新板』。"
+  },
+  {
+    "severity": "low",
+    "category": "C-步骤可操作性",
+    "description": "pyserial 依赖未声明。main.py 的 SerialTransport 在串口模式 import serial（注释明确 optional dependency，缺失时报『pyserial is required for serial mode: pip install pyserial』），仓库无 requirements.txt/pyproject.toml。Step 5 串口回环与 Step 7 双 COM 都走这条路，首次真机联调若没装 pyserial 会在最接近硬件的时刻卡壳。",
+    "suggestion": "Step 5 前置加『pip install pyserial』；建议顺手补 requirements.txt（目前依赖全靠环境现状）。"
+  }
+]
