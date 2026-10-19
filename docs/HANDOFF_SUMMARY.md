@@ -3,9 +3,13 @@
 > ZC702 确认硬件故障（DS14 亮/DS13 PWRGOOD 不亮），换 ZC706。
 > 完整交接摘要见用户粘贴版本或本节。新对话执行迁移工作。
 
-### 决定
-- ZC706 = 终端 1（实验室有），PYNQ-Z2 = 终端 2（实验室有）
+### 决定（2026-10-13 更新：双 ZC706）
+- **两块 ZC706**（实验室各有）：终端 1 + 终端 2
 - PC = 地面基站，两块板 = 无人机终端（编队演示）
+- **一份 wrapper + 一份 XDC + 一份比特流，烧两块板**
+- 终端区分：DIP 拨码（ZC706 有 4 位拨码，用低 2 位设 terminal_id 0~3）
+- PUF 天然不同（两颗不同物理芯片）——这正是演示卖点
+- ~~PYNQ-Z2 已排除~~（改为双 ZC706 后无需 PYNQ-Z2 迁移）
 
 ### ZC706 关键引脚（官方板卡文件，三方交叉验证）
 ```
@@ -17,12 +21,20 @@ LED：   Y21(LVCMOS25)  G2(LVCMOS15!)  W21(LVCMOS25)  A17(LVCMOS15!)
 ```
 器件: xc7z045ffg900-2 | 板卡文件: D:\vivado\...\zc706\1.5\
 
-### 迁移步骤（新对话按序执行）
-1. w3_top_zc706.v（参考 w3_top_zc702.v，改引脚+IOSTANDARD）
-2. w3_top_zc706.xdc（从 zc706 part0_pins.xml 逐引脚填，注意 4 颗 LVCMOS15）
-3. build_w3_board.tcl 更新（part=xc7z045ffg900-2）
-4. xvlog+xelab 验证（clk_wiz stub 需临时写在 TEMP，仓库无现成 stub）
-5. ZC706 实板验证 → 6. PYNQ-Z2 侧 → 7. PC 双端口 → 8. PUF 接入(W4)
+### 迁移步骤（双 ZC706 简化版，新对话按序执行）
+1. 创建 w3_top_zc706.v（参考 w3_top_zc702.v，改引脚 H9/G9/A8/Y21/G2/W21/A17 + IOSTANDARD）
+2. 创建 w3_top_zc706.xdc（从 zc706/1.5/part0_pins.xml 逐引脚填，注意 4 颗 LVCMOS15）
+3. 更新 build_w3_board.tcl（part=xc7z045ffg900-2 + wrapper 文件名）
+4. xvlog+xelab 验证
+   ⚠ clk_wiz_0 stub 不在仓库，需临时写在 %TEMP%（5 行）：
+   module clk_wiz_0(input clk_in1_p, clk_in1_n, reset, output clk_out1, locked);
+     assign clk_out1 = clk_in1_p; assign locked = ~reset;
+   endmodule
+5. 生成比特流 → **同一份 .bit 烧到两块 ZC706**
+6. 板 A 拨码设 terminal_id=1，板 B 拨码设 terminal_id=2
+7. 各板 FMC → USB-TTL → PC 两个 COM 口
+8. PC 侧 main.py 支持双 COM 口（两终端同时接入）
+9. PUF 真接入 + 两板分别注册模板（W4 核心，两颗芯片指纹必然不同）
 
 # PUF 无人机认证项目 · 交接摘要
 
