@@ -1,0 +1,127 @@
+[
+  {
+    "id": "meta",
+    "reviewer": "pynq_z2_search",
+    "created": "2026-10-19T05:15:12.601Z",
+    "task": "在本机搜索 PYNQ-Z2 板卡文件(part0_pins.xml/board.xml)或 XDC 引脚约束并提取用户 I/O 引脚表；若不存在则给出结论与获取方式；顺带核查 Board Store 中 ac701/sp701 板卡文件及其与 PYNQ 的关系",
+    "sources": {
+      "vivado_root": "D:/vivado/2026.1 (全树递归 *pynq* 文件名搜索)",
+      "board_store": "D:/vivado/2026.1/Vivado/data/xhub/boards/XilinxBoardStore/boards (vendor 仅 Xilinx, 68 个板卡目录全枚举)",
+      "external": "D:/puf-drone-auth/external (c_library_v2, fpga_puf, puf-esp32-auth, PUF-lab)",
+      "fpga_dir": "D:/文件/ssssssss/FPGA (全部 *.xdc 枚举 + clg400/pynq 文本 grep)",
+      "python_env": "Python 3.13.5 @ C:/Users/<user>/AppData/Local/Programs/Python/Python313, pip show pynq",
+      "aux_locations": "C:/Users/<user>/{.Xilinx, AppData/Roaming/Xilinx, Desktop, Documents, Downloads}, D:/{fpga_work, fpga_w1_review, workspace, coding, tmp, vivado/Downloads, vivado/xic}"
+    },
+    "method": "文件名级 *pynq* 递归搜索(Windows 大小写不敏感, 同时覆盖目录名) → 两个代码树内 *.xdc/*.tcl/*.md/*.py/*.xml 文本级 grep(pynq 与 clg400 双关键词) → 逐个读取候选 XDC 辨别目标板卡 → pip/python 环境核查 → ac701/sp701 的 board.xml 逐字段读取(part_name/组件清单)"
+  },
+  {
+    "id": "pynq_z2_local_search",
+    "verdict": "PYNQ-Z2 板卡文件不在本机（未找到任何 part0_pins.xml / board.xml / XDC）",
+    "searches": [
+      {
+        "location": "D:/vivado/2026.1",
+        "method": "Get-ChildItem -Recurse -Filter *pynq*",
+        "result": "0 命中（含目录名）"
+      },
+      {
+        "location": "Board Store .../XilinxBoardStore/boards",
+        "method": "vendor 与板卡目录全枚举",
+        "result": "仅 vendor=Xilinx 一个厂商、68 板（ac701...zcu670ld），无 pynq/PYNQ-Z2 条目；D:/vivado/2026.1/Vivado/data/boards 下也只有 board_schemas，无板卡定义。证实'Board Store 里没有'"
+      },
+      {
+        "location": "D:/vivado/Downloads 与 D:/vivado/xic",
+        "method": "递归枚举",
+        "result": "分别是 Vitis 2026.1 安装器与安装器运行库，无板卡文件"
+      },
+      {
+        "location": "D:/puf-drone-auth/external",
+        "method": "目录枚举 + 全树 *pynq*/*.xdc/part0_pins.xml/board.xml 搜索",
+        "result": "仅 c_library_v2/fpga_puf/puf-esp32-auth/PUF-lab 四个仓库，无 PYNQ 仓库；唯一 XDC = PUF-lab/constraints/consts.xdc"
+      },
+      {
+        "location": "D:/文件/ssssssss/FPGA",
+        "method": "全树 *pynq*/*.xdc 枚举 + 'clg400' 文本 grep（xdc/tcl/md/py/xml）",
+        "result": "XDC 共 5 个：consts.xdc(=PUF-lab 同款)、w1_probe.xdc(废弃占位、零引脚)、w1_ro_waiver.xdc、w2_waiver.xdc(纯 LUTLP-1 waiver)、w3_top.xdc(ZC702 底稿)；clg400 0 命中、pynq 文件名 0 命中"
+      },
+      {
+        "location": "Python 环境",
+        "method": "pip show pynq / pip list | grep pynq",
+        "result": "Python 3.13.5，pynq 包未安装（WARNING: Package(s) not found: pynq）"
+      },
+      {
+        "location": "用户目录与杂项目录",
+        "method": "C:/Users/<user>/{.Xilinx,AppData/Roaming/Xilinx,Desktop,Documents,Downloads} + D:/{fpga_work,fpga_w1_review,workspace,coding,tmp} 递归 *pynq*",
+        "result": "全部 0 命中（.Xilinx 与 Roaming/Xilinx 存在但无 pynq 内容）"
+      }
+    ],
+    "nearest_artifacts": [
+      {
+        "path": "D:/puf-drone-auth/external/PUF-lab/constraints/consts.xdc",
+        "what": "clk=W5@LVCMOS33(100MHz, create_clock 10ns), uart rx=B18/tx=A18@LVCMOS33",
+        "relevance": "引脚组合是 Digilent Basys3(XC7A35T-1CPG236) 教学板的典型映射，与 PYNQ-Z2(CLG400 封装、无 W5 时钟引脚)不符 —— 不能当作 PYNQ-Z2 引脚参考"
+      },
+      {
+        "path": "D:/文件/ssssssss/FPGA/w1_project/src/w1_probe.xdc + ro_probe_top.v",
+        "what": "README 标注'⛔ 废弃 旧版（PYNQ-Z2 绝对频率版）'",
+        "relevance": "两个文件均为零内容占位（w1_probe.xdc 只有注释声明'零引脚/零约束'），早期 PYNQ-Z2 路线已整体替换为 ZC702 方案，磁盘上没有残留任何 PYNQ-Z2 引脚号"
+      },
+      {
+        "path": "D:/puf-drone-auth/src/rtl/w3_protocol/w3_top.xdc",
+        "what": "头注释确认当前工程目标 = ZC702 (xc7z020clg484-1)",
+        "relevance": "佐证：现行仓库与 PYNQ 无板级关联，仅文档层面提及"
+      }
+    ],
+    "doc_traces_only": [
+      "D:/文件/ssssssss/FPGA/PUF认证方案V2_老师意见响应与优化.md:16 —— '板 1（PYNQ-Z2，主平台）：认证服务器 + 4 个 PUF 实例'；同文按 PYNQ-Z2(Z-7020, 5.3万 LUT)/Basys3/KV260 评估 XOR-CRO-PUF 资源",
+      "D:/文件/ssssssss/FPGA/压缩版6周作战排期.md:15 —— PYNQ-Z2 千元级采购/借用计划（尚无证据表明已到货）",
+      "D:/文件/ssssssss/FPGA/技能与开源项目调研.md:116 —— xilinx-skill 支持 Zynq-7000/7 系列覆盖 PYNQ-Z2/EGO1/Basys3（纯文字）",
+      "结论：全部为规划性文字，无任何可提取的引脚/IOSTANDARD 数据"
+    ],
+    "user_io_pin_table_extracted": "无（源文件不存在，无法提取；按规则不凭记忆杜撰引脚表）"
+  },
+  {
+    "id": "ac701_sp701_check",
+    "ac701": {
+      "exists": true,
+      "path": "D:/vivado/2026.1/Vivado/data/xhub/boards/XilinxBoardStore/boards/Xilinx/ac701/1.4/{board.xml, part0_pins.xml, preset.xml}",
+      "identity": "display_name='Artix-7 AC701 Evaluation Platform', vendor=xilinx.com, file_version=1.4, 板卡修订 1.1, url=www.xilinx.com/ac701",
+      "part_name": "xc7a200tfbg676-2",
+      "components": "DDR3(Micron MT8JTF12864HZ-1G6G1) + 4 位拨码(SDA04H1SBD) + Marvell M88E1111 板载以太网 PHY + SMA PHY + 旋转开关(Panasonic) + CP2103 UART + Micron N25Q256A SPI Flash + SiT9102AI 系统差分时钟 + FMC1 HPC 连接器"
+    },
+    "sp701": {
+      "exists": true,
+      "path": "D:/vivado/2026.1/Vivado/data/xhub/boards/XilinxBoardStore/boards/Xilinx/sp701/{1.0, 1.1}/{board.xml, part0_pins.xml, preset.xml}",
+      "identity": "display_name='Spartan-7 SP701 Evaluation Platform', vendor=xilinx.com, file_version=1.1, 板卡修订 1.0",
+      "part_name": "xc7s100fgga676-2",
+      "components": "DDR3(Micron MT8JTF12864HZ-1G6G1) + 16 位拨码 + 双 Marvell M88E1111 以太网 PHY + CP2103 UART + Micron N25Q256A SPI Flash + SiT9102AI 系统差分时钟"
+    },
+    "pynq_relation": "两者与 PYNQ 均无关系。ac701/sp701 是 AMD 官方纯 FPGA（无 Zynq PS）评估平台，分属 Artix-7/Spartan-7 家族；PYNQ-Z2 是 TUL 制造的 Zynq-7020 SoC 板（XC7Z020 CLG400 封装、带 PS DDR + Python/PYNQ 生态），从未进入 AMD Board Store（本机 Board Store 仅 vendor=Xilinx 也印证）。因此 ac701/sp701 的板卡文件不能给 PYNQ-Z2 迁移提供任何引脚/IOSTANDARD 依据",
+    "implication": "若迁移目标确为 PYNQ-Z2：本机 Vivado 内没有任何可替代板级定义（含 ac701/sp701/zc702/zcu 系列），必须先从外部获取 PYNQ-Z2 板卡文件并安装后，Create Project → Boards 才能选到"
+  },
+  {
+    "id": "acquisition",
+    "channels": [
+      {
+        "way": "GitHub 官方仓库 Xilinx/PYNQ（github.com/Xilinx/PYNQ）boards/PYNQ-Z2 目录",
+        "provides": "板卡文件、base overlay 工程与 master XDC（LED/按钮/拨码/125MHz 系统时钟等用户 I/O 与 IOSTANDARD）",
+        "note": "这是 Vivado 级约束的最权威离线来源；具体引脚以仓库文件为准，本机未验证"
+      },
+      {
+        "way": "TUL（制造商）官网产品页 www.tul.com.tw/Products/PYNQ-Z2",
+        "provides": "原理图、参考手册与约束文件下载",
+        "note": "硬件电平(VADJ/Bank 供电)以原理图为准"
+      },
+      {
+        "way": "pip install pynq",
+        "provides": "主机侧 Python overlay API（控制 .bit/.hwh），不含 Vivado 板卡 XML/XDC",
+        "note": "本机 Python 3.13.5 可能超出 PYNQ 官方支持解释器范围（通常需 3.8–3.10），如需安装建议先建对应版本 venv"
+      },
+      {
+        "way": "手动安装板卡文件到 Vivado",
+        "provides": "把 PYNQ-Z2 board_files 目录放入 <Vivado>/data/xhub/boards/ 自建厂商目录或工程本地 board repo",
+        "note": "安装后 Board 列表可见，即可复用 ZC702 的建板流程"
+      }
+    ],
+    "impact_for_parent_task": "PYNQ-Z2 侧的引脚/IOSTANDARD 对照在本机不可验证；migration_assess.json 中 PYNQ-Z2 条目在线获取失败、置信度降级的处理与本 finding 交叉一致 —— 离线状态下 PYNQ-Z2 迁移评估只能停留在外部知识；正式迁移前必须先落地官方板卡文件再逐引脚核对"
+  }
+]

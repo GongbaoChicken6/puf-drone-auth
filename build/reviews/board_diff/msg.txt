@@ -1,0 +1,12 @@
+docs: board migration handoff (ZC702 broken → ZC706 + PYNQ-Z2 dual-terminal)
+
+ZC702 confirmed dead (DS14 lit, DS13 PWRGOOD dark). Decision: migrate to ZC706
+(lab-available, 200MHz diff clock preserved, FMC preserved, board files in Vivado).
+PYNQ-Z2 as terminal 2 for formation demo. PC remains ground station.
+
+This handoff records: the decision, ZC706 key pins (from part0_pins.xml, three-way
+cross-verified including 4 LVCMOS15 pins), PYNQ-Z2 migration challenges (125MHz
+single-ended clock, no FMC, board files not local), existing code assets (w3_top.v
+board-agnostic wrapper approach), and the 8-step migration plan for the next session.
+
+Review artifacts: build/reviews/board_diff/ (3 JSON, 52KB total).
