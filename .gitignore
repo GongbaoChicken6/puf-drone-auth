@@ -90,3 +90,9 @@ docs/FRONTEND_HANDOFF.md
 # Vivado MCP session state
 build/vivado_mcp/.vivado-ai/
 build/vivado_mcp/mcp_cmd.json
+
+# Session-local credential-manager scratch scripts (runtime `git credential fill` helpers,
+# never part of the competition deliverable; kept on disk, kept out of git)
+build/create_repo.ps1
+build/cred*.ps1
+build/gh_auth.ps1
