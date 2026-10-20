@@ -1,4 +1,9 @@
 # W2 环振组合环豁免（改自 W1 的 w1_ro_waiver.xdc，覆盖 16 环）
+# ⚠ 2026-10-20 实测勘误（auto-review 内容审查）：本文件的 get_nets -hierarchical 在
+#   XDC 读取时（综合前）nets 不存在 -> 静默匹配 0 对象，豁免在 bitstream DRC 从未生效；
+#   且 generate 块与实例间分隔符是 '.' 非 '/'，原层级模式即便综合后也匹配不上。
+#   现由 build/tcl/build_w3_board.tcl 在综合后以 -hierarchical + {*u_ro_ring/n1} 应用
+#   （32 网响亮校验，BITSTREAM_SUCCESS WNS=1.060 实证）。本文件保留作文档与 dev 流。
 # 环振本体就是组合环，这是设计使然；不加豁免 write_bitstream 会被 DRC LUTLP-1 ERROR 阻断。
 # W2 的 16 个环在 ro_array 的 gen_ro_ring[0..15] 生成块里，网名带方括号索引，
 # 用 -hierarchical + name 过滤一次覆盖全部实例（层次网名经 DONT_TOUCH 保持稳定）：
