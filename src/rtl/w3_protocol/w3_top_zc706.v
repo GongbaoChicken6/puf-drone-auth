@@ -33,7 +33,7 @@ module w3_top_zc706 # (
 
     // 复位与控制
     input  wire         sys_rst_btn_n ,   // SW13 PL_CPU_RESET（低有效，A8）
-    input  wire         auth_btn      ,   // SW7 GPIO_SW_LEFT（空闲 1 / 按下 0）
+    input  wire         auth_btn      ,   // SW7 GPIO_SW_LEFT（空闲1/按下0，UG954 Table 1-29；板卡文件名 gpio_sws_3bits_tri_i_0）
     input  wire [3:0]   term_id_dip   ,   // SW12 pin1..4（ON=1 / OFF=0）
 
     // UART（PMOD1 J58，经 TXS0108E 电平移位，USB-TTL 3.3V 直插）

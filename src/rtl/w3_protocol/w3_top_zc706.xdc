@@ -1,7 +1,8 @@
 # w3_top_zc706.xdc -- ZC706 (xc7z045ffg900-2) 引脚/时钟约束
 # 顶层 = w3_top_zc706（wrapper 端口名）。禁止照抄 ZC702 任何引脚。
-# 事实来源：part0_pins.xml + xc7z045_ffg900.pkg(bank) + UG954 v1.8；
-# 本约束体系已过本机 Vivado 2026.1 synth/opt/place 初版实测（0 错 0 警，WNS=3.724）。
+# 事实来源：part0_pins.xml + xc7z045_ffg900.pkg(bank) + UG954 v1.8。
+# ⚠ 验证口径：**前身约束集**（仅 UART/LED 两行与本文件不同）已过本机 Vivado 2026.1
+# synth/opt/place 实测（0 错 0 警，WNS=3.724）；本文件自身的终验 = Phase 5 首次综合。
 
 # === CLOCK（bank34=VCC1V5_PL 1.5V 固定轨；LVDS_25 实测 BIVB-1 ERROR，禁抄 ZC702）===
 # 取 AMD 官方 zc706/1.5/new.ucf 对 H9/G9 的原生标准 DIFF_SSTL15
