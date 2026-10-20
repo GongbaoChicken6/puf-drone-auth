@@ -55,7 +55,8 @@ c0a32e9（10-20 09:26）入库 v1 = LF 行尾 + UTF-8 无 BOM + 中文注释 →
 2. **站端锁步**：enroll 驱动必须等上一轮 R1 frame_done 后再发下一批种子（rx_ok_latch 非等待态 1 拍即清，抢发=帧静默丢弃）。
 3. **安全注记（W5 报告如实声明）**：ENROLL_EN=1 = 站方可主动发起 PUF 查询（注册语义，物理近邻假设）。
 4. **Plan B 备案**：若 8a 路径出意外，站端逐轮全认证流采集（每轮按键+4 CRP，75 轮），不动 RTL。
-5. XDC 终验 = Phase 5 首次综合 DRC（前身约束集已过 0 错 0 警）。
+5. XDC 终验已完成：真实构建全链（synth/opt/place/route/bitstream）DRC 0 错（见 §3 P0 行终态）。
+6. **板卡使用教程** `docs/process/tutorials/zc706_tutorial.md`（UG954 依据，面向零经验使用者）；**烧写脚本** `build/tcl/program_zc706.tcl`（Phase 5，双 target 序列号选择 + PART 校验 + 文件存在性检查）。
 
 ## 6. 备注
 
