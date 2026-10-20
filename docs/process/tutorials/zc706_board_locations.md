@@ -132,4 +132,22 @@
 
 > 图片均从官方 PDF 提取；若与实物丝印有出入，以实物丝印为准并记录差异。
 
+---
+
+## 七、电源指示灯在哪（DS22 / DS24）
+
+位置：板子**右上角**，紧贴 **J22（12V 输入白色 6 针座）与 SW1（粉色电源拨柄）** 的那一排小灯群。丝印能读到 **GPIO LEDS / INIT / DONE / PWRGOOD / VTT / 3.3V** 等字样（放大图见 `assets/zc706/power_leds_zoom.jpg`）。
+
+| 灯 | 功能 | 在哪 | 什么时候亮 |
+|---|---|---|---|
+| **DS22** | 12V 输入指示（VCC12_P） | J22/SW1 旁 | SW1 拨 ON 后**立即亮** |
+| **DS24** | CTRL1_PWRGOOD（电源控制器总好信号） | 同排，丝印 **PWRGOOD** 旁 | 电源时序完成后亮（比 DS22 **稍晚**） |
+
+同排/同区还有各路电源指示：DS11=VCCINT(1.0V)、DS13=VCC1V5_PL(1.5V)、DS15=VADJ、DS16=VCC3V3(3.3V)、DS20/21=DDR VTT、DS23=FMC PG 等（Table 1-27）。
+
+上电自检顺序：SW1 ON → **DS22 亮** → 稍后 **DS24/PWRGOOD 亮** → 各轨道灯亮 → INIT(DS2) 红转绿 → 烧写后 DONE(DS3) 绿。
+
+> 找不到时：手机放大拍那一排，**PWRGOOD / GPIO LEDS / INIT / DONE** 是板上最大的丝印字样，顺着它们就能认出整组状态灯。
+
+
 
