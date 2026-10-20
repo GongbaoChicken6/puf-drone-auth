@@ -1,8 +1,8 @@
-# build_w3_board.tcl -- ZC702 上板构建（板级 wrapper 顶层 + Clk Wizard + 引脚约束）
+# build_w3_board.tcl -- ZC706 上板构建（板级 wrapper 顶层 + Clk Wizard + 引脚约束）
 # 用法: vivado -mode batch -source build_w3_board.tcl -tclargs <part> <outdir> <srcdir>
 #
 # 与 build_w3.tcl（dev 模式，top=w3_top、无 IP、无约束、DRC 豁免）的区别：
-#   本脚本 top = w3_top_zc702（含 200MHz 差分 -> 100MHz 适配），加载 w3_top.xdc，
+#   本脚本 top = w3_top_zc706（含 200MHz 差分 -> 100MHz 适配），加载 w3_top_zc706.xdc，
 #   生成 clk_wiz_0。W4 B5a 起含 PUF 子系统（challenge_decode + 真实 ro_array，
 #   环振本体即组合环，属设计使然）——加载 w2_waiver.xdc 豁免 LUTLP-1，
 #   这是唯一保留的 DRC 豁免；其余全约束、全把关。
@@ -29,11 +29,11 @@ $SRC/rtl/w2_array/ro_entropy.v \
     $SRC/rtl/common/speck64_96.v \
     $SRC/rtl/w3_protocol/terminal_fsm.v \
     $SRC/rtl/w3_protocol/w3_top.v \
-    $SRC/rtl/w3_protocol/w3_top_zc702.v \
+    $SRC/rtl/w3_protocol/w3_top_zc706.v \
 ]
 
 # 引脚约束：引脚号须先按保姆教程 2.3 核对 UG850 后取消 w3_top.xdc 里的注释
-add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top.xdc
+add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top_zc706.xdc
 # W4 B5a：环振组合环豁免（设计使然，w2_waiver 头注释自证无豁免必被 LUTLP-1 阻断）
 add_files -fileset constrs_1 $SRC/rtl/w2_array/w2_waiver.xdc
 
@@ -48,13 +48,13 @@ set_property -dict [list \
 ] [get_ips clk_wiz_0]
 generate_target all [get_ips clk_wiz_0]
 
-set_property top w3_top_zc702 [current_fileset]
-synth_design -top w3_top_zc702 -part $PART
+set_property top w3_top_zc706 [current_fileset]
+synth_design -top w3_top_zc706 -part $PART
 opt_design
 place_design
 route_design
 
 report_utilization -file $OD/utilization.rpt
 report_timing_summary -file $OD/timing.rpt
-write_bitstream -force $OD/w3_top_zc702.bit
+write_bitstream -force $OD/w3_top_zc706.bit
 puts "BITSTREAM_SUCCESS"
