@@ -80,6 +80,9 @@ data/device_keys/
 
 # Vivado workspace (repo-internal; artifacts never committed)
 build/vivado/
+# ZC706 board build outdir (bitstream/project/rpt live here; rpts get copied to
+# build/reviews/zc706_bringup/ as evidence before any commit)
+build/board_zc706/
 
 # Frontend: teammate workspace blob (merged & tracked copy lives in web/)
 web-over/

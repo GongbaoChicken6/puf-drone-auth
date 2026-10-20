@@ -56,7 +56,7 @@
 
 **auth_btn 极性**（审查确认项）：按键空闲=1/按下=0，w3_top.v:121 上升沿触发 ⇒ 语义=「按下并**松开**后启动」。默认直通（与模板一致），教程叙述写「按一下并松开」。
 **其余一律不动**：clk_wiz_0 实例、`rst_n = sys_rst_btn_n & mmcm_locked`、BAUD/TIMEOUT_S。w3_top.v **端口**不改（参数新增见 8a，向后兼容）。
-**验证清单**：`grep -nE "zc702|D18|C19|LVDS_25|GPIO_SW_N|W6|W7|6'h00" w3_top_zc706.v` **零命中**（初版只查 zc702，抓不到注释残留——审查 P2 修正）；Phase 4 xvlog/xelab 过。
+**验证清单**：`grep -nE "zc702|D18|C19|GPIO_SW_N|\bW6\b|\bW7\b|6'h00" w3_top_zc706.v` 零命中；`LVDS_25` 仅允许命中 1 处=「禁抄 ZC702 的 LVDS_25」告警注释（⚠ 模式用 `\bW7\b`——裸 `W7` 误伤 ZC706 按键名 SW7，内容审查 P2 实测 3 处良性命中）；Phase 4 xvlog/xelab 过。
 **反模式**：❌ 改 w3_top 端口/顺手优化；❌ wrapper 进 CI 清单。
 **提交**：`feat(board): add w3_top_zc706 wrapper (PMOD UART, 4-bit DIP, ENROLL_EN=1)`
 
@@ -136,13 +136,13 @@ $vw = 'D:\vivado\2026.1\Vivado\bin'
 & "$vw\xelab.bat" -debug typical w3_top_zc706 -s w3_zc706_chk
 ```
 （审查核实：无需 w2_top.v——w3_top 不例化它；清单与 build_w3_board.tcl 一致。）
-3. 交付：build/ps1/verify_wrapper.ps1 脚本化入库（CI 不接入）。
+3. 交付：build/ps1/verify_wrapper.ps1 脚本化入库（CI 不接入）。**覆盖口径（内容审查 P1 修正）**：它 = xvlog/xelab 语法 + XDC↔wrapper 端口交叉检查 + xsim 预清——**不含** synth/IP 集成/时序/DRC（build_w3_board.tcl 曾因 clk_wiz_0 IP 集成断裂 synth 8-439，只有真实构建能抓）。
 **验证**：xvlog/xelab exit 0，无 ERROR。
 **提交**：`build(ps1): verify_wrapper.ps1 gate`
 
 ## Phase 5 · 比特流 + 双板烧写
 
-1. 生成：`vivado -mode batch -source build\tcl\build_w3_board.tcl -tclargs xc7z045ffg900-2 build\board_zc706 .` → `BITSTREAM_SUCCESS`；核对 utilization/timing（基线 4190 LUT/7.88%@ZC702；ZC706 ~2% 正常）。**rpt 归档**：utilization.rpt/timing.rpt 拷入 build/reviews/zc706_bringup/ 后提交，`build/board_zc706/` 加 .gitignore（审查 P3：rpt 无忽略规则会污染 status）。
+1. 生成（⚠ srcdir=**src 目录**非仓库根——内容审查 P0 修复，脚本已加 $SRC/rtl 守卫+update_compile_order IP 接线+WNS 时序门禁）：`vivado -mode batch -source build\tcl\build_w3_board.tcl -tclargs xc7z045ffg900-2 build\board_zc706 src` → 期待 `BITSTREAM_SUCCESS WNS=<n>`；核对 utilization/timing（基线 4190 LUT/7.88%@ZC702；ZC706 ~2% 正常）。**rpt 归档**：utilization.rpt/timing.rpt 拷入 build/reviews/zc706_bringup/ 后提交，`build/board_zc706/` 加 .gitignore（审查 P3：rpt 无忽略规则会污染 status）。
 2. DRC 记录：LUTLP-1/NSTD-1/UCIO-1 → 回 Phase 2/3 修。
 3. 烧写脚本 build/tcl/program_zc706.tcl（COPY measure_w1.tcl 骨架去 VIO 段；**审查 P2 加固**——空参检查/多 target 防御/PART 校验）：
 ```tcl
@@ -213,6 +213,8 @@ python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\
    **实现注记（Round-2）**：S_IDLE 不在 rx_ok_latch 保持列表（terminal_fsm.v:316）——锁存块在非等待态每拍清零，新增 0x0091 分支是 **1 拍采样窗口**，同沿 NBA 语义下功能成立；实现时**勿"顺手整理"锁存块**；TB 直接用既有 feed_frame 任务（tb_terminal_fsm.v:157）打 fp_frame_ok 脉冲。
 5. **门禁：全量 CI 复跑 16/16 + Python 全绿才许提交。**
 6. 安全注记：使能位=站方可主动发起 PUF 查询（注册语义本就如此，物理近邻假设）；W5 报告如实声明。
+8. **安全修复（内容审查 P1，已落地）**：两个接受分支同时清 `calc_done_flag`——否则攻击链「合法 R1 后压制 RESULT→超时（旗标陈旧）→注册挑战→重放录制的 RESULT」可绕过 S_VERIFY_R2 的 P2-1 守卫冒充基站（攻击 TB 实证 VULNERABLE→修复后 BLOCKED）；tb_terminal_fsm 的 **TE2** 用例已把该攻击锁进 CI。
+9. **站端锁步约束（defect-reviewer P3）**：rx_ok_latch 仅在等待态保持——站端 enroll 驱动必须等上一轮 R1 `frame_done` 后再发下一批种子，抢先发=帧被静默丢弃、终端 2s 超时。
 7. **S_SESSION 盲区（Round-2）**：认证 PASS 后 FSM 驻留 S_SESSION（仅 auth_start 离开、无超时），该态忽略 0x0091——**每次 enroll 前先按 SW13 复位终端**。首次注册无模板→REJECT→S_BLOCKED→S_IDLE 自愈不受影响；但 Phase 8 步骤 1 的自证认证若已 PASS（再注册场景），终端会停在 S_SESSION 使 enroll 停滞退种。
 **备案 Plan B**（不动 RTL）：站端改逐轮全认证流采集（每轮 4 CRP、每轮一次按键，25 轮×3 测量=75 次按键+新采集驱动代码）——仅当 8a 补丁出意外时用。
 **工作量**：RTL+TB+CI ≈ 3~5h（含重综合 ~10min）。
