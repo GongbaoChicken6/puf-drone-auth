@@ -403,7 +403,8 @@ module terminal_fsm # (
                         puf_seed_idx<= 3'd0;
                         puf_dec_busy<= 1'b0;
                         timeout_cnt <= 32'd0;
-                        state       <= S_PUF_DECODE;
+                        calc_done_flag <= 1'b0;  // 8a 安全修复(defect-reviewer P1)：注册轮进入即
+                        state       <= S_PUF_DECODE;  // 失效上一会话 R2 期望，防重放绕过 P2-1 守卫
                     end
                 end
 
@@ -609,6 +610,7 @@ module terminal_fsm # (
                         puf_seed_idx<= 3'd0;
                         puf_dec_busy<= 1'b0;
                         timeout_cnt <= 32'd0;
+                        calc_done_flag <= 1'b0;  // 8a 安全修复：同上（背靠背轮同样失效旧期望）
                         state       <= S_PUF_DECODE;
                     end else if (timeout_cnt >= TIMEOUT_CYCLES) begin
                         state    <= S_BLOCKED;

@@ -8,7 +8,8 @@
 // T3: 超时流程（等挑战超时 → BLOCKED）
 // TE1: Phase 8a 注册流（默认编译 ENROLL_IDLE_ACCEPT=1）：S_IDLE 无按键直收
 //      0x0091 → R1 → S_WAIT_RESULT 背靠背再收 → R1 → 停喂后超时自清
-// TEN: 参数=0 回归锁（xvlog -d ENROLL_NEG 手动跑，不入 CI）：S_IDLE 忽略 0x0091
+// TE2: 注册态重放锁——压制 RESULT->超时->注册挑战->重放黄金 RESULT 必被 P2-1 守卫拒
+// TEN: 参数=0 回归锁（CI 附加段自动跑，见 ci_regression.ps1 ENROLL_NEG step）
 //============================================================================
 module tb_terminal_fsm;
 
@@ -43,6 +44,7 @@ module tb_terminal_fsm;
     reg         mf_frame_err = 1'b0;
 
     integer errors = 0;
+    reg saw_confirm = 1'b0;   // CONFIRM 帧监视（TE2 重放拒绝断言用）
     integer i;
     integer tx_byte_count = 0;
     reg [7:0] tx_captured [0:63];
@@ -131,6 +133,13 @@ module tb_terminal_fsm;
     );
 
     always #5 clk = ~clk;
+
+    //------------------------------------------------------------------------
+    // CONFIRM 帧监视（TE2：重放 RESULT 被拒后绝不应有 CONFIRM 发出）
+    //------------------------------------------------------------------------
+    always @(posedge clk) begin
+        if (mf_frame_done && mf_msg_id == 24'h0094) saw_confirm <= 1'b1;
+    end
 
     //------------------------------------------------------------------------
     // mavlink_frame 模型：收到 start 后模拟 payload_phase + frame_done
@@ -308,8 +317,10 @@ module tb_terminal_fsm;
         wait (mf_frame_done === 1'b1); @(negedge clk);
         if (mf_msg_id !== 24'h0092) begin
             errors = errors + 1; $display("[TE1 FAIL] idle R1 msgid=%h", mf_msg_id);
+        end else if (mf_pay_len !== 6'd32) begin
+            errors = errors + 1; $display("[TE1 FAIL] idle R1 len=%0d expect 32", mf_pay_len);
         end else
-            $display("  [TE1] S_IDLE accepted CHALLENGE -> R1 (no button)");
+            $display("  [TE1] S_IDLE accepted CHALLENGE -> R1 (no button, 32B)");
 
         // 2) 背靠背第二轮：此刻 DUT 在 S_WAIT_RESULT，直接再喂 CHALLENGE
         for (i = 0; i < 32; i = i + 1)
@@ -318,8 +329,10 @@ module tb_terminal_fsm;
         wait (mf_frame_done === 1'b1); @(negedge clk);
         if (mf_msg_id !== 24'h0092) begin
             errors = errors + 1; $display("[TE1 FAIL] back-to-back R1 msgid=%h", mf_msg_id);
+        end else if (mf_pay_len !== 6'd32) begin
+            errors = errors + 1; $display("[TE1 FAIL] back-to-back R1 len=%0d expect 32", mf_pay_len);
         end else
-            $display("  [TE1] S_WAIT_RESULT accepted next CHALLENGE -> R1");
+            $display("  [TE1] S_WAIT_RESULT accepted next CHALLENGE -> R1 (32B)");
 
         // 3) 停止喂帧：S_WAIT_RESULT 超时 → BLOCKED（会话自清，非挂死）
         repeat (1200) @(negedge clk);
@@ -327,6 +340,54 @@ module tb_terminal_fsm;
             errors = errors + 1; $display("[TE1 FAIL] result=%0d expect 3 (enroll-idle timeout)", auth_result);
         end else
             $display("[TE1 PASS] enroll flow + idle-timeout self-clear");
+
+        // ============ TE2: 注册态重放锁（defect-reviewer P1 的 CI 回归） ============
+        // 攻击链：合法认证 R1 后压制 RESULT -> 超时（旗标陈旧=1）-> 注册挑战 ->
+        // R1 -> 重放录制的"合法"RESULT（黄金 R2，与陈旧期望匹配）。
+        // 修复后：注册接受即清 calc_done_flag -> S_VERIFY_R2 守卫拦截 -> BLOCKED 且无 CONFIRM。
+        $display("[..TE2] enroll replay-reject (P1 regression)");
+        rst = 1'b1;
+        repeat (2) @(negedge clk);
+        rst = 1'b0;
+        repeat (2) @(negedge clk);
+        saw_confirm = 1'b0;
+        @(negedge clk);
+        auth_start <= 1'b1;
+        @(negedge clk);
+        auth_start <= 1'b0;
+        wait (mf_frame_done === 1'b1); @(negedge clk);   // ACCESS（rst 后 C2 复位 -> 首 C2=a1..a8）
+        for (i = 0; i < 32; i = i + 1)
+            fp_payload_buf[i] = 8'h50 + i;
+        feed_frame(24'h0091, 8'd32);                      // CHALLENGE（按键路径，calc_done=1）
+        wait (mf_frame_done === 1'b1); @(negedge clk);   // R1
+
+        repeat (1200) @(negedge clk);                     // 压制 RESULT -> 超时 BLOCKED -> IDLE
+        if (auth_result !== 2'd3) begin
+            errors = errors + 1; $display("[TE2 FAIL] expect timeout BLOCKED first, got %0d", auth_result);
+        end
+
+        for (i = 0; i < 32; i = i + 1)                    // 注册挑战（S_IDLE 接受并清旗标）
+            fp_payload_buf[i] = 8'h60 + i;
+        feed_frame(24'h0091, 8'd32);
+        wait (mf_frame_done === 1'b1); @(negedge clk);   // 注册 R1
+        if (mf_msg_id !== 24'h0092) begin
+            errors = errors + 1; $display("[TE2 FAIL] enroll R1 msgid=%h", mf_msg_id);
+        end
+
+        fp_payload_buf[0] = 8'h00;                        // 重放黄金 RESULT（R2=7b45b0545e59aa94）
+        fp_payload_buf[1] = 8'h05;
+        fp_payload_buf[2]  = 8'h7b; fp_payload_buf[3]  = 8'h45;
+        fp_payload_buf[4]  = 8'hb0; fp_payload_buf[5]  = 8'h54;
+        fp_payload_buf[6]  = 8'h5e; fp_payload_buf[7]  = 8'h59;
+        fp_payload_buf[8]  = 8'haa; fp_payload_buf[9]  = 8'h94;
+        feed_frame(24'h0093, 8'd10);
+        repeat (20) @(negedge clk);
+        if (auth_result === 2'd1 || saw_confirm) begin
+            errors = errors + 1; $display("[TE2 FAIL] replayed RESULT accepted! result=%0d confirm=%b", auth_result, saw_confirm);
+        end else if (auth_result !== 2'd3) begin
+            errors = errors + 1; $display("[TE2 FAIL] expect BLOCKED(3), got %0d", auth_result);
+        end else
+            $display("[TE2 PASS] replayed RESULT rejected by P2-1 guard (no CONFIRM)");
 `else
         // ============ TEN: 参数=0 回归锁（ENROLL_NEG 编译） ============
         $display("[..TEN] enroll disabled: S_IDLE must ignore 0x0091");
@@ -347,7 +408,7 @@ module tb_terminal_fsm;
 
     // 看门狗
     initial begin
-        #500_000;
+        #2_000_000;   // TE2 加入后总时长 ~0.6ms，看门狗放宽到 2ms
         $display("[WATCHDOG] TIMEOUT, state inspection needed");
         $display("TB_TERMINAL_FSM_FAIL errors=%0d (watchdog)", errors);
         $finish;
