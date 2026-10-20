@@ -6,6 +6,9 @@
 // T1: 正常通过流程（ACCESS→CHALLENGE→R1→RESULT(pass+R2)→CONFIRM→SESSION）
 // T2: 拒绝流程（RESULT 含 reject 码 → BLOCKED）
 // T3: 超时流程（等挑战超时 → BLOCKED）
+// TE1: Phase 8a 注册流（默认编译 ENROLL_IDLE_ACCEPT=1）：S_IDLE 无按键直收
+//      0x0091 → R1 → S_WAIT_RESULT 背靠背再收 → R1 → 停喂后超时自清
+// TEN: 参数=0 回归锁（xvlog -d ENROLL_NEG 手动跑，不入 CI）：S_IDLE 忽略 0x0091
 //============================================================================
 module tb_terminal_fsm;
 
@@ -79,7 +82,14 @@ module tb_terminal_fsm;
     //------------------------------------------------------------------------
     // DUT
     //------------------------------------------------------------------------
+`ifdef ENROLL_NEG
+    // 负向变体（手动 xvlog -d ENROLL_NEG，不入 CI）：参数=0 默认行为回归锁
     terminal_fsm # (.TIMEOUT_CYCLES(1000), .MEASURE_CYCLES(32'd64)) dut (
+`else
+    // 默认（CI）：参数=1——Phase 8a 注册流覆盖 + 全部既有流程回归
+    terminal_fsm # (.TIMEOUT_CYCLES(1000), .MEASURE_CYCLES(32'd64),
+                    .ENROLL_IDLE_ACCEPT(1)) dut (
+`endif
         .clk           (clk          ),
         .rst           (rst          ),
         .auth_start    (auth_start   ),
@@ -281,6 +291,52 @@ module tb_terminal_fsm;
             errors = errors + 1; $display("[T3 FAIL] result=%0d expect 3 (timeout)", auth_result);
         end else
             $display("[T3 PASS] challenge timeout → BLOCKED");
+
+`ifndef ENROLL_NEG
+        // ============ TE1: Phase 8a 注册流（ENROLL_IDLE_ACCEPT=1） ============
+        $display("[..TE1] enroll idle-accept flow (Phase 8a)");
+        // 板上语义：enroll 前按 SW13 复位——TB 等价重新拉 rst
+        rst = 1'b1;
+        repeat (2) @(negedge clk);
+        rst = 1'b0;
+        repeat (2) @(negedge clk);
+
+        // 1) 无按键：S_IDLE 直接收 CHALLENGE → 应答 R1
+        for (i = 0; i < 32; i = i + 1)
+            fp_payload_buf[i] = 8'h50 + i;
+        feed_frame(24'h0091, 8'd32);
+        wait (mf_frame_done === 1'b1); @(negedge clk);
+        if (mf_msg_id !== 24'h0092) begin
+            errors = errors + 1; $display("[TE1 FAIL] idle R1 msgid=%h", mf_msg_id);
+        end else
+            $display("  [TE1] S_IDLE accepted CHALLENGE -> R1 (no button)");
+
+        // 2) 背靠背第二轮：此刻 DUT 在 S_WAIT_RESULT，直接再喂 CHALLENGE
+        for (i = 0; i < 32; i = i + 1)
+            fp_payload_buf[i] = 8'h70 + i;
+        feed_frame(24'h0091, 8'd32);
+        wait (mf_frame_done === 1'b1); @(negedge clk);
+        if (mf_msg_id !== 24'h0092) begin
+            errors = errors + 1; $display("[TE1 FAIL] back-to-back R1 msgid=%h", mf_msg_id);
+        end else
+            $display("  [TE1] S_WAIT_RESULT accepted next CHALLENGE -> R1");
+
+        // 3) 停止喂帧：S_WAIT_RESULT 超时 → BLOCKED（会话自清，非挂死）
+        repeat (1200) @(negedge clk);
+        if (auth_result !== 2'd3) begin
+            errors = errors + 1; $display("[TE1 FAIL] result=%0d expect 3 (enroll-idle timeout)", auth_result);
+        end else
+            $display("[TE1 PASS] enroll flow + idle-timeout self-clear");
+`else
+        // ============ TEN: 参数=0 回归锁（ENROLL_NEG 编译） ============
+        $display("[..TEN] enroll disabled: S_IDLE must ignore 0x0091");
+        feed_frame(24'h0091, 8'd32);
+        repeat (100) @(negedge clk);
+        if (auth_busy !== 1'b0) begin
+            errors = errors + 1; $display("[TEN FAIL] auth_busy=%b expect 0", auth_busy);
+        end else
+            $display("[TEN PASS] S_IDLE ignored CHALLENGE (param=0)");
+`endif
 
         // ============ 总结 ============
         repeat (5) @(negedge clk);

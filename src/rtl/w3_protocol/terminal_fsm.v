@@ -26,7 +26,12 @@ module terminal_fsm # (
     // 裕量 65536 覆盖打包与握手抖动
     parameter PUF_WD_CYCLES    = (WARMUP_WINS + 1) * MEASURE_CYCLES + 32'd65536,
     // W4-P4 T1: 0=TB 兼容（DEVICE_KEY 参数，黄金不变），1=板上（PUF 派生密钥）
-    parameter ENABLE_KEY_DERIVE = 0
+    parameter ENABLE_KEY_DERIVE = 0,
+    // Phase 8a: 站端驱动注册。1=S_IDLE 与 S_WAIT_RESULT 受控接受 0x0091（板级
+    // wrapper 置 1，支持站端 enroll 的背靠背 CHALLENGE→R1 轮询）；0=默认——
+    // 全部既有语义与黄金完全不变。S_WAIT_RESULT 内 0x0093/0x0095 判定保持在前
+    // （认证语义优先，与注册挑战无 msgid/长度重叠）。
+    parameter ENROLL_IDLE_ACCEPT = 0
 ) (
     input  wire        clk       ,
     input  wire        rst       ,
@@ -387,6 +392,18 @@ module terminal_fsm # (
                         end else begin
                             state <= S_CALC_R2;
                         end
+                    end else if (ENROLL_IDLE_ACCEPT && rx_ok_latch &&
+                                  fp_msg_id == 24'h0091 && fp_pay_len == 8'd32) begin
+                        // Phase 8a：注册模式——站端主动挑战（无按键），接受体与
+                        // S_WAIT_CHALL 一致。⚠ 1 拍采样窗口：S_IDLE 不在锁存块
+                        // 保持列表，fp_frame_ok 脉冲后的下一拍恰好可见 rx_ok_latch=1
+                        // （同沿 NBA 语义下成立），勿"顺手整理"锁存块。
+                        fp_rd_addr  <= 5'd0;
+                        puf_extra   <= 1'b0;
+                        puf_seed_idx<= 3'd0;
+                        puf_dec_busy<= 1'b0;
+                        timeout_cnt <= 32'd0;
+                        state       <= S_PUF_DECODE;
                     end
                 end
 
@@ -582,6 +599,16 @@ module terminal_fsm # (
                         puf_seed_idx<= 3'd0;
                         puf_dec_busy<= 1'b0;
                         timeout_cnt <= 32'd0;        // 审查 D-P1：同上
+                        state       <= S_PUF_DECODE;
+                    end else if (ENROLL_IDLE_ACCEPT && rx_ok_latch &&
+                                  fp_msg_id == 24'h0091 && fp_pay_len == 8'd32) begin
+                        // Phase 8a：注册背靠背轮——上轮 R1 发出后站端立即发下一批
+                        // 种子（S_WAIT_RESULT 在锁存保持列表内，无 1 拍窗口问题）
+                        fp_rd_addr  <= 5'd0;
+                        puf_extra   <= 1'b0;
+                        puf_seed_idx<= 3'd0;
+                        puf_dec_busy<= 1'b0;
+                        timeout_cnt <= 32'd0;
                         state       <= S_PUF_DECODE;
                     end else if (timeout_cnt >= TIMEOUT_CYCLES) begin
                         state    <= S_BLOCKED;

@@ -30,7 +30,11 @@ module w3_top # (
     // 或 W5 落地 0x0096 KEY_SEED 注册通道（W4_design §5v2 主案）。
     parameter ENABLE_KEY_DERIVE = 0,
     // W4-P4 T2: 上电熵采样窗（默认 1ms；TB 可缩小加速）
-    parameter [31:0] ENTROPY_CYCLES = 32'd100_000
+    parameter [31:0] ENTROPY_CYCLES = 32'd100_000,
+    // Phase 8a: 1=板级 wrapper 用（站端驱动注册：terminal_fsm 在 S_IDLE/
+    // S_WAIT_RESULT 受控接受背靠背 0x0091 注册挑战）；0=默认——CI/TB 既有
+    // 语义与黄金完全不变（fail-safe，同 ENABLE_KEY_DERIVE 的保守约定）
+    parameter ENROLL_EN = 0
 ) (
     input  wire        sys_clk      ,   // 系统时钟（100MHz，XDC 约束待填）
     input  wire        sys_rst_n    ,   // 复位按键（低有效，需消抖）
@@ -182,7 +186,8 @@ module w3_top # (
         .TIMEOUT_CYCLES (TIMEOUT_CYCLES),
         .WARMUP_WINS    (WARMUP_WINS),
         .MEASURE_CYCLES (MEASURE_CYCLES),
-        .ENABLE_KEY_DERIVE (ENABLE_KEY_DERIVE)  // W4-P4 T1: 参数传递
+        .ENABLE_KEY_DERIVE (ENABLE_KEY_DERIVE), // W4-P4 T1: 参数传递
+        .ENROLL_IDLE_ACCEPT (ENROLL_EN)         // Phase 8a: 注册模式参数传递
     ) u_fsm (
         .clk           (sys_clk       ),
         .rst           (rst           ),
