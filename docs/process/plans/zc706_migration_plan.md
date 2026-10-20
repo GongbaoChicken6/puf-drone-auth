@@ -33,6 +33,7 @@
 | LED 认证中 | led_busy | **G2** | 33 = 1.5V 固定 | **LVCMOS15!** | **DS9** GPIO_LED_CENTER（偏暗可接受） |
 | LED 心跳 | led_heartbeat | **A17** | 35 = 1.5V 固定 | **LVCMOS15!** | **DS35** GPIO_LED_0（偏暗可接受） |
 
+- ⚠ **J57/J58 勿插错（Round-2）**：UG954 器件清单把 J57 标 "PMOD1"、J58 标 "PMOD2"，但**信号名 PMOD1_[0:7] 在 J58**（Table 1-31 电气权威）——UART 用 **J58**（直连 FPGA+TXS0108E）；**J57 走 TCA6416 I2C 扩展器，PL UART 不可用**。
 - **UART 走 PMOD1(J58) 而非 FMC**（审查决策，替代交接摘要的 AE12/AF12 方案）：J58 是 2×6 标准 0.1" 排针——杜邦线直插**零采购**；板上 TI TXS0108E(U40) 自动完成 3.3V↔VADJ(2.5V) 电平移位——**无需分压电阻**；且不碰 FMC ⇒ 无 JTAG 链串入风险。FMC LPC LA02（AE12/AF12，bank10 LVCMOS25）降级为注释备选（若用需转接板+1k/2.2k 分压+JTAG 旁路确认）。AJ21/AB21 分属两个独立差分对（L3P/L19P），避免同对单端疑虑。
 - **LED 重映射依据（amd-ross P2）**：所有用户 LED = VCC3V3→261Ω→LED→NDS331 NMOS→GND，栅极接 GPIO。NDS331 VGS(th)=0.5/0.7/1.0V，RDS(on) 仅在 VGS=2.7V 规格化 ⇒ **1.5V bank 驱动（DS9/DS35）偏暗且非手册保证**，2.5V bank（DS8/DS10）正常亮。故**承载判定显示的 2bit 结果码放 DS8/DS10（亮）**，busy/心跳放暗位（可见即可）。bring-up 第一步目检 DS9/DS35 可见性；不可见则 XDC 换灯重综合（~10min）。
 - **时钟口径注记（amd-ross P3）**：AMD 一手材料三处不一——new.ucf=DIFF_SSTL15、part0_pins.xml=LVDS、UG954 Table 1-13=LVDS。本机 Vivado 2026.1 实测：DIFF_SSTL15 与 LVDS 在 bank34 **均过 DRC**；LVDS_25 → ERROR BIVB-1（HP bank 不支持，**ZC702 禁抄实锤**）；LVDS_15 → Invalid I/O Standard（7 系无此标准）。取 DIFF_SSTL15（与 AMD 自家 MIG 约束一致）。**不要**向 part0_pins.xml 的"LVDS"字面回改。
@@ -180,22 +181,23 @@ SW12（ON=1）：板 A=**0001**、板 B=**0010**。功能自证：发起一次�
 
 ## Phase 7 · 双 COM 串口联调（PC = 基站）
 
-**硬件（PMOD 路径，零分压零转接）**：每板 3 根杜邦线：J58 **pin1(PMOD1_0/AJ21, txd)→USB-TTL RX**、**pin5(PMOD1_2/AB21, rxd)←USB-TTL TX**、**pin11 或 12(GND)↔GND**；USB-TTL 用 3.3V 逻辑（**接线前万用表测 TX 空闲电平=3.3V**——市售 CH340 模块常 5V/跳线，5V 会经 TXS0108E 直怼 2.5V 侧）。适配器 VCC 不接。**自环预检**（验证 TXS0108E OE 拉带）：杜邦短接 J58 pin1↔pin5，PC 侧串口助手发字节看回显。
+**硬件（PMOD 路径，零分压零转接）**：每板 3 根杜邦线：J58 **pin1(PMOD1_0/AJ21, txd)→USB-TTL RX**、**pin5(PMOD1_2/AB21, rxd)←USB-TTL TX**、**pin11 或 12(GND)↔GND**（GND 脚号系 Figure 1-29 残片弱证据——接线前万用表通断对板 GND 确认）；USB-TTL 用 3.3V 逻辑（**接线前万用表测 TX 空闲电平=3.3V**——市售 CH340 模块常 5V/跳线，5V 会经 TXS0108E 直怼 2.5V 侧）。适配器 VCC 不接。**自环预检**（验证 TXS0108E OE 拉带）：杜邦短接 J58 pin1↔pin5，PC 侧串口助手发字节看回显。
 **软件**：`pip install pyserial`。
 **正确顺序（审查 P1/P2 修正版）**：
 ```
 :: ① 串行配置期（单实例，严禁双实例并发写库）
 python -m src.python.server.main --port COM3 --baud 115200
-puf-server> setkey 1 0001020308090a0b10111213   ← ⚠ 字节反序！RTL 96'h13121110_0b0a0908_03020100 的
-puf-server> status                                  Python 等效是 0001020308090a0b10111213（main.py:681）
+puf-server> setkey 1 0001020308090a0b10111213
+puf-server> status
 puf-server> quit
+# ⚠ 密钥是字节反序的：RTL 96'h13121110_0b0a0908_03020100 的 Python 等效 = 0001020308090a0b10111213（main.py:681 实证）。写成 131211100b0a090803020100 会恒 BLOCKED。
 （换 COM4 重复：setkey 2 0001020308090a0b10111213）
 :: ② 并发 serve 期（分目录，规避 device_keys.json mtime 互斥）
 robocopy data\device_keys data\stB\device_keys /E   （概念示意：为实例B 备份独立密钥库）
 python -m src.python.server.main --port COM3 --device-keys data\device_keys\device_keys.json
 python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\device_keys.json
 ```
-**R9 说明（审查精化）**：serve **不是只读**（每 ACCESS_REQUEST 更新 C2 窗并持久化池）；池文件按 tid 分文件不互踩；device_keys.json 整文件+mtime 检测 ⇒ 共库时后退出者**必然** [ERROR]（external-change）且其 C2 窗不落盘——分目录即规避。REPL 会在 CWD 写 audit.log（main.py:715 落 `. `）——Phase 7 提交顺手把 `audit.log` 加 .gitignore。
+**R9 说明（审查精化）**：serve **不是只读**（每 ACCESS_REQUEST 更新 C2 窗并持久化池）；池文件按 tid 分文件不互踩；device_keys.json 整文件+mtime 检测 ⇒ 共库时后退出者**必然** [ERROR]（external-change）且其 C2 窗不落盘——分目录即规避。REPL 会在 CWD 写 audit.log（main.py:715）——已被 .gitignore 的 `*.log` 规则覆盖（实测 git check-ignore 命中 .gitignore:8），无需额外动作；注意 audit.log 含密钥操作记录，不离实验室机。
 **验收（审查 P1 修正：黄金值法作废，改闭环法）**：⚠ W4-T2 后真板上电 C2=ro_entropy 随机种子 ⇒ 首次 R2 **不再是** 7b45b0545e59aa94（该黄金值只在 TB tie 常量语义成立，CI 已锚定）。板上验收=①serve 日志读 ACCESS_REQUEST 的实际 C2 → 站端用已装密钥算 R2 → 终端 **PASS+CONFIRM_OK**（键/C2/RTL 三方一致的功能证明）；②断电重启终端 → 首帧 C2 与上次不同、旧 RESULT 重放被拒（P1-5 板级实证）。
 **反模式**：❌ setkey 用 131211100b0a090803020100（字节序反，恒 BLOCKED 且像硬件故障）；❌ 波特率非 115200；❌ 不共地。
 **提交**：`feat(server): dual-COM bring-up (split key stores, PMOD wiring) + evidence`
@@ -208,8 +210,10 @@ python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\
 2. w3_top.v 新参数 `parameter ENROLL_EN = 0` 透传给 terminal_fsm 例化（.ENROLL_IDLE_ACCEPT(ENROLL_EN)）——**只加参数不动端口**，tb_w3_top 零影响。
 3. w3_top_zc706.v 例化 `.ENROLL_EN(1)`（Phase 1 改动 #7）。默认 0 ⇒ CI 16/ TB 语义不变。
 4. tb_terminal_fsm.v 加参数=1 用例：a) S_IDLE 收 0x0091 直接纳（无按键）→R1→再收 0x0091（S_WAIT_RESULT 内）→ 再 R1（背靠背两轮）；b) 参数=0 时 S_IDLE 收 0x0091 忽略（回归锁）。CI 清单不变（tb_terminal_fsm 已在）。
+   **实现注记（Round-2）**：S_IDLE 不在 rx_ok_latch 保持列表（terminal_fsm.v:316）——锁存块在非等待态每拍清零，新增 0x0091 分支是 **1 拍采样窗口**，同沿 NBA 语义下功能成立；实现时**勿"顺手整理"锁存块**；TB 直接用既有 feed_frame 任务（tb_terminal_fsm.v:157）打 fp_frame_ok 脉冲。
 5. **门禁：全量 CI 复跑 16/16 + Python 全绿才许提交。**
 6. 安全注记：使能位=站方可主动发起 PUF 查询（注册语义本就如此，物理近邻假设）；W5 报告如实声明。
+7. **S_SESSION 盲区（Round-2）**：认证 PASS 后 FSM 驻留 S_SESSION（仅 auth_start 离开、无超时），该态忽略 0x0091——**每次 enroll 前先按 SW13 复位终端**。首次注册无模板→REJECT→S_BLOCKED→S_IDLE 自愈不受影响；但 Phase 8 步骤 1 的自证认证若已 PASS（再注册场景），终端会停在 S_SESSION 使 enroll 停滞退种。
 **备案 Plan B**（不动 RTL）：站端改逐轮全认证流采集（每轮 4 CRP、每轮一次按键，25 轮×3 测量=75 次按键+新采集驱动代码）——仅当 8a 补丁出意外时用。
 **工作量**：RTL+TB+CI ≈ 3~5h（含重综合 ~10min）。
 **提交**：`feat(rtl): ENROLL_IDLE_ACCEPT -- station-driven enrollment (param-gated, CI-neutral)`
@@ -230,7 +234,7 @@ python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\
 
 ## Phase 9 · E2E 收官 + 文档冻结（对接 W5）
 
-**做什么**：双终端编队演示走通（ACCESS→CHALLENGE→R2→RESULT→CONFIRM×2 板并发）；CI 全绿复跑；**文档更新全清单（审查 P3 补全，grep 实测计数）**：w1_tutorial.md(11 处)、architecture.html(7)、README.md(3)、project_design.md(4)、project_status.html(4)、process/handoff_summary.md(4)、mindmap.html(3)、project_flow.html(3)、DIRECTORY_STRUCTURE.md(1)、HANDOFF_SUMMARY 状态节；证据归档 build/reviews/zc706_bringup/；进 W5。
+**做什么**：双终端编队演示走通（ACCESS→CHALLENGE→R2→RESULT→CONFIRM×2 板并发）；CI 全绿复跑；**文档更新全清单（审查 P3 补全，grep 实测计数）**：w1_tutorial.md(11 处)、architecture.html(7)、README.md(1)、project_design.md(4)、project_status.html(4)、process/handoff_summary.md(4)、mindmap.html(3)、project_flow.html(3)、DIRECTORY_STRUCTURE.md(1)、HANDOFF_SUMMARY 状态节；证据归档 build/reviews/zc706_bringup/；进 W5。
 **验证**：CI exit 0；演示 3 连跑；`grep -rn ZC702 docs/ README.md` 逐处人工判（历史叙述保留）。
 **提交**：`docs: zc706 migration complete -- freeze`
 
