@@ -194,9 +194,28 @@ for ($i = 0; $i -lt $tbNames.Count; $i++) {
 }
 
 Write-Host ("=== {0}/{1} PASS, {2} FAIL ==={3}" -f $pass, $tbNames.Count, $fail, $(if ($overridesActive) { "  [SUBSET/OVERRIDE]" } else { "" }))
+if ($fail -gt 0) { Remove-Item xsim.dir -Recurse -Force -ErrorAction SilentlyContinue; exit 1 }
+
+# ---- Phase 8a: ENROLL_NEG 变体（param=0 回归锁，P2 silent-failure：原为手动一次性）----
+# 独立编译（-d ENROLL_NEG 换 tb_terminal_fsm 的 DUT 参数=0）+ 跑 TEN 断言。
+Write-Host "=== CI: TB ENROLL_NEG variant (param=0 idle-ignore lock) ==="
+$negTbs = @("sim\tb\tb_terminal_fsm.v", "sim\tb\ro_array_sim.v")
+$resN = Invoke-TimedNative -File "$vivado\xvlog.bat" -Arguments (@("-d", "PUF_MODEL_SIM", "-d", "ENROLL_NEG") + $rtl + $negTbs) -TimeoutS $CompileTimeoutS -Label "xvlog ENROLL_NEG" -WorkDir (Get-Location).Path
+if ($resN.Code -ne 0) { Write-Host "ENROLL_NEG COMPILE FAILED (exit $($resN.Code))"; Remove-Item xsim.dir -Recurse -Force -ErrorAction SilentlyContinue; exit 1 }
+$resN = Invoke-TimedNative -File "$vivado\xelab.bat" -Arguments @("-debug", "typical", "tb_terminal_fsm", "-s", "tb_tfs_neg_ci") -TimeoutS $ElabTimeoutS -Label "xelab ENROLL_NEG" -WorkDir (Get-Location).Path
+if ($resN.Code -ne 0) { Write-Host "ENROLL_NEG ELAB FAILED (exit $($resN.Code))"; Remove-Item xsim.dir -Recurse -Force -ErrorAction SilentlyContinue; exit 1 }
+$resN = Invoke-TimedNative -File "$vivado\xsim.bat" -Arguments @("tb_tfs_neg_ci", "-runall", "--onerror", "quit") -TimeoutS $SimTimeoutS -Label "xsim ENROLL_NEG" -WorkDir (Get-Location).Path
+$negOut = ($resN.Lines -join " ")
+if ($resN.Code -ne 0 -or $negOut -notmatch "TEN PASS" -or $negOut -notmatch "TB_TERMINAL_FSM_PASS") {
+    Write-Host "  [FAIL] ENROLL_NEG variant (exit $($resN.Code))"
+    $resN.Lines | Select-String "TEN|TB_TERMINAL|FAIL|ERROR" | Select-Object -First 10 | ForEach-Object { Write-Host "    | $_" }
+    Remove-Item xsim.dir -Recurse -Force -ErrorAction SilentlyContinue
+    exit 1
+}
+Write-Host "  [PASS] tb_terminal_fsm ENROLL_NEG ([TEN PASS] idle-ignore locked)"
+
 Remove-Item xsim.dir -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item *.pb -Force -ErrorAction SilentlyContinue
-if ($fail -gt 0) { exit 1 }
 
 Write-Host "=== CI: Python (Speck self-test + A1 phase-4 unit tests) ==="
 # Silent-failure review P2: a missing python must fail the gate, not
