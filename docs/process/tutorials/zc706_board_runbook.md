@@ -76,7 +76,7 @@ D:\puf-drone-auth\build\board_zc706\w3_top_zc706.bit
 > **DONE 绿 + 心跳闪 = Stage 1 完成，板内程序正常运行。**
 
 > **前提**：比特流已构建（build/board_zc706/w3_top_zc706.bit，WNS=1.060）；板 A 已完成首次烧写验证。
-> **配套**：快速定位表 zc706_board_locations.md；入门教程 zc706_tutorial.md；迁移计划 zc706_migration_plan.md。
+> **配套**：快速定位表 docs/process/tutorials/zc706_board_locations.md；入门教程 docs/process/tutorials/zc706_tutorial.md；迁移计划 docs/process/plans/zc706_migration_plan.md。
 
 ---
 
@@ -88,7 +88,7 @@ D:\puf-drone-auth\build\board_zc706\w3_top_zc706.bit
 | **R2** | 只用**套件原装 12V 适配器**插 J22 | 烧板 | UG954 p.65 |
 | **R3** | **不碰 J18**（保持有跳线）、**不碰 J66**（保持空） | PL 侧电源不上/失能 | UG954 Table A-2 |
 | **R4** | **PMOD/FMC 严禁带电插拔**；USB 可热插但先摸金属放电 | 烧引脚 | UG954 Discharge Caution |
-| **R5** | 操作前先**摸接地金属放电**（ESD） | 静电击穿芯片 | UG954 p.11 |
+| **R5** | 操作前先**摸接地金属放电**，有条件则戴防静电腕带、板放防静电垫上、绝不在地毯/化纤桌面操作 | 静电击穿芯片 | UG954 p.11 |
 | **R6** | **不按 SW10**（PROG_B）：按一下清空 FPGA 配置，要重新烧写 | 配置丢失（不损坏） | UG954 p.65 |
 | **R7** | USB-TTL 模块**必须 3.3V 逻辑**（接线前万用表量 TX 空闲电平=3.3V） | 烧 PMOD 引脚 | 项目实测 |
 | **R8** | USB-TTL **VCC 不接板**（只接 TX/RX/GND 三根线） | 反灌电流损坏 | 项目实测 |
@@ -111,8 +111,7 @@ D:\puf-drone-auth\build\board_zc706\w3_top_zc706.bit
 |---|---|---|---|
 | **SW7** | 第 1 颗 | **认证启动键**（按下再松开触发认证） | serve 模式运行时 |
 | **SW13** | 第 2 颗（丝印 CPU_RESET） | **复位键**（低有效，按住持续复位） | 改拨码后；enroll 前；灯卡住时 |
-| SW8 | — | 备用（本项目不用） | — |
-| SW9 | — | 备用（本项目不用） | — |
+| SW8/SW9 | \u4e1d\u5370\u8ba4\u51c6 | \u5907\u7528（SW7 \u548c SW13 \u4ee5\u677f\u4e0a\u4e1d\u5370\u4e3a\u51c6） | \u2014 |
 | **SW10** | SW12 下方另一颗 | **PROG_B**：按一下清空 FPGA 配置 | **永远别按** |
 
 ### LED 指示灯（右上角灯群 + J22 旁）
@@ -164,7 +163,7 @@ D:\puf-drone-auth\build\board_zc706\w3_top_zc706.bit
 
 ### 3.1 接线前安全检查（不可跳过）
 
-1. **断电**：SW1 拨 OFF。
+1. **断电**：SW1 拨 OFF，**等 5 秒**（让电容残荷放净）。
 2. **USB-TTL 电平确认**：
    - 模块单独插电脑 USB。
    - 万用表直流电压档：红表笔接模块 **TX 引脚**，黑表笔接模块 **GND**。
@@ -320,10 +319,10 @@ serve → 按 SW7 → 预期 DS8 亮 = PASS。
 > **为什么**：演示双终端编队，证明两颗芯片的 PUF 指纹天然不同。
 
 1. **板 B 是新板，必须重过 Stage 1.1 完整检查单**（尤其 SW4 出厂是 10，必须改 01）。
-2. 板 B 上电 → 烧同一份 .bit → SW12 拨 **0010**（ID2）→ SW13。
+2. 板 B 上电 → 烧同一份 .bit（双板同接时逐块上电烧写最稳） → SW12 拨 **0010**（ID2）→ SW13。
 2. **第二根 USB-TTL 也要做 3.3V 电平检查**（同 Stage 3.1 方法）！然后接板 B J58 → 插电脑第二个 USB → 记 COM 号。
 3. 第二个窗口跑 main.py --port COM4 --device-keys data\stB\device_keys\device_keys.json → setkey 2 000102...10111213 → enroll 2 100。
-4. **交叉验证**：把板 B 的 SW12 拨成 0001（假冒终端 1）→ 在终端 1 的基站上认证 → **必 BLOCKED**（板 B 的 PUF 指纹与板 A 不同）→ 拨回 0010。
+4. **交叉验证**：把板 B 的 SW12 拨成 0001（假冒终端 1；此时板 A 不要同时按 SW7）→ 在终端 1 的基站上认证 → **必 REJECT**（DS10 单亮，结果码=10；板 B 的 PUF 指纹与板 A 不同）→ 拨回 0010。
 5. 双板同时在线演示：两窗口各自 serve，同按 SW7，各自 PASS。
 
 ---
@@ -357,9 +356,9 @@ serve → 按 SW7 → 预期 DS8 亮 = PASS。
 | DONE 不亮 | SW10 误按 / bit 不对 | 重烧；别按 SW10 | 不会 |
 | 心跳不闪 | 时钟/复位异常 | 查DS15→J18→SW4/SW11→重烧 | 不会 |
 | 按 SW7 没反应 | 没复位 / 按法不对 | SW13 复位后再按 | 不会 |
-| 串口无数据 | TX/RX 接反 / 没共地 / 波特率 | 交换TX/RX；确认115200 | 不会 |
+| 串口无数据 | TX/RX 接反 / 没共地 / 波特率 | 先断电再交换TX/RX；确认115200 | 不会 |
 | PC 收到帧但 BLOCKED | 密钥字节序错 / 未注册 | setkey 000102...10111213；先enroll | 不会 |
-| enroll 超时 | 终端不在空闲态 | 按 SW13 后重新 enroll | 不会 |
+| enroll \u8d85\u65f6 | \u7ec8\u7aef\u4e0d\u5728\u7a7a\u95f2\u6001；\u6216 .bit \u4e0d\u542b ENROLL_EN=1 | \u6309 SW13 \u540e\u91cd\u65b0 enroll；\u786e\u8ba4\u7528\u6700\u65b0 .bit | \u4e0d\u4f1a |
 | 灯很暗 | DS9/DS35 在 1.5V 域（正常偏暗） | 凑近看；结果码认 DS8/DS10 | 不会 |
 | **板子发烫/异味** | 电源异常 | **立即断电**，报告老师 | **继续通电可能** |
 
