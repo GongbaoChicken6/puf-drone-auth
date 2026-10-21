@@ -203,7 +203,7 @@ D:\vivado\2026.1\Vivado\data\xicom\cable_drivers\nt64\install_drivers.cmd
 
 1. 打开 Vivado → 左侧 **Flow Navigator** 底部点 **Open Hardware Manager**。
 2. 上方绿条点 **Open Target** → **Auto Connect**。
-3. 左侧 **Hardware** 面板出现：`localhost:3121` → 目标 → **xc7z045_0**（这就是芯片）。
+3. 左侧 **Hardware** 面板出现：`localhost:3121` → 目标 → **xc7z045_1**（这就是芯片；末尾的 _1 是 JTAG 链索引，arm_dap_0 排在 _0）。
 4. 右键 **xc7z045_0** → **Program Device...** → **Bitstream file** 选：
 
 ```text
