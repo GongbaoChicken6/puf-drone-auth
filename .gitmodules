@@ -1,0 +1,12 @@
+[submodule "external/c_library_v2"]
+	path = external/c_library_v2
+	url = https://github.com/mavlink/c_library_v2.git
+[submodule "external/fpga_puf"]
+	path = external/fpga_puf
+	url = https://github.com/stnolting/fpga_puf.git
+[submodule "external/puf-esp32-auth"]
+	path = external/puf-esp32-auth
+	url = https://github.com/xtncl/esp32-sram-puf-authentication.git
+[submodule "external/PUF-lab"]
+	path = external/PUF-lab
+	url = https://github.com/eriksargent/PUF-lab.git
