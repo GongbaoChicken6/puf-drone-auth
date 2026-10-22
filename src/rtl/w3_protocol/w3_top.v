@@ -56,7 +56,7 @@ module w3_top # (
     // 状态 LED
     output wire        led_busy     ,   // 认证进行中
     output wire [1:0]  led_result   ,   // 01=通过 10=拒绝 11=阻断
-    output wire        led_heartbeat    // ~0.75Hz 时钟心跳（hb_cnt[26] @100MHz）
+    output wire        led_heartbeat    // 心跳：0.75Hz（hb_cnt[26]）；零熵被拒时 ~3Hz 快闪（hb_cnt[24]，M5）
 );
 
     //========================================================================

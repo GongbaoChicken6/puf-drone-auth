@@ -222,6 +222,8 @@ python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\
 
 ## Phase 8 · PUF 板上注册（W4 收官；前置=Phase 8a 已合并）
 
+> ⚠ **bring-up 豁免（auto-review 复验 P3）：本 Phase 步骤 1~6 整体依赖真 PUF 指纹**——`SEED_GATE_EN=0` 旁路期且心跳快闪（`seed_fault=1`，环振疑似未起振）时，注册/阈值/交叉验证产出的都是全零退化数据，**整 Phase 挂起**（原仅步骤 6 标注，执行序存在空隙，已扩为全 Phase）。恢复门控且心跳慢闪后再执行。
+
 **做什么**（顺序勿颠倒）：
 1. **接线前自证**：COM↔板映射贴标签；先发起一次认证确认 ACCESS_REQUEST 的 terminal_id 与所插板一致（REPL enroll 不校验线序，防模板-tid 错配——审查 P3）。
 2. 板 A（单实例串行）：`enroll 1 100`（100 CRP×3 测量 majority；reserve→逐批→模板，中断自动回滚）。池语义：代码默认 500（crp_pool.py:36；SOP 文本写 100 已过时，顺手修）；每认证耗 4+灰区 3；失败/停滞 30s 退种。**总线耗时分钟级**（审查 P2：原"8~12h/板"无依据已删——真实成本是 8a 的 RTL 工作）。
@@ -290,13 +292,13 @@ python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\
 
 ## bring-up 旁路豁免条目（auto-review M2/M7，2026-10-22 记档）
 
-**豁免对象**：`w3_top_zc706.v` 中 `.SEED_GATE_EN(0)`（板级 wrapper 唯一偏离安全默认值的参数）。
+**豁免对象**：`w3_top_zc706.v` 中 `.SEED_GATE_EN(0)`（板级 wrapper 唯一偏离安全默认值的**安全门**参数；另有 .ENROLL_EN(1) 偏离功能默认，属 Phase 8a 计划内模式，不在豁免范围）。
 
 | 要素 | 内容 |
 |---|---|
 | **时限** | Phase 7 验收② / Phase 8 步骤 6（P1-5 板级实证）执行前**必须**恢复 `.SEED_GATE_EN(1)` 并重新构建烧写 |
 | **撤销条件** | 熵子系统修复实证 = 板上心跳恢复 0.75Hz 慢闪（`seed_fault=0`；快闪即零熵被拒，观测出口见 runbook LED 表）。ro_entropy 独立故障口 `seed_fault`（M4）+ 心跳编码（M5）已随本批合入，板上可直接裁决"环振是否起振"这一未实证根因 |
-| **安全代价** | 旁路期 P1-5 终端侧跨断电重放窗重开：熵失效时 `boot_seed` 锁 0 → `c2_counter` 每次上电从 0 确定性起算 → 录制的 RESULT 帧换电重放可通过 `S_VERIFY_R2`。**旁路期 bitstream 不得用于任何可信认证/注册/安全演示**（defect-reviewer：真实认证场景下本豁免升级为 P1） |
+| **安全代价** | 旁路期 P1-5 终端侧跨断电重放窗重开：熵失效时 `boot_seed` 锁 0 → `c2_counter` 每次上电从 0 确定性起算 → 录制的 RESULT 帧换电重放可通过 `S_VERIFY_R2`。**旁路期 bitstream 不得用于任何可信认证/注册/安全演示**（defect-reviewer：真实认证场景下本豁免升级为 P1）。残留语义（复验 M8）：旁路下 seed_load 若恰好命中认证进行中会被 S_IDLE 守卫跳过且不再重试 → 该次上电 C2 保持默认 A0 起算 |
 | **契约偏离（M7）** | 旁路使"熵就绪前认证"板上可达：首认证线上 C2=0x0101010101010101，偏离 protocol_contract §4.1 冻结的复位值 A0..A7 / 首次 C2=a1..a8 语义（该语义在 TB tie 常量下保持）。恢复门控后自动消解 |
 | **仿真锁定** | `tb_w3_top_seedgate`（M1，17/17 CI 已含）：DUT-A 旁路+熵未完成→放行；DUT-B 门控+熵未完成→fail-closed 压制（FSM 停 S_IDLE）；DUT-C 旁路+零熵被拒→`seed_fault=1`+心跳快闪+仍放行 |
 | **跟踪任务** | ①板上读 `seed_fault`（心跳频率）裁决环振假设 → ②若未起振：VIO/ILA 采 16 环计数定位物理根因 → ③修复后恢复门控 → ④重跑 Stage 6 重放验证闭合 P1-5 板级实证 |
