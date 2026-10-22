@@ -66,7 +66,13 @@ wire rst_n = sys_rst_btn_n & mmcm_locked;
 w3_top # ( .FREQ_HZ   ( 100_000_000 ),   // 板上时钟 100MHz
            .BAUD      ( BAUD        ),
            .TIMEOUT_S ( TIMEOUT_S   ),
-           .ENROLL_EN ( 1           )    // Phase 8a：板级注册模式
+           .ENROLL_EN ( 1           ),   // Phase 8a：板级注册模式
+           .SEED_GATE_EN ( 0        )    // ⚠ 临时 bring-up 旁路（三要素，详见 zc706_migration_plan
+                                         //   豁免条目）：①时限=Phase 7/8 验收前必须恢复 1；
+                                         //   ②撤销条件=熵子系统修复实证（板上心跳快闪即
+                                         //   seed_fault=1 可直接裁决环振状态）；③代价=P1-5
+                                         //   跨断电重放窗在旁路期重开。根因（环振未起振）
+                                         //   截至旁路时点仍是假设，未实证
 ) u_top (
     .sys_clk       ( clk_100m              ),
     .sys_rst_n     ( rst_n                 ),

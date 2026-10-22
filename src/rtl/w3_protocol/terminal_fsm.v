@@ -916,7 +916,11 @@ module terminal_fsm # (
             // 独立过程块驱动 = multi-driven net（Vivado Synth 8-6859 CRITICAL，
             // 硬件行为未定义；由 AMD Vivado MCP 综合检查发现）。放在 case 之后
             // 确保同拍优先于 S_CALC_R2 的递增。TB 恒 0 → initial 值保持。
-            if (seed_load) begin
+            // M8(auto-review)：限 S_IDLE 生效——SEED_GATE_EN=0 旁路下认证可先于
+            // 熵完成启动，seed_load 若命中 S_CALC_R2 首拍，重载 NBA 胜出递增而
+            // tx_buf 已锁旧 C2 → 站端/终端 R2 必失配。原门控语义下 seed_load
+            // 必然发生在首个认证前（=IDLE），本守卫不改变原行为。
+            if (seed_load && state == S_IDLE) begin
                 for (j = 0; j < 8; j = j + 1)
                     c2_counter[j] <= c2_boot_seed[8*j +: 8];
             end

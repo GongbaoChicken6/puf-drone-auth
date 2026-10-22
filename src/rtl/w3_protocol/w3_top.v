@@ -34,7 +34,13 @@ module w3_top # (
     // Phase 8a: 1=板级 wrapper 用（站端驱动注册：terminal_fsm 在 S_IDLE/
     // S_WAIT_RESULT 受控接受背靠背 0x0091 注册挑战）；0=默认——CI/TB 既有
     // 语义与黄金完全不变（fail-safe，同 ENABLE_KEY_DERIVE 的保守约定）
-    parameter ENROLL_EN = 0
+    parameter ENROLL_EN = 0,
+    // 板级 bring-up 修复（ZC706 首烧实测）：1=默认，auth 按键受 re_seed_valid
+    // 门控（P1-5 重放修复原语义，CI/TB 不变）；0=旁路门控——真实硅片上环振
+    // 阵列若未起振，ro_entropy 的 seed_acc==0 fail-closed 检查会把按键永久
+    // 屏蔽（现象：心跳闪但按 SW7 后 L/C/R 无任何反应）。bring-up 先放开主
+    // 链路，熵子系统问题单独排查
+    parameter SEED_GATE_EN = 1
 ) (
     input  wire        sys_clk      ,   // 系统时钟（100MHz，XDC 约束待填）
     input  wire        sys_rst_n    ,   // 复位按键（低有效，需消抖）
@@ -84,14 +90,21 @@ module w3_top # (
     // 按键消抖（auth_btn：需稳定 DEBOUNCE_CYC 拍才认）
     //========================================================================
     reg [23:0] btn_cnt   = 24'd0;
-    reg        btn_state = 1'b0;   // 消抖后的稳定状态
-    reg        btn_prev  = 1'b0;   // 上一拍（边沿检测用）
+    // 初值=1（板级空闲电平）：ZC706 SW7 空闲=1/按下=0（UG954 Table 1-29）。
+    // 原初值 0 会在复位释放约 DEBOUNCE_CYC 拍后产生伪 0→1 上升沿=幽灵认证。
+    // M9(auto-review) 症状归位：旧 bitstream 上熵门控若恰好屏蔽（re_seed_valid
+    // 恒 0），幽灵沿同样被吞掉——"复位后 L/R 自动亮"只发生在熵正常的构建上，
+    // 与本次板故（按键全屏蔽）分属两种不同构建的症状，勿混读；板故期用户
+    // 报告的"SW13 灭不掉的灯"实为电源/DONE 灯（见 runbook）。TB 的 auth_btn
+    // 初始 0（反极性建模）掩盖了该 bug
+    reg        btn_state = 1'b1;   // 消抖后的稳定状态
+    reg        btn_prev  = 1'b1;   // 上一拍（边沿检测用）
 
     always @(posedge sys_clk) begin
         if (rst) begin
             btn_cnt   <= 24'd0;
-            btn_state <= 1'b0;
-            btn_prev  <= 1'b0;
+            btn_state <= 1'b1;     // 见声明处注释：对齐板级空闲电平
+            btn_prev  <= 1'b1;
         end else begin
             btn_prev <= btn_state;
             if (auth_btn != btn_state) begin
@@ -112,6 +125,7 @@ module w3_top # (
     wire         re_measure_en, re_ring_en, re_busy, re_done;
     wire [255:0] re_ring_freq;
     wire         re_seed_valid;
+    wire         re_seed_fault;                       // M4/M5(auto-review): 零熵被拒独立故障口
     wire [63:0]  re_boot_seed;
     wire         re_start;
     wire         re_start_valid;
@@ -122,7 +136,9 @@ module w3_top # (
     // C-F2: 熵采样窗（~ENTROPY_CYCLES 拍）内压制认证启动——窗内 c2_counter
     // 尚未装载熵种子（仍为复位 0），C2 确定性=可重放窗口。门控后首个认证
     // 必然发生在 seed_valid 之后（对齐 W4_T1T2_design P2-3 的声明）。
-    wire auth_start_pulse = btn_state & ~btn_prev & re_seed_valid;   // 上升沿+熵就绪
+    // SEED_GATE_EN=0（板级 bring-up）时旁路熵门控：防 seed 卡死把按键屏蔽
+    wire auth_start_pulse = btn_state & ~btn_prev
+                            & (SEED_GATE_EN ? re_seed_valid : 1'b1); // 上升沿(+熵就绪)
 
     //========================================================================
     // LED 心跳（0.75Hz，实证时钟频率——不闪=时钟有问题）
@@ -132,7 +148,10 @@ module w3_top # (
         if (rst) hb_cnt <= 27'd0;
         else     hb_cnt <= hb_cnt + 1;
     end
-    assign led_heartbeat = hb_cnt[26];    // 100MHz / 2^27 ≈ 0.75Hz
+    // M5(auto-review)：心跳兼作熵故障出口——零熵被拒（seed_fault=1）时切换为
+    // 快闪（hb_cnt[24]，100MHz/2^25≈3Hz），正常 0.75Hz。SEED_GATE_EN=0 旁路后
+    // 死熵与活熵的板上现象靠此区分（runbook 同步记载"快闪=熵子系统零熵被拒"）
+    assign led_heartbeat = re_seed_fault ? hb_cnt[24] : hb_cnt[26];
 
     //========================================================================
     // 内部互连信号
@@ -340,7 +359,8 @@ module w3_top # (
         .done       (re_done       ),
         .ring_freq  (re_ring_freq  ),
         .seed_valid (re_seed_valid ),
-        .boot_seed  (re_boot_seed  )
+        .boot_seed  (re_boot_seed  ),
+        .seed_fault (re_seed_fault)                  // M5: 板级可观测出口（心跳快闪）
     );
 
     //------------------------------------------------------------------------

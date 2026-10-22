@@ -35,7 +35,11 @@ module ro_entropy # (
 
     // 结果
     output reg                        seed_valid  ,   // 1 = boot_seed 已锁存
-    output reg  [63:0]                boot_seed       // 16 x 低4bit 拼接
+    output reg  [63:0]                boot_seed   ,   // 16 x 低4bit 拼接
+    // M4(auto-review)：独立故障口——seed_valid=0 原是三义信号（采样中/卡死/
+    // 零熵被拒），板上无从分辨。seed_fault=1 精确指明"零熵被拒"（E_DONE 锁存），
+    // 供板级观测（w3_top 心跳编码）与撤销 SEED_GATE_EN 旁路的回退判据使用
+    output reg                        seed_fault      // 1 = 零熵被拒（fail-closed 且可观测）
   );
 
 //---------------- 状态机 ----------------//
@@ -63,6 +67,7 @@ always @ ( posedge clk ) begin
         seed_acc   <= 64'd0;
         boot_seed  <= 64'd0;
         seed_valid <= 1'b0;
+        seed_fault <= 1'b0;
     end
     else begin
         case ( st )
@@ -101,6 +106,7 @@ always @ ( posedge clk ) begin
                 // w3_top 的 F2 门控因此压制认证——宁可阻断也不带零熵运行。
                 if (seed_acc == 64'd0) begin
                     seed_valid <= 1'b0;         // 保持无效（fail-closed）
+                    seed_fault <= 1'b1;         // M4: 独立指示"零熵被拒"（不再三义）
                 end else begin
                     seed_valid <= 1'b1;         // 锁存完成
                 end
