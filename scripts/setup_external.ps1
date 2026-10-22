@@ -5,7 +5,10 @@
 #   git clone --recurse-submodules <url>
 # the four repos are already present and this script will skip them.
 
-$ErrorActionPreference = "Stop"
+# Keep the default (Continue) ErrorActionPreference: native git writes progress/
+# warnings to stderr, so "Stop" would turn a caller's "2>&1" redirect into a
+# terminating error. Failures are detected through $LASTEXITCODE below.
+$ErrorActionPreference = "Continue"
 
 # Pinned commits MUST stay in sync with: git ls-tree HEAD external/
 $repos = @(
