@@ -198,7 +198,7 @@ python -m src.python.server.main --port COM3 --device-keys data\device_keys\devi
 python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\device_keys.json
 ```
 **R9 说明（审查精化）**：serve **不是只读**（每 ACCESS_REQUEST 更新 C2 窗并持久化池）；池文件按 tid 分文件不互踩；device_keys.json 整文件+mtime 检测 ⇒ 共库时后退出者**必然** [ERROR]（external-change）且其 C2 窗不落盘——分目录即规避。REPL 会在 CWD 写 audit.log（main.py:715）——已被 .gitignore 的 `*.log` 规则覆盖（实测 git check-ignore 命中 .gitignore:8），无需额外动作；注意 audit.log 含密钥操作记录，不离实验室机。
-**验收（审查 P1 修正：黄金值法作废，改闭环法）**：⚠ W4-T2 后真板上电 C2=ro_entropy 随机种子 ⇒ 首次 R2 **不再是** 7b45b0545e59aa94（该黄金值只在 TB tie 常量语义成立，CI 已锚定）。板上验收=①serve 日志读 ACCESS_REQUEST 的实际 C2 → 站端用已装密钥算 R2 → 终端 **PASS+CONFIRM_OK**（键/C2/RTL 三方一致的功能证明）；②断电重启终端 → 首帧 C2 与上次不同、旧 RESULT 重放被拒（P1-5 板级实证）。
+**验收（审查 P1 修正：黄金值法作废，改闭环法）**：⚠ W4-T2 后真板上电 C2=ro_entropy 随机种子 ⇒ 首次 R2 **不再是** 7b45b0545e59aa94（该黄金值只在 TB tie 常量语义成立，CI 已锚定）。板上验收=①serve 日志读 ACCESS_REQUEST 的实际 C2 → 站端用已装密钥算 R2 → 终端 **PASS+CONFIRM_OK**（键/C2/RTL 三方一致的功能证明）；②断电重启终端 → 首帧 C2 与上次不同、旧 RESULT 重放被拒（P1-5 板级实证）。**bring-up 豁免（auto-review M2/M6）**：验收② 在 `SEED_GATE_EN=0` 旁路期挂起（旁路期 C2 跨上电确定，②按定义不可通过）——撤销旁路后方可执行，见文末「bring-up 旁路豁免条目」。
 **反模式**：❌ setkey 用 131211100b0a090803020100（字节序反，恒 BLOCKED 且像硬件故障）；❌ 波特率非 115200；❌ 不共地。
 **提交**：`feat(server): dual-COM bring-up (split key stores, PMOD wiring) + evidence`
 
@@ -228,7 +228,7 @@ python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\
 3. 阈值复核：threshold.decide_scaled 灰区宽度 + hamming_analysis 跨板区分度过一遍。
 4. 板 B 重复（换口 `enroll 2 100`）。
 5. **交叉验证（演示卖点，操作要写明）**：把板 B 的 SW12 拨成板 A 的 ID（0001）→ 发起认证 → 必 REJECT（板 A 模板对板 B 的 PUF）→ **拨回 0010**。
-6. 断电重启重放测试：录一次 RESULT 帧 → 终端断电重启 → 重放 → 被拒（P1-5 板级实证）。**验后恢复**：REPL `c2reset <tid>`（不清窗会把后续正常认证误判 RESULT_REPLAY——审查 P3）。
+6. 断电重启重放测试：录一次 RESULT 帧 → 终端断电重启 → 重放 → 被拒（P1-5 板级实证）。**bring-up 豁免（M2/M6）：`SEED_GATE_EN=0` 旁路期本步挂起**——旁路下 C2 跨上电确定、重放会被接受（与承诺相反），恢复门控后再做。**验后恢复**：REPL `c2reset <tid>`（不清窗会把后续正常认证误判 RESULT_REPLAY——审查 P3）。
 7. T1 使能（ENABLE_KEY_DERIVE=1）：**板上必败**——站端读不到真设备 PUF 频率，KEY_SEED 0x0096 通道未实现（enroll.py:108-112 诚实边界）⇒ 标注"仅仿真语义，不投板时"（审查 P3）。
 **验证**：两板各自首认证 PASS；交叉 REJECT；重放被拒+c2reset 恢复；池/模板按 SOP 归档（data/ 已 gitignore）。
 **反模式**：❌ 用 --loopback 语义模板认证真板（恒 REJECT）；❌ 未过 8a 就上板 enroll；❌ 密钥/模板误提交。
@@ -284,3 +284,21 @@ python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\
 | 10-22~25 | Phase 8（两板 enrollment 分钟级 + 阈值复核 + 交叉验证；留足缓冲） |
 | 10-25~27 | Phase 9 收官 → W5 冻结（报告/视频） |
 | 11-03 | 全量彩排 |
+
+
+---
+
+## bring-up 旁路豁免条目（auto-review M2/M7，2026-10-22 记档）
+
+**豁免对象**：`w3_top_zc706.v` 中 `.SEED_GATE_EN(0)`（板级 wrapper 唯一偏离安全默认值的参数）。
+
+| 要素 | 内容 |
+|---|---|
+| **时限** | Phase 7 验收② / Phase 8 步骤 6（P1-5 板级实证）执行前**必须**恢复 `.SEED_GATE_EN(1)` 并重新构建烧写 |
+| **撤销条件** | 熵子系统修复实证 = 板上心跳恢复 0.75Hz 慢闪（`seed_fault=0`；快闪即零熵被拒，观测出口见 runbook LED 表）。ro_entropy 独立故障口 `seed_fault`（M4）+ 心跳编码（M5）已随本批合入，板上可直接裁决"环振是否起振"这一未实证根因 |
+| **安全代价** | 旁路期 P1-5 终端侧跨断电重放窗重开：熵失效时 `boot_seed` 锁 0 → `c2_counter` 每次上电从 0 确定性起算 → 录制的 RESULT 帧换电重放可通过 `S_VERIFY_R2`。**旁路期 bitstream 不得用于任何可信认证/注册/安全演示**（defect-reviewer：真实认证场景下本豁免升级为 P1） |
+| **契约偏离（M7）** | 旁路使"熵就绪前认证"板上可达：首认证线上 C2=0x0101010101010101，偏离 protocol_contract §4.1 冻结的复位值 A0..A7 / 首次 C2=a1..a8 语义（该语义在 TB tie 常量下保持）。恢复门控后自动消解 |
+| **仿真锁定** | `tb_w3_top_seedgate`（M1，17/17 CI 已含）：DUT-A 旁路+熵未完成→放行；DUT-B 门控+熵未完成→fail-closed 压制（FSM 停 S_IDLE）；DUT-C 旁路+零熵被拒→`seed_fault=1`+心跳快闪+仍放行 |
+| **跟踪任务** | ①板上读 `seed_fault`（心跳频率）裁决环振假设 → ②若未起振：VIO/ILA 采 16 环计数定位物理根因 → ③修复后恢复门控 → ④重跑 Stage 6 重放验证闭合 P1-5 板级实证 |
+
+**决策记录**：2026-10-22 板级 bring-up 发现"心跳闪但按 SW7 无反应"；根因判定为 ro_entropy 零熵 fail-closed 卡死（疑似，环振未起振未实证）叠加消抖复位极性 bug（已实证修复）。旁路是 bring-up 期让协议链路可验证的临时手段，非终态设计。同批合入的加固（seed_fault 故障口 / 心跳编码 / seed_load 限 S_IDLE / 幽灵沿回归锁）确保旁路可观测、可撤销、可回归。
