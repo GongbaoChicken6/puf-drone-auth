@@ -126,12 +126,14 @@ $tbs = @(
     "sim\tb\tb_puf_path.v",
     "sim\tb\tb_key_derive.v",
     "sim\tb\tb_w3top_keyloop.v",
-    "sim\tb\tb_ro_entropy.v"
+    "sim\tb\tb_ro_entropy.v",
+    "sim\tb\tb_w3_top_seedgate.v"   # M1(auto-review): SEED_GATE_EN 旁路/门控双向锁定
 )
 $tbNames = @("tb_speck", "tb_gap_regression",
              "tb_challenge_decode","tb_crc16","tb_mavlink_frame","tb_frame_parser",
              "tb_byte_fifo","tb_uart_tx","tb_terminal_fsm","tb_tx_chain","tb_level3_protocol",
-             "tb_w3_top", "tb_puf_path", "tb_key_derive", "tb_w3top_keyloop", "tb_ro_entropy")
+             "tb_w3_top", "tb_puf_path", "tb_key_derive", "tb_w3top_keyloop", "tb_ro_entropy",
+             "tb_w3_top_seedgate")
 # Test-only overrides (W4-P0 timeout experiment).  Deliberately plain
 # [string] + internal split: powershell.exe -File does NOT split commas
 # for array parameters (that is -Command behaviour), so accepting one

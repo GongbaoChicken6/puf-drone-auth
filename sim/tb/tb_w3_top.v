@@ -13,7 +13,7 @@ module tb_w3_top;
 
     reg         sys_clk = 1'b0;
     reg         sys_rst_n = 1'b0;
-    reg         auth_btn = 1'b0;
+    reg         auth_btn = 1'b1;   // 板级空闲电平（ZC706 SW7：空闲1/按下0）
     reg  [7:0]  term_id_sw = 8'd42;
     wire        radio_txd;
     wire        radio_rxd;
@@ -25,6 +25,13 @@ module tb_w3_top;
     assign radio_rxd = radio_txd;
 
     integer errors = 0;
+    integer pulse_cnt = 0;   // M3: 认证启动脉冲计数（幽灵/极性回归锁）
+    integer guard = 0;
+
+    // M3(auto-review): 计一切 auth_start_pulse——消抖复位值回退 1'b0 时，
+    // 复位释放 ~100k 拍出现幽灵沿（变异实测旧 TB 对此全盲，本计数器必抓）
+    always @(posedge sys_clk)
+        if (sys_rst_n && dut.auth_start_pulse) pulse_cnt = pulse_cnt + 1;
 
     // 快速仿真参数（缩小时钟和超时）
     w3_top # (
@@ -56,13 +63,37 @@ module tb_w3_top;
         // 复位
         repeat (10) @(negedge sys_clk);
         sys_rst_n = 1'b1;
-        repeat (10) @(negedge sys_clk);
+
+        // T0/M3: 复位后空闲静默窗 >2×DEBOUNCE_CYCLES（220k 拍）——幽灵沿回归锁
+        repeat (220_000) @(negedge sys_clk);
+        if (pulse_cnt !== 0) begin
+            errors = errors + 1;
+            $display("[T0 FAIL] 静默窗幽灵认证 ×%0d（消抖复位值回退为 0？）", pulse_cnt);
+        end else
+            $display("[T0 PASS] 复位后 220k 拍空闲窗零触发（幽灵沿回归锁）");
 
         // T1: 按下认证按钮（需保持足够长以过消抖）
         $display("[T1] Loopback: auth button → TX chain → RX chain");
-        auth_btn = 1'b1;
+        auth_btn = 1'b0;                       // 按下（板级：空闲1/按下0）
         repeat (500_000) @(negedge sys_clk);   // 保持 >10ms@10MHz
-        auth_btn = 1'b0;
+        // M3: 按住期零触发（认证只许由松开 0→1 沿启动——边沿极性回归锁）
+        if (pulse_cnt !== 0) begin
+            errors = errors + 1;
+            $display("[T1 FAIL] 按住期触发认证 ×%0d（极性回退为下降沿触发？）", pulse_cnt);
+        end else
+            $display("[T1 PASS] 按住 500k 拍零触发（松开沿极性锁）");
+        auth_btn = 1'b1;                       // 松开 → 0→1 上升沿触发认证
+        // M3: 确认松开沿确实触发（消抖 100k 拍后 pulse_cnt 必 +1）
+        guard = 0;
+        while (pulse_cnt == 0 && guard < 300_000) begin
+            @(posedge sys_clk); guard = guard + 1;
+        end
+        if (pulse_cnt >= 1)
+            $display("[T1] 松开沿触发确认：auth_start_pulse ×%0d", pulse_cnt);
+        else begin
+            errors = errors + 1;
+            $display("[T1 FAIL] 松开沿未触发（%0d 拍内无 auth_start_pulse）", guard);
+        end
 
         // 等待发送和回环接收
         repeat (1_000_000) @(negedge sys_clk);  // 100ms 足够超时触发
@@ -96,7 +127,7 @@ module tb_w3_top;
     end
 
     initial begin
-        #200_000_000;  // 200ms watchdog（留足超时时间）
+        #250_000_000;  // 250ms watchdog（M3 静默窗后新时间线 ~183ms，留余量）
         $display("[WATCHDOG] TIMEOUT tx_bits=%0d busy=%b result=%0d", tx_bits, led_busy, led_result);
         $display("TB_W3_TOP_FAIL (watchdog)");
         $finish;

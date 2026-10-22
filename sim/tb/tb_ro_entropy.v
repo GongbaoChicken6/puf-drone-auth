@@ -99,6 +99,25 @@ module tb_ro_entropy;
             $display("[T12 FAIL] 二次 start 后 boot_seed=%h valid=%b", boot_seed, seed_valid);
         end
 
+        // T14/M4(auto-review): 零熵 fail-closed 分支——force 阵列频率低 4 位
+        // 全 0（16×0x1000）→ E_DONE 拒绝：seed_valid=0 + seed_fault=1 + seed=0。
+        // 该分支此前零覆盖：若健康检查被删除（seed_valid 无条件置 1）本用例必失败
+        force u_arr.latch_freqs = {16{16'h1000}};
+        rst = 1'b1; repeat (5) @(negedge clk); rst = 1'b0;   // 复位重来（fault/valid 清 0）
+        @(negedge clk); start = 1'b1;
+        @(negedge clk); start = 1'b0;
+        guard = 0;
+        while (dut.st != 2'd3 && guard < 5000) begin @(posedge clk); guard = guard + 1; end
+        repeat (5) @(negedge clk);                            // E_DONE 锁存后
+        if (dut.seed_fault === 1'b1 && dut.seed_valid === 1'b0 && boot_seed === 64'd0)
+            $display("[T14 PASS] 零熵被拒: seed_fault=1 + seed_valid=0 + boot_seed=0（fail-closed 且可观测）");
+        else begin
+            errors = errors + 1;
+            $display("[T14 FAIL] fault=%b valid=%b seed=%h（期望 1/0/0；健康检查被删或故障口失效？）",
+                     dut.seed_fault, dut.seed_valid, boot_seed);
+        end
+        release u_arr.latch_freqs;
+
         if (errors == 0) $display("TB_RO_ENTROPY_PASS");
         else             $display("TB_RO_ENTROPY_FAIL: %0d 项错误", errors);
         $finish;

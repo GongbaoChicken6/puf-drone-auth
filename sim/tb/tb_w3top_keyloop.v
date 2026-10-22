@@ -9,7 +9,7 @@ module tb_w3top_keyloop;
 
     reg  sys_clk = 1'b0;
     reg  sys_rst_n = 1'b0;
-    reg  auth_btn = 1'b0;
+    reg  auth_btn = 1'b1;   // 板级空闲电平（ZC706 SW7：空闲1/按下0）
     reg  [7:0] term_id_sw = 8'h01;
     wire radio_txd, radio_rxd, led_busy, led_heartbeat;
     wire [1:0] led_result;
@@ -17,6 +17,11 @@ module tb_w3top_keyloop;
     assign radio_rxd = radio_txd;   // 回环
 
     integer errors = 0, guard = 0;
+    integer pulse_cnt = 0;   // M3: 认证启动脉冲计数（幽灵/极性回归锁）
+
+    // M3(auto-review): 消抖复位值回退 1'b0 时复位释放 ~100k 拍出幽灵沿，必被抓
+    always @(posedge sys_clk)
+        if (sys_rst_n && dut.auth_start_pulse) pulse_cnt = pulse_cnt + 1;
 
     localparam [95:0] GOLDEN_KEY = 96'h26C4EC61BA319FF325041DEE;
     localparam [95:0] NSA_VECTOR = 96'h1312_1110_0B0A_0908_0302_0100;
@@ -44,7 +49,14 @@ module tb_w3top_keyloop;
     initial begin
         repeat (10) @(negedge sys_clk);
         sys_rst_n = 1'b1;
-        repeat (10) @(negedge sys_clk);
+
+        // T0/M3: 复位后空闲静默窗 >2×DEBOUNCE_CYCLES（220k 拍）——幽灵沿回归锁
+        repeat (220_000) @(negedge sys_clk);
+        if (pulse_cnt !== 0) begin
+            errors = errors + 1;
+            $display("[T0 FAIL] 静默窗幽灵认证 ×%0d（消抖复位值回退？）", pulse_cnt);
+        end else
+            $display("[T0 PASS] 复位后 220k 拍空闲窗零触发");
 
         // T7-1: 回环 wire 不得悬空
         if (dut.fsm_key_valid === 1'bx || dut.fsm_key_valid === 1'bz) begin
@@ -53,13 +65,20 @@ module tb_w3top_keyloop;
         end else
             $display("[T7-1 PASS] 回环 wire 已连接 (fsm_key_valid=%b)", dut.fsm_key_valid);
 
-        // 触发认证（保持过消抖）
-        auth_btn = 1'b1;
+        // 触发认证（板级极性：空闲=1/按下=0，松开 0→1 上升沿触发）
+        auth_btn = 1'b0;
+        repeat (150_000) @(negedge sys_clk);   // 按住过消抖 (>10ms@10MHz)
+        // M3: 按住期零触发（仅松开沿极性）
+        if (pulse_cnt !== 0) begin
+            errors = errors + 1;
+            $display("[T0b FAIL] 按住期触发认证 ×%0d（极性回退？）", pulse_cnt);
+        end else
+            $display("[T0b PASS] 按住 150k 拍零触发");
+        auth_btn = 1'b1;                       // 松开 → 触发
         guard = 0;
         while (dut.fsm_key_valid !== 1'b1 && guard < 600_000) begin
             @(negedge sys_clk); guard = guard + 1;
         end
-        auth_btn = 1'b0;
 
         // T7-2: 派生完成
         if (dut.fsm_key_valid === 1'b1)
@@ -107,7 +126,7 @@ module tb_w3top_keyloop;
     end
 
     initial begin
-        #50_000_000;
+        #120_000_000;   // M10(auto-review): 最坏线 20+220k+150k+600k≈970k 拍=97ms（原 50ms 会先于 guard 上限到期，丢失 T7-2 诊断）
         $display("TB_W3TOP_KEYLOOP_FAIL (global watchdog)");
         $finish;
     end
