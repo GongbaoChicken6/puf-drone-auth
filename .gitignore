@@ -99,3 +99,11 @@ build/vivado_mcp/mcp_cmd.json
 build/create_repo.ps1
 build/cred*.ps1
 build/gh_auth.ps1
+
+# Bring-up/debug Vivado projects (generated; keep only tcl/rtl debug assets under build/dbg/)
+build/board_zc706_*/
+# Frontend generated output
+web/.out/
+# Vivado xsim / MCP session artifacts at repo root
+/.vivado-ai/
+/clockInfo.txt

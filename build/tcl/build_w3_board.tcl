@@ -45,7 +45,7 @@ add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top_zc706.xdc
 # W4 B5a：环振组合环豁免（设计使然，w2_waiver 头注释自证无豁免必被 LUTLP-1 阻断）
 add_files -fileset constrs_1 $SRC/rtl/w2_array/w2_waiver.xdc
 
-# Clk Wizard：200MHz 差分 -> 100MHz + locked + reset（wrapper 里接 ~sys_rst_btn_n）
+# Clk Wizard：200MHz 差分 -> 100MHz + locked + reset（wrapper 里直连 sys_rst_btn_n，板上高有效）
 create_ip -name clk_wiz -vendor xilinx.com -library ip -module_name clk_wiz_0
 set_property -dict [list \
     CONFIG.PRIM_SOURCE {Differential_clock_capable_pin} \

@@ -32,8 +32,8 @@ module w3_top_zc706 # (
     input  wire         clk_n         ,   // G9，200MHz 差分负端
 
     // 复位与控制
-    input  wire         sys_rst_btn_n ,   // SW13 PL_CPU_RESET（低有效，A8）
-    input  wire         auth_btn      ,   // SW7 GPIO_SW_LEFT（空闲1/按下0，UG954 Table 1-29；板卡文件名 gpio_sws_3bits_tri_i_0）
+    input  wire         sys_rst_btn_n ,   // SW13 PL_CPU_RESET（A8）板上实测：空闲0/按下1（高有效，2026-10-22 23:27 health 实证；端口名沿用 _n 是历史命名，勿按名推极性）
+    input  wire         auth_btn      ,   // SW7 GPIO_SW_LEFT（AK25）板上实测：空闲0/按下1（2026-10-22 23:27 health 实证，推翻 UG954 图纸解读）
     input  wire [3:0]   term_id_dip   ,   // SW12 pin1..4（ON=1 / OFF=0）
 
     // UART（PMOD1 J58，经 TXS0108E 电平移位，USB-TTL 3.3V 直插）
@@ -53,26 +53,24 @@ wire mmcm_locked;                     // MMCM 锁定指示
 clk_wiz_0 u_mmcm (
     .clk_in1_p ( clk_p          ),   // 200MHz 差分正端
     .clk_in1_n ( clk_n          ),   // 200MHz 差分负端
-    .reset     ( ~sys_rst_btn_n ),   // IP 复位高有效 <- 按键低有效取反
+    .reset     ( sys_rst_btn_n   ),   // IP 复位高有效 <- 按键高有效直连（板上按下=1）
     .clk_out1  ( clk_100m       ),   // 100MHz 单端输出
     .locked    ( mmcm_locked    )    // 锁定指示
 );
 
 //---------------- 复位组合 ---------------//
-// 按键低有效 AND MMCM 已锁定（锁定前持续复位，按键仍可复位，双保险）
-wire rst_n = sys_rst_btn_n & mmcm_locked;
+// 按键高有效（按下=复位）取反 AND MMCM 已锁定（锁定前持续复位，双保险）
+wire rst_n = ~sys_rst_btn_n & mmcm_locked;
 
 //---------------- 协议顶层 ---------------//
 w3_top # ( .FREQ_HZ   ( 100_000_000 ),   // 板上时钟 100MHz
            .BAUD      ( BAUD        ),
            .TIMEOUT_S ( TIMEOUT_S   ),
            .ENROLL_EN ( 1           ),   // Phase 8a：板级注册模式
-           .SEED_GATE_EN ( 0        )    // ⚠ 临时 bring-up 旁路（三要素，详见 zc706_migration_plan
-                                         //   豁免条目）：①时限=Phase 7/8 验收前必须恢复 1；
-                                         //   ②撤销条件=熵子系统修复实证（板上心跳快闪即
-                                         //   seed_fault=1 可直接裁决环振状态）；③代价=P1-5
-                                         //   跨断电重放窗在旁路期重开。根因（环振未起振）
-                                         //   截至旁路时点仍是假设，未实证
+           .SEED_GATE_EN ( 1        )    // P1-5 熵门控恢复（2026-10-23）：曾因"熵卡死屏蔽按键"
+                                         //   误判旁路(=0)——该依据已被板上实测翻案（设计从未
+                                         //   出复位，E_IDLE 是复位假象），豁免已撤销，详见
+                                         //   build/reviews/zc706_bringup/HANDOFF_20261023_根因翻案.md
 ) u_top (
     .sys_clk       ( clk_100m              ),
     .sys_rst_n     ( rst_n                 ),

@@ -159,6 +159,28 @@ if ($overridesActive) {
     if ($TbNameList) { Write-Host ">>>   Tops: $tbNames" }
 }
 
+# M-LOCK(auto-review #3): wrapper 3-element text lock - wrapper is NOT compiled by xsim
+# (clk_wiz IP); polarity/gating regressions (.reset inverted revive / SEED_GATE_EN(0)
+# bypass reopen) are intercepted here, closing the "CI green, board broken" gap.
+# NOTE: keep this block pure ASCII - the script is UTF-8 without BOM and Windows
+# PowerShell 5.1 parses it as ANSI (non-ASCII here once broke the parser).
+Write-Host "=== CI: Wrapper 3-element lock ==="
+$wtext = Get-Content -Raw -Encoding UTF8 "src\rtl\w3_protocol\w3_top_zc706.v"
+$wchecks = @(
+    @{ pat = '\.reset\s*\(\s*sys_rst_btn_n\s*\)';              desc = 'clk_wiz .reset direct (active-high, no invert)' },
+    @{ pat = 'rst_n\s*=\s*~\s*sys_rst_btn_n\s*&\s*mmcm_locked'; desc = 'rst_n = ~sys_rst_btn_n & mmcm_locked' },
+    @{ pat = '\.SEED_GATE_EN\s*\(\s*1\s*\)';                     desc = '.SEED_GATE_EN(1) (P1-5 gating, bypass revoked)' }
+)
+$wfail = 0
+foreach ($c in $wchecks) {
+    if ($wtext -notmatch $c.pat) {
+        Write-Host "  [FAIL] WRAPPER_LOCK: $($c.desc) -- w3_top_zc706.v element regressed!"
+        $wfail++
+    }
+}
+if ($wfail -gt 0) { Write-Host "WRAPPER_LOCK_FAIL ($wfail issue(s))"; exit 1 }
+Write-Host "  [PASS] wrapper 3-element lock (reset direct / rst_n invert / SEED_GATE_EN=1)"
+
 Write-Host "=== CI: Compile ==="
 Remove-Item xsim.dir -Recurse -Force -ErrorAction SilentlyContinue
 $sw = [System.Diagnostics.Stopwatch]::StartNew()

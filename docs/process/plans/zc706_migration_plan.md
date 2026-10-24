@@ -23,8 +23,8 @@
 | 信号 | wrapper 端口 | 引脚 | Bank/轨 | IOSTANDARD | 丝印/组件 |
 |---|---|---|---|---|---|
 | 差分时钟 200MHz | clk_p / clk_n | **H9 / G9** | **34 = VCC1V5_PL 1.5V 固定** | **DIFF_SSTL15** | sys_diff_clock（SiT9102，MRCC 脚） |
-| 复位(低有效) | sys_rst_btn_n | **A8** | 34 | **LVCMOS15** | **SW13** PL_CPU_RESET（PUDC_B 复用脚，普通输入 OK，实测 place 过） |
-| 认证按键 | auth_btn | **AK25** | 11 (VADJ) | LVCMOS25 | **SW7** GPIO_SW_LEFT（空闲1/按下0） |
+| 复位(高有效⚠勘误) | sys_rst_btn_n | **A8** | 34 | **LVCMOS15** | **SW13** PL_CPU_RESET（PUDC_B 复用脚，普通输入 OK，实测 place 过）。**板上实测空闲0/按下1（高有效）——2026-10-22 23:27 health 灯语推翻原"低有效"图纸解读** |
+| 认证按键 | auth_btn | **AK25** | 11 (VADJ) | LVCMOS25 | **SW7** GPIO_SW_LEFT。**板上实测空闲0/按下1（同上实证，推翻原"空闲1/按下0"图纸解读）** |
 | DIP bit0..3 | term_id_dip[3:0] | **AB17/AC16/AC17/AJ13** | 10 (VADJ) | LVCMOS25 | **SW12** pin1..4；**ON=1/OFF=0**（4.7k 下拉，出厂全 OFF） |
 | UART 发 | radio_txd | **AJ21** | 11 (VADJ) | LVCMOS25 | **PMOD1_0 = J58 pin1**（经 TXS0108E 移位） |
 | UART 收 | radio_rxd | **AB21** | 11 (VADJ) | LVCMOS25 | **PMOD1_2 = J58 pin5**（经 TXS0108E 移位） |
@@ -50,12 +50,12 @@
 2. `input wire [1:0] term_id_dip` → `[3:0]`，行尾注释改「SW12 pin1..4，ON=1」。
 3. `.term_id_sw({6'h00, term_id_dip})` → `{4'h00, ...}`，注释改「高 4 位 tie 0（SW12 有 4 位）」。
 4. clk_p 行注释：D18/LVDS_25 → 「H9, 200MHz 差分 (DIFF_SSTL15)」；clk_n 行同理 C19→G9。
-5. sys_rst_btn_n 行注释：GPIO_SW_N → 「SW13 PL_CPU_RESET（低有效）」。
+5. sys_rst_btn_n 行注释：GPIO_SW_N → 「SW13 PL_CPU_RESET（低有效）」。【⚠ 勘误 2026-10-23：真极性为高有效（板上实测空闲0/按下1），本步骤注释口径已被推翻，wrapper 实际代码已按实测修正】
 6. 头注释整体重写：贴 0.5 节引脚表 + 「4 颗 LVCMOS15」+「时钟 bank34=1.5V 用 DIFF_SSTL15」+「UART 走 PMOD1(J58)」+「ENROLL_EN=1（见 Phase 8a）」。
 7. **w3_top 例化加参数 `.ENROLL_EN(1)`**（Phase 8a 的 RTL 注册支持，见下）。
 
-**auth_btn 极性**（审查确认项）：按键空闲=1/按下=0，w3_top.v:121 上升沿触发 ⇒ 语义=「按下并**松开**后启动」。默认直通（与模板一致），教程叙述写「按一下并松开」。
-**其余一律不动**：clk_wiz_0 实例、`rst_n = sys_rst_btn_n & mmcm_locked`、BAUD/TIMEOUT_S。w3_top.v **端口**不改（参数新增见 8a，向后兼容）。
+**auth_btn 极性**（⚠ 勘误 2026-10-23）：板上实测**空闲=0/按下=1**（2026-10-22 23:27 health 灯语实证，推翻本段原"空闲=1/按下=0"的 UG954 图纸解读）；w3_top 上升沿触发 ⇒ 语义=「**按下瞬间**启动」，教程叙述统一改「按一下即触发」。
+**其余一律不动**：clk_wiz_0 实例、`rst_n = sys_rst_btn_n & mmcm_locked`、BAUD/TIMEOUT_S。w3_top.v **端口**不改（参数新增见 8a，向后兼容）。【⚠ 勘误 2026-10-23：本条"不动"指令正是错误极性 wrapper 的来源——clk_wiz 的 .reset 与 rst_n 已按实测极性修正（直连 / ~sys_rst_btn_n & mmcm_locked），见 build/reviews/zc706_bringup/HANDOFF_20261023_根因翻案.md】
 **验证清单**：`grep -nE "zc702|D18|C19|GPIO_SW_N|\bW6\b|\bW7\b|6'h00" w3_top_zc706.v` 零命中；`LVDS_25` 仅允许命中 1 处=「禁抄 ZC702 的 LVDS_25」告警注释（⚠ 模式用 `\bW7\b`——裸 `W7` 误伤 ZC706 按键名 SW7，内容审查 P2 实测 3 处良性命中）；Phase 4 xvlog/xelab 过。
 **反模式**：❌ 改 w3_top 端口/顺手优化；❌ wrapper 进 CI 清单。
 **提交**：`feat(board): add w3_top_zc706 wrapper (PMOD UART, 4-bit DIP, ENROLL_EN=1)`
@@ -77,9 +77,9 @@ set_false_path -from [get_ports auth_btn]
 set_false_path -from [get_ports {term_id_dip[*]}]
 set_false_path -to [get_ports led_*]
 
-# RESET：SW13（A8，bank34，LVCMOS15！低有效）
+# RESET：SW13（A8，bank34，LVCMOS15！板上实测高有效：空闲0/按下1——2026-10-22 health 实证，勘误原"低有效"）
 set_property -dict {PACKAGE_PIN A8 IOSTANDARD LVCMOS15} [get_ports sys_rst_btn_n]
-# AUTH：SW7（AK25，bank11，空闲1/按下0）
+# AUTH：SW7（AK25，bank11，板上实测：空闲0/按下1——同上实证）
 set_property -dict {PACKAGE_PIN AK25 IOSTANDARD LVCMOS25} [get_ports auth_btn]
 
 # UART：PMOD1(J58) 经 TXS0108E 3.3V<->2.5V 移位——3.3V USB-TTL 直插，无需分压
@@ -175,7 +175,7 @@ puts "PROGRAM_OK"
 
 ## Phase 6 · 拨码 ID + 按键/LED 行为验证
 
-SW12（ON=1）：板 A=**0001**、板 B=**0010**。功能自证：发起一次认证，PC 日志读 ACCESS_REQUEST 的 terminal_id = 期望值。auth_btn=SW7「按一下并松开」触发；led_busy(DS9，偏暗) 亮 → **DS8/DS10 给结果码**（01=通过）。拍照留证。
+SW12（ON=1）：板 A=**0001**、板 B=**0010**。功能自证：发起一次认证，PC 日志读 ACCESS_REQUEST 的 terminal_id = 期望值。auth_btn=SW7「按下即触发」（板上实测按下=1、上升沿=按下沿；勘误原"按一下并松开"）；led_busy(DS9，偏暗) 亮 → **DS8/DS10 给结果码**（01=通过）。拍照留证。
 **验证**：terminal_id 回读=1/2；两板一致；心跳正常。
 **提交**：`docs(evidence): zc706 dip/led bringup records`
 
@@ -198,7 +198,7 @@ python -m src.python.server.main --port COM3 --device-keys data\device_keys\devi
 python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\device_keys.json
 ```
 **R9 说明（审查精化）**：serve **不是只读**（每 ACCESS_REQUEST 更新 C2 窗并持久化池）；池文件按 tid 分文件不互踩；device_keys.json 整文件+mtime 检测 ⇒ 共库时后退出者**必然** [ERROR]（external-change）且其 C2 窗不落盘——分目录即规避。REPL 会在 CWD 写 audit.log（main.py:715）——已被 .gitignore 的 `*.log` 规则覆盖（实测 git check-ignore 命中 .gitignore:8），无需额外动作；注意 audit.log 含密钥操作记录，不离实验室机。
-**验收（审查 P1 修正：黄金值法作废，改闭环法）**：⚠ W4-T2 后真板上电 C2=ro_entropy 随机种子 ⇒ 首次 R2 **不再是** 7b45b0545e59aa94（该黄金值只在 TB tie 常量语义成立，CI 已锚定）。板上验收=①serve 日志读 ACCESS_REQUEST 的实际 C2 → 站端用已装密钥算 R2 → 终端 **PASS+CONFIRM_OK**（键/C2/RTL 三方一致的功能证明）；②断电重启终端 → 首帧 C2 与上次不同、旧 RESULT 重放被拒（P1-5 板级实证）。**bring-up 豁免（auto-review M2/M6）**：验收② 在 `SEED_GATE_EN=0` 旁路期挂起（旁路期 C2 跨上电确定，②按定义不可通过）——撤销旁路后方可执行，见文末「bring-up 旁路豁免条目」。
+**验收（审查 P1 修正：黄金值法作废，改闭环法）**：⚠ W4-T2 后真板上电 C2=ro_entropy 随机种子 ⇒ 首次 R2 **不再是** 7b45b0545e59aa94（该黄金值只在 TB tie 常量语义成立，CI 已锚定）。板上验收=①serve 日志读 ACCESS_REQUEST 的实际 C2 → 站端用已装密钥算 R2 → 终端 **PASS+CONFIRM_OK**（键/C2/RTL 三方一致的功能证明）；②断电重启终端 → 首帧 C2 与上次不同、旧 RESULT 重放被拒（P1-5 板级实证）。**bring-up 豁免（auto-review M2/M6）**：~~验收② 在 `SEED_GATE_EN=0` 旁路期挂起~~【已撤销 2026-10-23：旁路依据被根因翻案作废，门控已恢复 =1，验收②恢复执行】。
 **反模式**：❌ setkey 用 131211100b0a090803020100（字节序反，恒 BLOCKED 且像硬件故障）；❌ 波特率非 115200；❌ 不共地。
 **提交**：`feat(server): dual-COM bring-up (split key stores, PMOD wiring) + evidence`
 
@@ -222,7 +222,7 @@ python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\
 
 ## Phase 8 · PUF 板上注册（W4 收官；前置=Phase 8a 已合并）
 
-> ⚠ **bring-up 豁免（auto-review 复验 P3）：本 Phase 步骤 1~6 整体依赖真 PUF 指纹**——`SEED_GATE_EN=0` 旁路期且心跳快闪（`seed_fault=1`，环振疑似未起振）时，注册/阈值/交叉验证产出的都是全零退化数据，**整 Phase 挂起**（原仅步骤 6 标注，执行序存在空隙，已扩为全 Phase）。恢复门控且心跳慢闪后再执行。
+> ⚠ **bring-up 豁免（auto-review 复验 P3）【已撤销 2026-10-23】**：原"`SEED_GATE_EN=0` 旁路期整 Phase 挂起"的依据（环振疑似未起振屏蔽按键）已被根因翻案作废——设计从未出复位，E_IDLE 是复位假象。门控已恢复 =1，本 Phase 恢复执行；保留前置不变：**心跳必须 0.75Hz 慢闪**（若 DS35 快闪=`seed_fault=1`=环振真死，注册数据仍是全零退化，须先走环振诊断——该判据与极性无关，仍然有效）。
 
 **做什么**（顺序勿颠倒）：
 1. **接线前自证**：COM↔板映射贴标签；先发起一次认证确认 ACCESS_REQUEST 的 terminal_id 与所插板一致（REPL enroll 不校验线序，防模板-tid 错配——审查 P3）。
@@ -230,7 +230,7 @@ python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\
 3. 阈值复核：threshold.decide_scaled 灰区宽度 + hamming_analysis 跨板区分度过一遍。
 4. 板 B 重复（换口 `enroll 2 100`）。
 5. **交叉验证（演示卖点，操作要写明）**：把板 B 的 SW12 拨成板 A 的 ID（0001）→ 发起认证 → 必 REJECT（板 A 模板对板 B 的 PUF）→ **拨回 0010**。
-6. 断电重启重放测试：录一次 RESULT 帧 → 终端断电重启 → 重放 → 被拒（P1-5 板级实证）。**bring-up 豁免（M2/M6）：`SEED_GATE_EN=0` 旁路期本步挂起**——旁路下 C2 跨上电确定、重放会被接受（与承诺相反），恢复门控后再做。**验后恢复**：REPL `c2reset <tid>`（不清窗会把后续正常认证误判 RESULT_REPLAY——审查 P3）。
+6. 断电重启重放测试：录一次 RESULT 帧 → 终端断电重启 → 重放 → 被拒（P1-5 板级实证）。【原"`SEED_GATE_EN=0` 旁路期本步挂起"豁免已撤销 2026-10-23（依据作废，门控已恢复）——本步恢复执行】**验后恢复**：REPL `c2reset <tid>`（不清窗会把后续正常认证误判 RESULT_REPLAY——审查 P3）。
 7. T1 使能（ENABLE_KEY_DERIVE=1）：**板上必败**——站端读不到真设备 PUF 频率，KEY_SEED 0x0096 通道未实现（enroll.py:108-112 诚实边界）⇒ 标注"仅仿真语义，不投板时"（审查 P3）。
 **验证**：两板各自首认证 PASS；交叉 REJECT；重放被拒+c2reset 恢复；池/模板按 SOP 归档（data/ 已 gitignore）。
 **反模式**：❌ 用 --loopback 语义模板认证真板（恒 REJECT）；❌ 未过 8a 就上板 enroll；❌ 密钥/模板误提交。
@@ -290,7 +290,7 @@ python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\
 
 ---
 
-## bring-up 旁路豁免条目（auto-review M2/M7，2026-10-22 记档）
+## bring-up 旁路豁免条目（auto-review M2/M7，2026-10-22 记档）【⚠ 已撤销 2026-10-23：依据作废】
 
 **豁免对象**：`w3_top_zc706.v` 中 `.SEED_GATE_EN(0)`（板级 wrapper 唯一偏离安全默认值的**安全门**参数；另有 .ENROLL_EN(1) 偏离功能默认，属 Phase 8a 计划内模式，不在豁免范围）。
 
@@ -304,3 +304,5 @@ python -m src.python.server.main --port COM4 --device-keys data\stB\device_keys\
 | **跟踪任务** | ①板上读 `seed_fault`（心跳频率）裁决环振假设 → ②若未起振：VIO/ILA 采 16 环计数定位物理根因 → ③修复后恢复门控 → ④重跑 Stage 6 重放验证闭合 P1-5 板级实证 |
 
 **决策记录**：2026-10-22 板级 bring-up 发现"心跳闪但按 SW7 无反应"；根因判定为 ro_entropy 零熵 fail-closed 卡死（疑似，环振未起振未实证）叠加消抖复位极性 bug（已实证修复）。旁路是 bring-up 期让协议链路可验证的临时手段，非终态设计。同批合入的加固（seed_fault 故障口 / 心跳编码 / seed_load 限 S_IDLE / 幽灵沿回归锁）确保旁路可观测、可撤销、可回归。
+
+**【撤销记录 2026-10-23】**：本条目豁免依据已被板上实测**翻案**——health 灯语固件实证 SW13/SW7 真实极性为空闲0/按下1（与 UG954 图纸解读相反），历史 bitstream 的 wrapper `.reset(~sys_rst_btn_n)` 使 MMCM 上电恒复位，**设计从未运行**；"心跳闪但按 SW7 无反应"的真根因即此，上文"熵卡死叠加消抖极性 bug"双根因判定作废（E_IDLE 是复位假象；消抖复位值 1'b1 的"修复"也系反向误修，已回退 1'b0）。`.SEED_GATE_EN(1)` 已随 2026-10-23 极性终修恢复，豁免撤销。表中"跟踪任务①"（心跳裁决环振）仍有效——那是门控恢复后的板上验收项而非豁免依据。证据：`build/reviews/zc706_bringup/HANDOFF_20261023_根因翻案.md`。

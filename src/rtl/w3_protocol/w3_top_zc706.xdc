@@ -17,10 +17,10 @@ set_false_path -from [get_ports auth_btn]
 set_false_path -from [get_ports {term_id_dip[*]}]
 set_false_path -to [get_ports led_*]
 
-# === RESET：SW13 PL_CPU_RESET（A8，bank34，LVCMOS15！低有效）===
+# === RESET：SW13 PL_CPU_RESET（A8，bank34，LVCMOS15！板上实测高有效：空闲0/按下1）===
 set_property -dict {PACKAGE_PIN A8 IOSTANDARD LVCMOS15} [get_ports sys_rst_btn_n]
 
-# === AUTH 按钮：SW7 GPIO_SW_LEFT（AK25，bank11，空闲1/按下0）===
+# === AUTH 按钮：SW7 GPIO_SW_LEFT（AK25，bank11，板上实测：空闲0/按下1）===
 set_property -dict {PACKAGE_PIN AK25 IOSTANDARD LVCMOS25} [get_ports auth_btn]
 
 # === UART：PMOD1(J58) 经 TXS0108E 3.3V<->2.5V 移位——3.3V USB-TTL 直插免分压 ===
