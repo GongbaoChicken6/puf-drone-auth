@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic but structurally faithful mini .hwh with a PARTITION block
+     for offline part-gate tests (real Vivado exports carry PART here). -->
+<EDKSYSTEM EDKVERSION="2026.1" TIMESTAMP="2026-10-24T00:00:00Z">
+  <MODULES>
+    <MODULENODE>
+      <FULLNAME>/speck_cipher_0</FULLNAME>
+      <IPSTRUCT>xilinx.com:user:speck_cipher:1.0</IPSTRUCT>
+      <MEMRANGE BASEVALUE="0x43C00000" HIGHVALUE="0x43C0FFFF"/>
+    </MODULENODE>
+  </MODULES>
+  <PARTITION>
+    <MODULE FULLNAME="/" NAME="/" PART="xc7z020clg484-1"></MODULE>
+  </PARTITION>
+</EDKSYSTEM>

@@ -1,0 +1,18 @@
+{
+  "ip": "speck_cipher_0",
+  "registers": [
+    {"name": "ctrl", "offset": 0, "width": 32, "access": "rw", "reset": 0,
+     "doc": "bit0=start bit1=done bit2=idle"},
+    {"name": "key_lo", "offset": 4, "width": 32, "access": "rw", "reset": 0,
+     "doc": "key bits [31:0]"},
+    {"name": "status", "offset": 8, "width": 32, "access": "r",
+     "doc": "internally driven status word"},
+    {"name": "result_lo", "offset": 12, "width": 32, "access": "r",
+     "doc": "ciphertext result bits [31:0]"}
+  ],
+  "operations": [
+    {"name": "start", "doc": "kick one block encryption",
+     "writes": [{"reg": "ctrl", "value": 1}],
+     "wait_done": {"reg": "ctrl", "bit": 1, "timeout_ms": 100}}
+  ]
+}
