@@ -63,24 +63,24 @@ footer{text-align:center;color:var(--dim);font-size:11px;margin-top:48px;padding
 <div class="wrap">
 <header>
 <h1>🔑 PUF 无人机认证 · 全周期总控 v3</h1>
-<p>ZC702 · XC7Z020 · AMD 初级组 · 截止 11-04 18:00</p>
+<p>ZC706 · XC7Z045 · AMD 初级组 · 截止 11-04 18:00（剩 8 天）· 真硅片已收官</p>
 </header>
 
 <div class="stats">
-<div class="stat"><div class="v g">85</div><div class="l">Git 提交</div></div>
-<div class="stat"><div class="v c">185</div><div class="l">文件入库</div></div>
-<div class="stat"><div class="v b">2,431</div><div class="l">RTL 行</div></div>
-<div class="stat"><div class="v c">2,380</div><div class="l">TB 行</div></div>
-<div class="stat"><div class="v p">3,179</div><div class="l">Python 行</div></div>
-<div class="stat"><div class="v g">1,225+</div><div class="l">测试用例</div></div>
+<div class="stat"><div class="v g">172</div><div class="l">Git 提交</div></div>
+<div class="stat"><div class="v c">385</div><div class="l">文件入库</div></div>
+<div class="stat"><div class="v b">3,296</div><div class="l">RTL 行</div></div>
+<div class="stat"><div class="v c">4,076</div><div class="l">TB 行</div></div>
+<div class="stat"><div class="v p">4,428</div><div class="l">Python 行</div></div>
+<div class="stat"><div class="v g">1,500+</div><div class="l">测试用例</div></div>
 <div class="stat"><div class="v g">100%</div><div class="l">通过率</div></div>
-<div class="stat"><div class="v c">653</div><div class="l">LUT (1.23%)</div></div>
-<div class="stat"><div class="v a">~27天</div><div class="l">距截止</div></div>
+<div class="stat"><div class="v c">4,375</div><div class="l">LUT (2.00% ZC706)</div></div>
+<div class="stat"><div class="v a">8天</div><div class="l">距截止</div></div>
 </div>
 
 <section>
-<h2>W3 通信栈 · 顶层集成完成</h2>
-<div class="sub">15 个 RTL 模块 · 16 套 TB · 比特流已验证 · A1 Speck 统一 R2</div>
+<h2>W3 通信栈 · 顶层集成 + 真硅片验证完成</h2>
+<div class="sub">17 个 RTL 模块 · 19 套 TB · CI 18/18 · A1 Speck 统一 R2 · 真线 300+ 帧零丢</div>
 <div class="stack">
 <div class="path">
 <h4>📤 发送路径</h4>
@@ -92,11 +92,11 @@ footer{text-align:center;color:var(--dim);font-size:11px;margin-top:48px;padding
 <div class="arr">↓</div>
 <div class="step ok"><span>✅</span><span class="nm">uart_tx</span><span class="ln">185 行</span></div>
 <div class="arr">↓</div>
-<div class="step ok"><span>📡</span><span class="nm">w3_top.bit</span><span class="ln">4 MB ✓</span></div>
+<div class="step ok"><span>✅</span><span class="nm">w3_top_zc706.bit</span><span class="ln">13.3MB · 双板验收</span></div>
 </div>
 <div class="path">
 <h4>📥 接收路径</h4>
-<div class="step ok"><span>📡</span><span class="nm">uart_rx</span><span class="ln">173 行</span></div>
+<div class="step ok"><span>✅</span><span class="nm">uart_rx</span><span class="ln">bit_idx P0 修复 + 变异测试</span></div>
 <div class="arr">↓</div>
 <div class="step ok"><span>✅</span><span class="nm">frame_parser</span><span class="ln">213 行</span></div>
 <div class="arr">↓</div>
@@ -121,12 +121,14 @@ footer{text-align:center;color:var(--dim);font-size:11px;margin-top:48px;padding
 <div class="mod done"><div class="head"><span class="ico">🏗️</span><h3>w3_top 顶层</h3><span class="badge done">✅</span></div><p>全部模块集成 · 复位同步 · 消抖 · 心跳</p><div class="meta"><span>218 行</span><span>比特流 ✅</span></div></div>
 <div class="mod done"><div class="head"><span class="ico">🖥️</span><h3>B 线认证服务器</h3><span class="badge done">✅</span></div><p>protocol + crp_pool + hsm + main</p><div class="meta"><span>7 文件 1740 行</span><span>67 检查 ✅</span></div></div>
 <div class="mod done"><div class="head"><span class="ico">📊</span><h3>B 线评估工具</h3><span class="badge done">✅</span></div><p>hamming + compare + quantizer</p><div class="meta"><span>694 行</span><span>CLI ✅</span></div></div>
-<div class="mod wait"><div class="head"><span class="ico">🧪</span><h3>ML 攻击实验</h3><span class="badge wait">W4</span></div><p>arbiter 基线 + RO 排序重构</p><div class="meta"><span></span><span>P0-P5 完成</span></div></div>
+<div class="mod done"><div class="head"><span class="ico">🏗️</span><h3>ZC706 板级迁移 bring-up</h3><span class="badge done">✅</span></div><p>引脚事实卡 + 极性翻案 + 时钟 MMCM + 双板烧写验收 + J58 定案</p><div class="meta"><span>WNS +1.873ns</span><span>bit 13.3MB ✅</span></div></div>
+  <div class="mod done"><div class="head"><span class="ico">🛡️</span><h3>Phase 7 真硅片认证</h3><span class="badge done">✅</span></div><p>hd=0 + CONFIRM + R2 复算一致；断电重放 3×PASS 免 re-enroll</p><div class="meta"><span>2026-10-27 收官</span><span>enroll 112 CRPs 100%</span></div></div>
+  <div class="mod wait"><div class="head"><span class="ico">🧪</span><h3>ML 攻击实验</h3><span class="badge wait">数据待跑</span></div><p>arbiter 基线 + RO 排序重构（代码与 11 单测就绪）</p><div class="meta"><span>纯 PC</span><span>论文出图待做</span></div></div>
 </div>
 </section>
 
 <section>
-<h2>仿真测试 16 套 TB · 1,225+ 用例全过</h2>
+<h2>仿真测试 19 套 TB · CI 18/18 全绿</h2>
 <div class="sub">含 Level 2 真实 TX 链 · Level 3 全链路协议 · 顶层回环 · A1 全量向量回放与码 4 拒绝</div>
 <div class="tests">
 <div class="test"><div class="h"><b>tb_crc16</b><span>7/7 ✅</span></div><ul><li>黄金向量×3</li><li>全帧域 42B</li><li>损坏帧检测</li><li>init+dv 同拍</li></ul></div>
@@ -141,6 +143,8 @@ footer{text-align:center;color:var(--dim);font-size:11px;margin-top:48px;padding
 <div class="test"><div class="h"><b>tb_challenge_dec</b><span>4/4 ✅</span></div><ul><li>100×确定性</li><li>置换验证</li></ul></div>
 <div class="test"><div class="h"><b>tb_speck</b><span>1181 ✅</span></div><ul><li>NSA KAT + 边角</li><li>1175 组全量回放</li><li>时延 53 拍上界</li></ul></div>
 <div class="test"><div class="h"><b>tb_gap_regression</b><span>7/7 ✅</span></div><ul><li>陈旧/伪造 R2</li><li>灰区不递增</li><li>A1: 码 4 拒绝锁定</li></ul></div>
+<div class="test"><div class="h"><b>tb_uart_rx (新)</b><span>7/7 ✅</span></div><ul><li>bit_idx 回归锁</li><li>变异测试实证抓旧 bug</li><li>背靠背字节流</li></ul></div>
+<div class="test"><div class="h"><b>tb_w3_top 等价锁</b><span>✅</span></div><ul><li>TX/RX 等价 (rx==tx)</li><li>TX 活性下界 ≥20</li><li>真硅片对照 300+ 帧</li></ul></div>
 </div>
 </section>
 
@@ -160,6 +164,9 @@ footer{text-align:center;color:var(--dim);font-size:11px;margin-top:48px;padding
 <div class="rev"><span class="sev p0">P0×1</span><span class="txt"><b>A1 阶段 5</b> — 向量门禁恒真 + shim 假通过链（全实验闭环）</span></div>
 <div class="rev"><span class="sev p1">P1×1</span><span class="txt"><b>A1 安全复审</b> — 终端跨断电重放 P1-5 登记 W4（威胁建模实证）</span></div>
 <div class="rev"><span class="sev pass">PASS</span><span class="txt"><b>A1 全六阶段整体复审</b> — E2E 追踪 + 追溯矩阵 + 互操作实演 18/18 · PASS</span></div>
+<div class="rev"><span class="sev p0">P0×1</span><span class="txt"><b>uart_rx 两天悬案</b> — bit_idx DATA 态清零（uart_tx 同源）→ 修复+TB+等价锁，CI 18/18</span></div>
+<div class="rev"><span class="sev pass">PASS</span><span class="txt"><b>ZC706 极性根因翻案 + 板级合规审计</b> — 五代理 11 项全修；双板 P6 验收回填</span></div>
+<div class="rev"><span class="sev pass">PASS</span><span class="txt"><b>Phase 7 三角度 auto-review + AMD Ross 官方对照</b> — J58/采样/GSR/FSM 全一致；真硅片收官实证</span></div>
 </div>
 </section>
 
@@ -169,8 +176,8 @@ footer{text-align:center;color:var(--dim);font-size:11px;margin-top:48px;padding
 <div class="tstep done"><h4>W1 信号验证 <span class="sb">✅ 完成</span></h4><p>双环振 · xvlog+Artix-7 · 板上待板到</p></div>
 <div class="tstep done"><h4>W2 阵列 + B 线 <span class="sb">✅ 完成</span></h4><p>16 环 + 解码 + UART + Python 全套 · xsim TB_PASS</p></div>
 <div class="tstep done"><h4>W3 协议整合 + A1 <span class="sb">✅ 完成</span></h4><p>15 模块 + 顶层 · A1 Speck 统一 R2 · 12 TB 全过 · 十轮审查闭环</p></div>
-<div class="tstep wait"><h4>W4 实验周 <span class="sb">⏳ P0-P5 完成</span></h4><p>ML 攻击 · 温度 · 无线联调（需板+电台）</p></div>
-<div class="tstep wait"><h4>W5 冻结周 <span class="sb">⏳ P0-P5 完成</span></h4><p>全量指标 · 报告初稿 · Skill · 视频</p></div>
+<div class="tstep done"><h4>W4 实验周 <span class="sb">✅ 板上完成</span></h4><p>真硅片认证 10-27 收官（hd=0）；剩 ML 数据/温度/无线</p></div>
+<div class="tstep wait"><h4>W5 冻结周 <span class="sb">🚧 进行中</span></h4><p>实测指标已到手（hd=0/WNS/时序）· 报告撰写 · ML 出图</p></div>
 <div class="tstep wait"><h4>W6 交付周 <span class="sb">⏳ P0-P5 完成</span></h4><p><b style="color:var(--amber)">11-03 晚提交（硬死线 11-04 18:00）</b></p></div>
 </div>
 </section>
@@ -178,28 +185,28 @@ footer{text-align:center;color:var(--dim);font-size:11px;margin-top:48px;padding
 <section>
 <h2>关键指标</h2>
 <div class="stats">
-<div class="stat"><div class="v g">653</div><div class="l">LUT 实测 (1.23%)</div></div>
-<div class="stat"><div class="v g">1,033</div><div class="l">FF (0.97%)</div></div>
-<div class="stat"><div class="v">~14ms</div><div class="l">全握手延迟</div></div>
+<div class="stat"><div class="v g">4,375</div><div class="l">LUT 实测 (2.00%)</div></div>
+<div class="stat"><div class="v g">6,546</div><div class="l">FF (1.50%)</div></div>
+<div class="stat"><div class="v g">hd=0</div><div class="l">真硅片汉明距离</div></div>
 <div class="stat"><div class="v g">0</div><div class="l">预置密钥</div></div>
 <div class="stat"><div class="v">~44 bit</div><div class="l">有效熵</div></div>
-<div class="stat"><div class="v g">4 MB</div><div class="l">比特流已验证</div></div>
+<div class="stat"><div class="v g">+1.873ns</div><div class="l">WNS · 双板验收</div></div>
 </div>
 </section>
 
 <section>
-<h2>板到手前的待办</h2>
+<h2>收官冲刺（板级已通）</h2>
 <div class="mods">
-<div class="mod wait"><div class="head"><span class="ico">📌</span><h3>填入 ZC702 引脚</h3><span class="badge wait">必须</span></div><p>全部引脚已核（含 UART=FMC1_LPC L21/L22）· 待取消注释</p><div class="meta"><span>UART 已选 FMC1_LPC LA02（L21/L22, H7/H8）</span></div></div>
+<div class="mod wait"><div class="head"><span class="ico">📦</span><h3>板 B 交叉验证</h3><span class="badge wait">约 20 分钟</span></div><p>SW12=0010 → setkey 2 → enroll 2 → 双板同演；假冒必 REJECT</p><div class="meta"><span>跨芯片唯一性卖点演示</span></div></div>
 <div class="mod done"><div class="head"><span class="ico">✅</span><h3>时钟适配</h3><span class="badge done">已解决</span></div><p>w3_top_zc702 wrapper + clk_wiz_0（IP 上板时在工程内生成）</p><div class="meta"><span>ZC702 D18/C19 LVDS_25</span></div></div>
-<div class="mod wait"><div class="head"><span class="ico">📡</span><h3>电台连接</h3><span class="badge wait">需硬件</span></div><p>FMC/PMOD 引脚 + 433MHz SiK 电台</p><div class="meta"><span>LVCMOS25</span></div></div>
-<div class="mod wait"><div class="head"><span class="ico">🧪</span><h3>ML 攻击实验</h3><span class="badge wait">无需板</span></div><p>合成 arbiter 基线 + RO 排序重构 · 纯 Python</p><div class="meta"><span>W4 可提前</span></div></div>
+<div class="mod wait"><div class="head"><span class="ico">📡</span><h3>HC-12 无线链路</h3><span class="badge wait">已购待配</span></div><p>AT 配置 FU3/115200/CH001 → 替换 USB-TTL 上无线</p><div class="meta"><span>半双工切换 1-2ms 联调观察</span></div></div>
+<div class="mod wait"><div class="head"><span class="ico">🧪</span><h3>ML 攻击实验 + 温度曲线</h3><span class="badge wait">论文素材</span></div><p>ML 纯 Python 出图；温度实验需板（暖手宝+XADC）</p><div class="meta"><span>可靠性数据断电重放已到手</span></div></div>
 </div>
 </section>
 
 <footer>
-PUF Drone Auth · D:puf-drone-auth · 2026-10-15<br>
-118 commits · 204 files · ~10,500 lines · 1,500+ tests · 30 review rounds · W4 P0-P5 全部完成 (M1/M2/M3 达成)
+PUF Drone Auth · D:puf-drone-auth · 2026-10-27 · Phase 7 真硅片收官<br>
+172 commits · 385 files · ~11,800 lines · 1,500+ tests · 35+ review rounds · CI 18/18 · hd=0 + CONFIRM 实证
 </footer>
 </div>
 </body>

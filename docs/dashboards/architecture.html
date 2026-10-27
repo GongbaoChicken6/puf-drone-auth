@@ -93,6 +93,8 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .pseg{height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;overflow:hidden}
 .psim{background:rgba(34,211,238,.2);color:var(--comm)}
 .pnone{background:var(--bg3);color:var(--dim);border:1px dashed var(--border2)}
+.pbrd{background:rgba(245,158,11,.2);color:var(--brd)}
+.psys{background:rgba(239,68,68,.2);color:var(--sys)}
 
 /* 待办 */
 .todo{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px;margin:18px 0}
@@ -107,6 +109,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .tp.high{background:rgba(245,158,11,.15);color:#f59e0b}
 .tp.med{background:rgba(34,211,238,.15);color:#22d3ee}
 .tp.low{background:var(--bg4);color:var(--dim)}
+.tp.done{background:rgba(0,214,143,.15);color:#00d68f}
 
 /* 域颜色 */
 .dm-puf{border-color:var(--puf-b);background:var(--puf-bg)} .dm-puf h2{color:var(--puf)}
@@ -125,15 +128,15 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 
 <div class="hero">
 <h1>🔒 PUF 无人机身份认证系统 · 诚实的进度图谱</h1>
-<p>所有模块都通过了仿真测试，但<b>没有任何一个上过真实板子</b>（板卡已尝试上电：DS14 亮 / DS13 不亮，电源故障排查中，见 HANDOFF §三）。电台还没买。以下用四级验证状态标注每个部件的真实进度。</p>
+<p><b style="color:var(--puf)">2026-10-27 真硅片收官：</b>板 A 全链路认证 PASS（DS8 + CONFIRM 回帧，hd=0），断电重放三轮全过。板级验证大部分完成（剩板 B 交叉/温度/无线），系统联调 USB 链已端到端打通。以下用四级验证状态标注每个部件的真实进度。</p>
 </div>
 
 <!-- ====== 验证级别图例 ====== -->
 <div class="vlegend">
 <div class="vl"><b>📝</b> 代码完成（编译通过）</div>
 <div class="vl"><b>🧪</b> 仿真通过（TB全绿）</div>
-<div class="vl"><b>🔧</b> 板级验证（烧板运行）← <b style="color:#ef4444">目前= 0</b></div>
-<div class="vl"><b>🌐</b> 系统联调（电台+PC端到端）← <b style="color:#ef4444">目前= 0</b></div>
+<div class="vl"><b>🔧</b> 板级验证（烧板运行）← <b style="color:var(--brd)">大部分完成</b></div>
+<div class="vl"><b>🌐</b> 系统联调（链路+PC端到端）← <b style="color:var(--sys)">USB 链完成 · 无线待</b></div>
 </div>
 
 <!-- ====== 系统架构 ====== -->
@@ -144,38 +147,38 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <!-- FPGA -->
 <div class="acol">
 <div class="abox" style="border-color:var(--board-b)">
-<div class="at" style="color:var(--board)">💠 ZC702 FPGA 开发板
-<span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></span>
+<div class="at" style="color:var(--board)">💠 ZC706 FPGA 开发板 (xc7z045)
+<span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span>
 </div>
-<p style="font-size:10px;color:var(--dim);margin-bottom:8px">以下所有模块都在这颗芯片内部运行。代码和仿真都过了，但<b>从未烧到真实芯片上</b>。</p>
+<p style="font-size:10px;color:var(--dim);margin-bottom:8px">板 A/B 双板烧写验收；真硅片五帧认证全链路 PASS（2026-10-27）。WNS +1.873ns，LUT 4,375 (2.00%)。</p>
 
 <div style="border:1px solid var(--auth-b);border-radius:10px;padding:8px;margin-bottom:6px">
 <div style="font-size:11px;font-weight:600;color:var(--auth);margin-bottom:4px">🧠 认证大脑</div>
-<div class="afbox"><span class="fi">🎯</span><div class="ft"><b>terminal_fsm.v</b><span>13态协议控制器 · 含防重放（服务器侧；终端侧跨断电重放待W4，见HANDOFF P1-5）</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
+<div class="afbox"><span class="fi">🎯</span><div class="ft"><b>terminal_fsm.v</b><span>16 态协议控制器 · 防重放（含上电熵跨断电拒止）· 真硅片 CONFIRM ✅</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span></div>
 </div>
 
 <div style="border:1px solid var(--comm-b);border-radius:10px;padding:8px;margin-bottom:6px">
 <div style="font-size:11px;font-weight:600;color:var(--comm);margin-bottom:4px">📡 通信协议栈</div>
-<div class="afbox"><span class="fi">✉️</span><div class="ft"><b>mavlink_frame.v 打包</b><span>数据→标准帧</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
+<div class="afbox"><span class="fi">✉️</span><div class="ft"><b>mavlink_frame.v 打包</b><span>真线 300+ 帧零丢</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span></div>
 <div class="aarr"><span>↓</span></div>
-<div class="afbox"><span class="fi">📥</span><div class="ft"><b>byte_fifo.v 缓冲</b><span>快进慢出排队</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
+<div class="afbox"><span class="fi">📥</span><div class="ft"><b>byte_fifo.v 缓冲</b><span>真线正常（无反压缺陷已记档）</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span></div>
 <div class="aarr"><span>↓</span></div>
-<div class="afbox"><span class="fi">📤</span><div class="ft"><b>uart_tx.v 串口发送</b><span>字节→位流→引脚</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
+<div class="afbox"><span class="fi">📤</span><div class="ft"><b>uart_tx.v 串口发送</b><span>bit_idx P0 已修（变异测试锁定）</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span></div>
 <div class="aarr"><span>↓</span></div>
-<div class="afbox"><span class="fi">📻</span><div class="ft"><b>uart_rx.v 串口接收</b><span>位流→字节</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
+<div class="afbox"><span class="fi">📻</span><div class="ft"><b>uart_rx.v 串口接收</b><span>两天悬案根因修复 + tb_uart_rx</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span></div>
 <div class="aarr"><span>↓</span></div>
-<div class="afbox"><span class="fi">📂</span><div class="ft"><b>frame_parser.v 拆包</b><span>帧→数据 · 含载荷保护</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
-<div class="afbox" style="margin-top:4px"><span class="fi">🔐</span><div class="ft"><b>crc16.v 校验码</b><span>被打包器和拆包器共用</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
+<div class="afbox"><span class="fi">📂</span><div class="ft"><b>frame_parser.v 拆包</b><span>帧→数据 · 含载荷保护</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span></div>
+<div class="afbox" style="margin-top:4px"><span class="fi">🔐</span><div class="ft"><b>crc16.v 校验码</b><span>双侧一致（真线 CRC 全过）</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span></div>
 </div>
 
 <div style="border:1px dashed var(--puf-b);border-radius:10px;padding:8px">
-<div style="font-size:11px;font-weight:600;color:var(--puf);margin-bottom:4px">🔬 芯片指纹引擎（未接入认证流程）</div>
-<div class="afbox"><span class="fi">🎲</span><div class="ft"><b>challenge_decode.v</b><span>随机题→选环配对</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
+<div style="font-size:11px;font-weight:600;color:var(--puf);margin-bottom:4px">🔬 芯片指纹引擎（已接入认证流程 ✅）</div>
+<div class="afbox"><span class="fi">🎲</span><div class="ft"><b>challenge_decode.v</b><span>真硅片每挑战 3 测量</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span></div>
 <div class="aarr"><span>↓</span></div>
-<div class="afbox"><span class="fi">🎛️</span><div class="ft"><b>ro_array.v 16环阵列</b><span>16个振荡器频率=指纹</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
+<div class="afbox"><span class="fi">🎛️</span><div class="ft"><b>ro_array.v 16环阵列</b><span>112 CRPs · 64/64 稳定 100%</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span></div>
 <div class="aarr"><span>↓</span></div>
-<div class="afbox"><span class="fi">🎵</span><div class="ft"><b>ro_ring.v ×16 环振器</b><span>每颗芯片频率不同</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
-<p style="font-size:9px;color:var(--amber);margin-top:6px;padding:4px 8px;background:rgba(245,158,11,.08);border-radius:6px">⚠ 指纹引擎代码写好了，但认证流程目前用的是"种子直通占位"——<b>真实指纹还没被使用过</b>。接入需要改 terminal_fsm 的处理逻辑。</p>
+<div class="afbox"><span class="fi">🎵</span><div class="ft"><b>ro_ring.v ×16 环振器</b><span>真硅片指纹 hd=0</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span></div>
+<p style="font-size:9px;color:var(--puf);margin-top:6px;padding:4px 8px;background:rgba(0,214,143,.08);border-radius:6px">✅ B5a 管线已上线并经真硅片验证：挑战→解码→测量→打包全程真实数据，「种子直通占位」已成历史。</p>
 </div>
 </div>
 </div>
@@ -183,9 +186,9 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <!-- 无线电台 -->
 <div class="airlink">
 <div style="font-size:32px">📻⇄📻</div>
-<div class="al">433MHz 无线电台<br>（一对，需要购买）</div>
+<div class="al">433MHz HC-12×2<br>（已购买 · AT 配置待做）</div>
 <div class="vs"><span class="v code off">📝</span><span class="v sim off">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div>
-<p style="font-size:9px;color:var(--dim);text-align:center">完全未开始<br>没有电台就没有无线通信<br>所有认证只能在仿真中跑</p>
+<p style="font-size:9px;color:var(--dim);text-align:center">USB-TTL 有线链路已完成<br>端到端联调（CONFIRM 实证）；<br>无线为最后一公里</p>
 <div style="font-size:20px;color:var(--dim)">⇅</div>
 </div>
 
@@ -193,22 +196,22 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <div class="acol">
 <div class="abox" style="border-color:var(--server-b)">
 <div class="at" style="color:var(--server)">🖥️ PC 地面基站（Python）
-<span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></span>
+<span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span>
 </div>
-<p style="font-size:10px;color:var(--dim);margin-bottom:8px">逻辑测试通过了，但<b>无法通过真实串口和 FPGA 对话</b>（串口循环未写）。</p>
+<p style="font-size:10px;color:var(--dim);margin-bottom:8px">真线 serve 收发循环已验证：PC↔板 300+ 帧，CONFIRM tid=1 OK。</p>
 
-<div class="afbox"><span class="fi">⌨️</span><div class="ft"><b>main.py 操作入口</b><span>注册/认证/伪造测试</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
+<div class="afbox"><span class="fi">⌨️</span><div class="ft"><b>main.py 操作入口</b><span>enroll/serve/setkey/c2reset REPL</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span></span></div>
 <div class="aarr"><span>↓</span></div>
-<div class="afbox"><span class="fi">📋</span><div class="ft"><b>protocol.py 协议引擎</b><span>和FPGA用同一套规则</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
+<div class="afbox"><span class="fi">📋</span><div class="ft"><b>protocol.py 协议引擎</b><span>真线五帧全链路</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span></div>
 <div class="aarr"><span>↓</span></div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-<div class="afbox" style="padding:6px"><span class="fi">🗂️</span><div class="ft"><b style="font-size:10px">crp_pool.py</b><span style="font-size:8px">题库管理</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
-<div class="afbox" style="padding:6px"><span class="fi">💾</span><div class="ft"><b style="font-size:10px">template_db.py</b><span style="font-size:8px">指纹数据库</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
-<div class="afbox" style="padding:6px"><span class="fi">⚖️</span><div class="ft"><b style="font-size:10px">threshold.py</b><span style="font-size:8px">判决器</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
-<div class="afbox" style="padding:6px"><span class="fi">🔑</span><div class="ft"><b style="font-size:10px">hsm.py</b><span style="font-size:8px">基站身份</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
+<div class="afbox" style="padding:6px"><span class="fi">🗂️</span><div class="ft"><b style="font-size:10px">crp_pool.py</b><span style="font-size:8px">池 88/500</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span></span></div>
+<div class="afbox" style="padding:6px"><span class="fi">💾</span><div class="ft"><b style="font-size:10px">template_db.py</b><span style="font-size:8px">112 CRPs</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span></span></div>
+<div class="afbox" style="padding:6px"><span class="fi">⚖️</span><div class="ft"><b style="font-size:10px">threshold.py</b><span style="font-size:8px">hd=0 判定</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span></span></div>
+<div class="afbox" style="padding:6px"><span class="fi">🔑</span><div class="ft"><b style="font-size:10px">hsm.py</b><span style="font-size:8px">R2 真线一致</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span></span></div>
 </div>
 <div class="aarr"><span>↓</span></div>
-<div class="afbox" style="border-style:dashed;border-color:rgba(239,68,68,.3)"><span class="fi">🔗</span><div class="ft"><b>串口通信循环</b><span style="color:#ef4444">未实现——PC无法和真实FPGA通信</span></div><span class="vs"><span class="v code off">📝</span></span></div>
+<div class="afbox" style="border-style:dashed;border-color:rgba(0,214,143,.35)"><span class="fi">🔗</span><div class="ft"><b>串口通信循环 serial_server.py</b><span style="color:var(--puf)">✅ 已实现并真线验证（19 单测 + CONFIRM 收讫）</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></span></div>
 </div>
 </div>
 </div>
@@ -220,10 +223,10 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <b style="font-size:12px;color:var(--hw)">板级硬件状态</b>
 </div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px">
-<div class="afbox"><span class="fi">💠</span><div class="ft"><b>ZC702 板</b><span>已有；上电尝试中 DS13 不亮（电源排查中）</span></div><span class="vs"><span class="v code on">📝</span></span></div>
-<div class="afbox"><span class="fi">📦</span><div class="ft"><b>比特流 .bit</b><span>生成验证过，未烧板</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span></span></div>
-<div class="afbox"><span class="fi">📍</span><div class="ft"><b>XDC 引脚</b><span>全部引脚已核（UART=FMC1_LPC L21/L22）；约束仍注释</span></div><span class="vs"><span class="v code off">📝</span></span></div>
-<div class="afbox"><span class="fi">🕐</span><div class="ft"><b>时钟适配</b><span>✅ wrapper + clk_wiz_0 已解决</span></div><span class="vs"><span class="v code off">📝</span></span></div>
+<div class="afbox"><span class="fi">💠</span><div class="ft"><b>ZC706 板 A/B</b><span>双板烧写验收 ✅（DS35 心跳实证）</span></div><span class="vs"><span class="v code on">📝</span><span class="v brd on">🔧</span></span></div>
+<div class="afbox"><span class="fi">📦</span><div class="ft"><b>比特流 .bit</b><span>13.3MB · WNS +1.873 · 已烧板</span></div><span class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span></span></div>
+<div class="afbox"><span class="fi">📍</span><div class="ft"><b>XDC 引脚事实卡</b><span>UG954+板卡文件+IBIS 三方核验 ✅</span></div><span class="vs"><span class="v code on">📝</span><span class="v brd on">🔧</span></span></div>
+<div class="afbox"><span class="fi">🕐</span><div class="ft"><b>时钟适配</b><span>✅ 200M 差分 → MMCM → 100M</span></div><span class="vs"><span class="v code on">📝</span><span class="v brd on">🔧</span></span></div>
 </div>
 </div>
 </div>
@@ -235,122 +238,113 @@ footer{text-align:center;color:var(--dim);font-size:10px;margin-top:28px;padding
 <div class="dhead"><span class="di">🔬</span><div><h2>功能域 1：芯片指纹引擎</h2><p class="dd">利用制造工艺偏差产生每颗芯片独有的"硬件指纹"。就像双胞胎也有不同指纹。</p></div></div>
 <p class="danalogy">💡 类比：芯片里放了16个微型音叉，每个振动频率由制造工艺决定。同一颗芯片频率永远不变，不同芯片必然不同。</p>
 <div class="dbody"><div class="nodes">
-<div class="node"><div class="nh"><span class="ni">🎵</span><span class="nn">环振器 ro_ring.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>5个反相器首尾相连的振荡回路。频率由物理延迟决定——每颗芯片不同。</div><div class="nf"><b>真实状态：</b>代码写好，仿真验证。但环振是物理器件，<b>必须上板才能知道真实频率</b>——仿真无法模拟制造偏差。</div></div>
-<div class="node"><div class="nh"><span class="ni">🎛️</span><span class="nn">环振阵列 ro_array.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>16个环振+分频器+计数器。16个频率构成芯片指纹向量。含功耗管理（ring_en）。</div><div class="nf"><b>真实状态：</b>代码写好，xsim验证了计数逻辑。<b>但"16个频率是否真的各不相同"只有上板才能验证</b>——这是PUF的核心假设。</div></div>
-<div class="node"><div class="nh"><span class="ni">🎲</span><span class="nn">挑战解码器 challenge_decode.v</span>
-<div class="node"><div class="nh"><span class="ni">曳</span><span class="nn">上电熵采样 ro_entropy.v</span></div><div class="nd">16 环低 4bit 拼接 64bit boot_seed · P1-5 重放拒止 · T10-T13 验证</div></div><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>收到随机挑战→LFSR+洗牌→决定比较哪8对环振器。</div><div class="nf"><b>真实状态：</b>代码写好，100次确定性仿真通过。<b>未接入认证流程</b>（terminal_fsm目前用种子直通占位）。</div></div>
+<div class="node"><div class="nh"><span class="ni">🎵</span><span class="nn">环振器 ro_ring.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></div></div><div class="nd"><b>是什么：</b>5个反相器首尾相连的振荡回路。频率由物理延迟决定——每颗芯片不同。</div><div class="nf"><b>真实状态：</b><b style="color:var(--puf)">真硅片验证通过</b>——指纹参与认证，64 位响应 hd=0（与模板零误码），稳定性 100%×3 测量。</div></div>
+<div class="node"><div class="nh"><span class="ni">🎛️</span><span class="nn">环振阵列 ro_array.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></div></div><div class="nd"><b>是什么：</b>16个环振+分频器+计数器。16个频率构成芯片指纹向量。含功耗管理（ring_en）。</div><div class="nf"><b>真实状态：</b><b style="color:var(--puf)">真硅片验证通过</b>——enroll 112 CRPs 全部稳定；跨芯片唯一性正式数据待板 B 交叉验证。</div></div>
+<div class="node"><div class="nh"><span class="ni">⚡</span><span class="nn">上电熵采样 ro_entropy.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></div></div><div class="nd"><b>是什么：</b>环振物理熵→上电 C2 播种→每次上电 C2 初值不同。</div><div class="nf"><b>真实状态：</b><b style="color:var(--puf)">断电重放实证</b>——重上电后 c2 整段跳变（785d…→5ac6…），三轮重放测试零误判、零 c2reset。</div></div>
+<div class="node"><div class="nh"><span class="ni">🎲</span><span class="nn">挑战解码器 challenge_decode.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></div></div><div class="nd"><b>是什么：</b>收到随机挑战→LFSR+洗牌→决定比较哪8对环振器。</div><div class="nf"><b>真实状态：</b><b style="color:var(--puf)">已接入认证流程</b>（B5a 管线）：真硅片每挑战 3 次测量取多数，非占位直通。</div></div>
 </div></div>
-<p class="dnote">⚠ <b>关键诚实声明：</b>整个指纹引擎目前只存在于仿真中。PUF的核心前提（不同芯片频率不同、同一芯片频率稳定）<b>需要在真实芯片上验证</b>。如果上板后发现频率差异不够大（芯片间太相似）或不够稳定（同芯片测量抖动太大），可能需要增加环数或调整比较策略。<b>这是W4实验周的核心任务。</b></p>
+<p class="dnote">✅ <b>2026-10-27 更新：</b>指纹引擎已在真实芯片上完成验证——PUF 核心前提成立（同芯片稳定 100%、跨断电重放拒止生效）。原"种子直通占位/仿真-only"状态已成历史。唯一性维度：板 B 交叉验证（假冒必拒）为最后一块拼图。</p>
 </div>
 
 <!-- Communication -->
 <div class="domain dm-comm">
 <div class="dhead"><span class="di">📡</span><div><h2>功能域 2：通信协议栈</h2><p class="dd">把认证数据打包成MAVLink v2标准帧通过串口发送/接收。是无人机行业标准协议。</p></div></div>
 <div class="dbody"><div class="nodes">
-<div class="node"><div class="nh"><span class="ni">✉️</span><span class="nn">帧打包 mavlink_frame.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>数据→加帧头+编号+校验→输出字节流。黄金向量逐字节验证通过。</div><div class="nf"><b>真实状态：</b>仿真确认输出与Python端完全一致。但<b>串口波特率是否正确需要示波器上板验证</b>。</div></div>
-<div class="node"><div class="nh"><span class="ni">📂</span><span class="nn">帧拆包 frame_parser.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>字节流→找帧头→提取内容→验CRC。含载荷保护和超时。</div><div class="nf"><b>真实状态：</b>仿真验证（含噪声容忍、CRC拒绝、截断恢复）。<b>真实电台噪声下的表现需要联调验证</b>。</div></div>
-<div class="node"><div class="nh"><span class="ni">📥</span><span class="nn">缓冲区 byte_fifo.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>64字节速度缓冲。打包器快（每拍1字节），串口慢（每字节868拍）。</div><div class="nf"><b>真实状态：</b>仿真验证含流水线、满溢碰撞测试。<b>背靠背双帧溢出风险在真实协议下需关注</b>。</div></div>
-<div class="node"><div class="nh"><span class="ni">📤</span><span class="nn">串口 uart_tx.v / uart_rx.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>字节↔位流转换。发送端把每个字节拆成10个位，接收端反向。</div><div class="nf"><b>真实状态：</b>修复了bit_idx挂死和CLEANUP丢字节两个P0。<b>但波特率精度、电气特性需上板+示波器验证。uart_rx无独立TB。</b></div></div>
+<div class="node"><div class="nh"><span class="ni">✉️</span><span class="nn">帧打包 mavlink_frame.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></div></div><div class="nd"><b>是什么：</b>数据→加帧头+编号+校验→输出字节流。</div><div class="nf"><b>真实状态：</b><b style="color:var(--puf)">真线验证</b>——115200bps 实测 300+ 帧零丢失，黄金向量与 Python 逐字节一致。</div></div>
+<div class="node"><div class="nh"><span class="ni">📂</span><span class="nn">帧拆包 frame_parser.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></div></div><div class="nd"><b>是什么：</b>字节流→找帧头→提取内容→验CRC。含载荷保护和超时。</div><div class="nf"><b>真实状态：</b><b style="color:var(--puf)">真线验证</b>——enroll 100 批背靠背挑战 + RESULT/EXTRA 帧解析全部正常。电台噪声维度待无线联调。</div></div>
+<div class="node"><div class="nh"><span class="ni">📥</span><span class="nn">缓冲区 byte_fifo.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></div></div><div class="nd"><b>是什么：</b>64字节速度缓冲。打包器快（每拍1字节），串口慢（每字节868拍）。</div><div class="nf"><b>真实状态：</b><b style="color:var(--puf)">真线正常</b>。已知遗留：无反压（UART 链死时连按 3 次起溢出丢字节）——已记 Phase 8 待修，不影响正常流程。</div></div>
+<div class="node"><div class="nh"><span class="ni">📤</span><span class="nn">串口 uart_tx.v / uart_rx.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></div></div><div class="nd"><b>是什么：</b>字节↔位流转换。发送端把每个字节拆成10个位，接收端反向。</div><div class="nf"><b>真实状态：</b><b style="color:var(--puf)">真线验证 + 双 P0 修复</b>——uart_rx bit_idx 清零缺陷（两天 0 字节悬案）已修，补独立 tb_uart_rx（7 回归）+ 变异测试实证，tb_w3_top TX/RX 等价锁。</div></div>
 </div></div>
-<p class="dnote">⚠ <b>关键遗漏：</b>通信栈在仿真中表现完美，但<b>真实电台是半双工的</b>——发送时不能同时接收。SiK电台TX→RX切换需要1-2ms。协议假设"发完立刻能收"，实际上有切换延迟。<b>需要联调时调整时序或加入切换等待。</b></p>
+<p class="dnote">⚠ <b>遗留关注（无线时）：</b>HC-12 半双工——发送时不能同时接收，TX→RX 切换约 1-2ms。协议"发完立刻能收"假设在有线 USB-TTL 下成立，<b>无线联调时需验证或加切换等待</b>。</p>
 </div>
 
 <!-- Auth -->
 <div class="domain dm-auth">
 <div class="dhead"><span class="di">🧠</span><div><h2>功能域 3：认证流程控制器</h2><p class="dd">整个系统的"大脑"，按严格协议完成双向身份认证。含多重安全防护。</p></div></div>
 <div class="dbody"><div class="nodes">
-<div class="node"><div class="nh"><span class="ni">🎯</span><span class="nn">terminal_fsm.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>13态FSM：空闲→发请求→等题→答题→发答案→等判定→验基站→确认→会话。含C2防重放（服务器侧有效；终端侧跨断电重放待W4修复，见HANDOFF P1-5）、动态R2、载荷校验、超时保护。</div><div class="nf"><b>真实状态：</b>仿真验证了通过流/拒绝流/超时流/灰区。<b>但PUF答题用的是种子直通占位——真实指纹测量还没接入。</b>R2期望值已统一为Speck64/96重算（A1阶段3），与PC端SpeckHSM黄金向量逐位一致。</div></div>
+<div class="node"><div class="nh"><span class="ni">🎯</span><span class="nn">terminal_fsm.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></div></div><div class="nd"><b>是什么：</b>16态FSM：空闲→请求→答题（真实 PUF 测量）→应答→判定→验基站 R2→确认→会话。含 C2 防重放（服务器侧窗口 + 终端侧上电熵跨断电拒止）、动态 R2、载荷校验、超时保护。</div><div class="nf"><b>真实状态：</b><b style="color:var(--puf)">真硅片全链路 PASS</b>——五帧走通、R2 逐字节校验通过并回 CONFIRM；灰区加测路径 TB 覆盖。已知观察项：enroll 后首轮一次性 R2 失败（再按即过，Phase 8 定位中）。</div></div>
 </div></div>
-<p class="dnote">⚠ <b>三个未闭环的关键点：</b><br>
-① <b>PUF占位</b>：terminal_fsm 收到挑战后直接把种子当响应发回。真实场景需要调用环振阵列测量频率再生成响应。<b>需要写"接入层"代码。</b><br>
-② <b>R2已统一</b>（A1完成）：FPGA与PC均用Speck64/96，黄金向量7b45b0545e59aa94双侧一致；残余为终端侧跨断电重放（W4，HANDOFF P1-5）。<br>
-③ <b>灰区无测试</b>：灰区加测流程(EXTRA_CHALLENGE)在Level 3 TB中没有完整测试路径。</p>
+<p class="dnote">✅ <b>2026-10-27 更新：原三个未闭环点全部闭环。</b><br>
+① <b>PUF 接入</b>：B5a 真实管线（S_PUF 测量/打包）已上线，真硅片 hd=0；<br>
+② <b>R2 统一</b>：Speck64/96 双侧一致并经真线 CONFIRM 实证；密钥书写方向定案（setkey 字节流 ≡ RTL 96 位参数）；<br>
+③ <b>跨断电重放（P1-5）</b>：ro_entropy 上电熵实现终端侧拒止，断电重放 3×PASS + 旧 R2 必失配实证。</p>
 </div>
 
 <!-- Board -->
 <div class="domain dm-board">
 <div class="dhead"><span class="di">🏗️</span><div><h2>功能域 4：板级集成层</h2><p class="dd">把FPGA内部模块连接到物理世界。是代码和硬件之间的桥梁。</p></div></div>
 <div class="dbody"><div class="nodes">
-<div class="node"><div class="nh"><span class="ni">🏗️</span><span class="nn">w3_top.v 顶层</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>14个模块的总集成 + 复位同步 + 按钮消抖 + LED心跳。回环TB验证了全链路。</div><div class="nf"><b>真实状态：</b>比特流生成验证通过（4MB）。但用的开发模式DRC豁免（无引脚约束）。<b>必须填入真实引脚后重新生成比特流才能烧板。</b></div></div>
+<div class="node"><div class="nh"><span class="ni">🏗️</span><span class="nn">w3_top.v + w3_top_zc706.v</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></div></div><div class="nd"><b>是什么：</b>17 模块总集成 + 板级 wrapper（时钟 MMCM/复位组合/拨码 tie/ENROLL_EN）。</div><div class="nf"><b>真实状态：</b><b style="color:var(--puf)">双板验收 + 真硅片认证</b>——LUT 4,375 (2.00%)、FF 6,546 (1.50%)、WNS +1.873ns、bit 13.3MB；引脚事实卡（UG954 v1.8 + 板卡文件 + IBIS 三方核验）。</div></div>
 </div></div>
-<p class="dnote">⚠ <b>三个上板前必须解决的问题：</b><br>
-① <b>时钟</b>：ZC702提供200MHz差分时钟，设计假设100MHz单端。需要加IBUFDS+MMCM分频，或改FREQ_HZ=200M<br>
-② <b>引脚</b>：XDC模板中所有引脚号都是占位符。需查UG850手册+确定电台接在哪个FMC/PMOD<br>
-③ <b>复位</b>：ZC702的CPU_RESET按钮在PS域（不在FPGA/PL域）。需改用GPIO_SW_*按钮</p>
+<p class="dnote">✅ <b>原三个上板前问题全部解决：</b>时钟（200M 差分→MMCM→100M）；引脚（ZC706 引脚事实卡，J58 PMOD 定案：pin1=TX/pin5=RX/pin9=GND，pin11/12=3.3V 禁插）；复位（SW13 极性板上实测翻案：空闲0/按下1）。附加战绩：两天 J58 针位悬案与两天 uart_rx 悬案均已根因定案并修复。</p>
 </div>
 
 <!-- PC Server -->
 <div class="domain dm-server">
 <div class="dhead"><span class="di">🖥️</span><div><h2>功能域 5：PC 地面基站（Python）</h2><p class="dd">地面"身份验证中心"：出题、收答案、比对指纹、做判定、证明自身身份。</p></div></div>
 <div class="dbody"><div class="nodes">
-<div class="node"><div class="nh"><span class="ni">📋</span><span class="nn">协议引擎等6个模块</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>protocol + crp_pool + template_db + threshold + hsm + main。67项单元测试通过。</div><div class="nf"><b>真实状态：</b>--loopback模式可自测。但<b>串口通信循环未实现</b>——PC无法通过真实串口和FPGA对话。这是PC端最大的缺口。</div></div>
-<div class="node"><div class="nh"><span class="ni">📊</span><span class="nn">评估工具</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>hamming_analysis + compare_devices + quantizer。分析指纹质量。</div><div class="nf"><b>真实状态：</b>工具可用但输入格式需要适配真实测量数据格式。W4时需要更新。</div></div>
+<div class="node"><div class="nh"><span class="ni">📋</span><span class="nn">协议引擎等模块</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></div></div><div class="nd"><b>是什么：</b>protocol + crp_pool + template_db + threshold + hsm + main。109 单测 + 契约同步。</div><div class="nf"><b>真实状态：</b><b style="color:var(--puf)">真线验证</b>——serve 接收环 + SpeckHSM + DeviceKeyStore（密钥/C2 窗口断电持久化）全部实装实跑。</div></div>
+<div class="node"><div class="nh"><span class="ni">📊</span><span class="nn">评估工具</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span></div></div><div class="nd"><b>是什么：</b>hamming_analysis + compare_devices + quantizer。分析指纹质量。</div><div class="nf"><b>真实状态：</b>CLI 可用；真硅片数据（112 CRPs + hd=0）已落盘，论文出图待做。</div></div>
 </div></div>
-<p class="dnote">⚠ <b>关键缺口：</b>PC端目前只能在回环模式自言自语。<b>要和真实FPGA通信需要写串口收发循环</b>（从串口读帧→解析→处理→发回复帧）。没有这个，整个系统无法联调。R2算法已统一为Speck64/96（A1，双侧黄金向量7b45b0545e59aa94一致）；残余安全项为终端侧跨断电重放（W4，HANDOFF P1-5）。</p>
+<p class="dnote">✅ <b>原最大缺口（串口通信循环）已闭环</b>：serial_server.py serve_forever 帧同步 + 分发 + 防环死，19 单测；真线完整跑通 ACCESS_REQUEST→CHALLENGE→RESPONSE→RESULT→CONFIRM。抓帧落盘工具（serve_capture.py）沉淀为排查利器。</p>
 </div>
 
 <!-- Radio -->
 <div class="domain dm-radio">
-<div class="dhead"><span class="di">📶</span><div><h2>功能域 6：无线电台链路</h2><p class="dd">无人机和地面基站之间的"空中桥梁"。需要购买一对433MHz电台模块。</p></div></div>
+<div class="dhead"><span class="di">📶</span><div><h2>功能域 6：无线电台链路</h2><p class="dd">无人机和地面基站之间的"空中桥梁"。一对 433MHz HC-12 透传模块。</p></div></div>
 <div class="dbody"><div class="nodes">
-<div class="node"><div class="nh"><span class="ni">📻</span><span class="nn">电台模块（一对）</span><div class="vs"><span class="v code off">📝</span><span class="v sim off">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>两个433MHz SiK兼容无线模块。一个连FPGA串口，一个连PC USB串口。<br>参数配置已写入文档（board/radio/README.md）。</div><div class="nf"><b>真实状态：</b><b style="color:#ef4444">完全未开始</b>——电台未购买。购买后需要：<br>1. 配置参数（波特率/空中速率/网络ID）<br>2. 物理连接到FPGA引脚和PC<br>3. 联调时可能发现半双工切换延迟问题需要协议适配</div></div>
+<div class="node"><div class="nh"><span class="ni">📻</span><span class="nn">HC-12 模块（一对）</span><div class="vs"><span class="v code off">📝</span><span class="v sim off">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>两个433MHz透传模块。一个接FPGA PMOD，一个接PC USB串口。</div><div class="nf"><b>真实状态：</b><b style="color:var(--amber)">已购买，AT 配置待做</b>（FU3/115200/CH001）。有线 USB-TTL 链已端到端打通，无线为最后一公里；联调时关注半双工切换延迟。</div></div>
 </div></div>
 </div>
 
 <!-- Hardware -->
 <div class="domain dm-hw">
-<div class="dhead"><span class="di">🔩</span><div><h2>功能域 7：板级硬件</h2><p class="dd">所有逻辑运行的物理平台。板子已有但从未上电验证过我们的设计。</p></div></div>
+<div class="dhead"><span class="di">🔩</span><div><h2>功能域 7：板级硬件</h2><p class="dd">所有逻辑运行的物理平台。</p></div></div>
 <div class="dbody"><div class="nodes">
-<div class="node"><div class="nh"><span class="ni">💠</span><span class="nn">ZC702 开发板</span><div class="vs"><span class="v code on">📝</span><span class="v sim off">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>AMD官方FPGA评估板。我们的设计只用了1.23%的资源。</div><div class="nf"><b>真实状态：</b>板子在手但<b>从未上电跑过我们的代码</b>。Vivado环境已验证可连接JTAG（W1阶段确认过）。</div></div>
-<div class="node"><div class="nh"><span class="ni">📍</span><span class="nn">引脚约束 XDC</span><div class="vs"><span class="v code off">📝</span><span class="v sim off">🧪</span><span class="v brd off">🔧</span><span class="v sys off">🌐</span></div></div><div class="nd"><b>是什么：</b>告诉Vivado每个信号连到板上哪个引脚。没有这个，比特流不知道信号路由到哪里。</div><div class="nf"><b>真实状态：</b>底稿已改写为 wrapper 端口名；LED/时钟/复位/按键/拨码引脚已核（P17/P18/W10/V7=DS15~DS18、D18/C19、G19、F19、W6/W7），UART 已选 FMC1_LPC LA02=L21/L22；全部约束仍为注释（上板前取消）。原 3 个适配问题（时钟/复位/拨码）已由 wrapper 解决。</div></div>
+<div class="node"><div class="nh"><span class="ni">💠</span><span class="nn">ZC706 开发板 ×2</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span><span class="v sys on">🌐</span></div></div><div class="nd"><b>是什么：</b>AMD官方评估板（xc7z045ffg900-2），带 JTAG/PMOD/拨码/按键。</div><div class="nf"><b>真实状态：</b><b style="color:var(--puf)">板 A/B 双板烧写验收</b>；板 A 真硅片认证收官（hd=0）；板 B 交叉验证待做。资源占用 LUT 2.00%。</div></div>
+<div class="node"><div class="nh"><span class="ni">📍</span><span class="nn">引脚约束 XDC</span><div class="vs"><span class="v code on">📝</span><span class="v sim on">🧪</span><span class="v brd on">🔧</span></div></div><div class="nd"><b>是什么：</b>信号→物理引脚映射。ZC706 版含 4 颗 LVCMOS15 精确压摆（DRC BIVB-1 防线）。</div><div class="nf"><b>真实状态：</b><b style="color:var(--puf)">完成并实证</b>——w3_top_zc706.xdc 引脚事实卡三方核验；J58 PMOD 针位定案（16KB 签名级证据）；UART 经 TXS0108E 电平移位真线验证。</div></div>
 </div></div>
 </div>
 
 <!-- ====== 待办清单 ====== -->
 <div class="todo">
-<h3>📋 上板前必须完成的事（按优先级排序）</h3>
+<h3>📋 收官冲刺清单（按优先级排序，死线 11-03 晚）</h3>
 
-<div class="todo-item"><div class="tn">1</div><div class="tt"><b>启用 XDC 引脚约束（引脚号已核）</b><span>LED/时钟/复位/按键/拨码引脚已按 UG850 与官方板卡文件核好（P17/P18/W10/V7=DS15~DS18、D18/C19、G19、F19、W6/W7）→ 取消 w3_top.xdc 注释（UART 已选 FMC1_LPC LA02=L21/L22）→ 重新综合出正式比特流</span></div><span class="tp crit">必须有</span></div>
+<div class="todo-item"><div class="tn">1</div><div class="tt"><b>✅ ZC706 引脚约束 + 比特流（原"必须"项）</b><span>引脚事实卡三方核验 → 修复版 bit（WNS +1.873）→ 双板烧写验收 → 真硅片认证 PASS</span></div><span class="tp done">已完成</span></div>
 
-<div class="todo-item"><div class="tn">2</div><div class="tt"><b>✅ 时钟适配已解决（wrapper + clk_wiz_0）</b><span>w3_top_zc702 差分输入 → clk_wiz_0 出 100MHz + locked；clk_wiz_0 须上板时在 Vivado 工程内生成（不在仓库、不参与 CI）</span></div><span class="tp done">已完成</span></div>
+<div class="todo-item"><div class="tn">2</div><div class="tt"><b>板 B 交叉验证（约 20 分钟）</b><span>SW12=0010 → setkey 2 → enroll 2 → 双板同演；板 B 拨 0001 假冒板 A 必 REJECT——跨芯片唯一性核心演示</span></div><span class="tp high">高优</span></div>
 
-<div class="todo-item"><div class="tn">3</div><div class="tt"><b>✅ 复位源已解决（PL 域）</b><span>wrapper 组合复位 rst_n = sys_rst_btn_n(GPIO_SW_N/G19) &amp; mmcm_locked（ZC702 的 CPU_RESET 在 PS 域，PL 不可见）</span></div><span class="tp done">已完成</span></div>
+<div class="todo-item"><div class="tn">3</div><div class="tt"><b>论文成稿 + ML 出图 + 视频</b><span>实测指标回填（hd=0/时序/断电重放/资源）；两天悬案翻案=现成的失败分析章节；ML 相变曲线正式数据</span></div><span class="tp crit">必须有</span></div>
 
-<div class="todo-item"><div class="tn">4</div><div class="tt"><b>购买并配置 433MHz 电台（一对）</b><span>购买SiK兼容电台×2 + USB-TTL转接线×2。配置：57600波特/64k空中速率/ECC开/网络ID匹配</span></div><span class="tp crit">必须有</span></div>
+<div class="todo-item"><div class="tn">4</div><div class="tt"><b>HC-12 无线链路配置与联调</b><span>已购；AT 配置 FU3/115200/CH001 → 替换 USB-TTL；半双工切换 1-2ms 联调验证</span></div><span class="tp high">高优</span></div>
 
-<div class="todo-item"><div class="tn">5</div><div class="tt"><b>写 PC 串口通信循环</b><span>实现"从串口读帧→解析→处理→发回复"的循环。没有这个PC无法和FPGA真实通信</span></div><span class="tp high">高优</span></div>
+<div class="todo-item"><div class="tn">5</div><div class="tt"><b>温度鲁棒性实验</b><span>暖手宝加热 → XADC 监测 → 认证持续通过；论文可靠性曲线（断电维度已到手）</span></div><span class="tp med">需板</span></div>
 
-<div class="todo-item"><div class="tn">6</div><div class="tt"><b>✅ 统一 R2 验证算法（A1 已完成）</b><span>FPGA 与 PC 均用 Speck64/96，黄金向量 7b45b0545e59aa94 双侧一致。残余：终端侧跨断电重放（W4，HANDOFF P1-5）</span></div><span class="tp done">已完成</span></div>
+<div class="todo-item"><div class="tn">6</div><div class="tt"><b>Phase 8 观察项（不阻塞交付）</b><span>enroll 后首轮一次性 R2 失败 RTL 定位（复现：断电→重烧→enroll→立即 auth）；byte_fifo 反压加固</span></div><span class="tp low">低优</span></div>
 
-<div class="todo-item"><div class="tn">7</div><div class="tt"><b>接入真实 PUF 测量</b><span>替换terminal_fsm中的种子直通占位→调用challenge_decode+ro_array→用频率差生成响应。这是核心功能</span></div><span class="tp high">高优</span></div>
-
-<div class="todo-item"><div class="tn">8</div><div class="tt"><b>处理电台半双工切换延迟</b><span>SiK电台TX→RX切换需1-2ms。协议需加入切换等待或时序调整。联调时验证</span></div><span class="tp med">联调时</span></div>
-
-<div class="todo-item"><div class="tn">9</div><div class="tt"><b>验证 PUF 核心假设</b><span>上板后验证：不同芯片频率是否确实不同（唯一性）、同一芯片频率是否稳定（可靠性）。如果不行需增加环数</span></div><span class="tp med">W4实验</span></div>
-
-<div class="todo-item"><div class="tn">10</div><div class="tt"><b>✅ 拨码不足已解决（wrapper tie）</b><span>ZC702 仅 W6/W7 两位 PL 拨码；wrapper 内 term_id_sw = {6'h00, term_id_dip} 高位 tie 0，w3_top 一行未改</span></div><span class="tp done">已完成</span></div>
+<div class="todo-item"><div class="tn">7</div><div class="tt"><b>✅ 原"上板前必办"清单全部关闭</b><span>XDC/时钟/复位/串口循环/R2 统一/PUF 接入/拨码 tie——七项全数完成并经真硅片验证</span></div><span class="tp done">已完成</span></div>
 </div>
 
 <!-- ====== 诚实进度 ====== -->
 <div class="prog">
 <h3>📊 诚实的完成度</h3>
 <div class="pbar">
-<div class="pseg psim" style="flex:42">📝🧪 代码+仿真 42%</div>
-<div class="pseg pnone" style="flex:20">🔧 板级 0%</div>
-<div class="pseg pnone" style="flex:20">🌐 联调 0%</div>
-<div class="pseg pnone" style="flex:18">📄 交付 0%</div>
+<div class="pseg psim" style="flex:42">📝🧪 代码+仿真 42% ✅</div>
+<div class="pseg pbrd" style="flex:30">🔧 板级 30%（基本完成）</div>
+<div class="pseg psys" style="flex:18">🌐 联调 18%（USB 通，无线待）</div>
+<div class="pseg pnone" style="flex:10">📄 交付 10%</div>
 </div>
 <div style="font-size:11px;color:var(--muted);line-height:1.8">
-<b style="color:var(--comm)">已完成：</b>全部14个RTL模块编码+仿真通过、10个Python文件单元测试通过、比特流生成验证、9轮auto-review修复140+缺陷、Level 1-3测试体系<br>
-<b style="color:var(--brd)">板级验证（0%）：</b>需填引脚→解决时钟→重新综合→烧板→VIO验证环振频率→LED验证协议状态<br>
-<b style="color:var(--sys)">系统联调（0%）：</b>需购买电台→写串口循环→统一R2算法→接入真实PUF→端到端认证演示<br>
-<b style="color:var(--dim)">交付（0%）：</b>W4实验→W5冻结→W6报告+视频+提交
+<b style="color:var(--comm)">代码+仿真（✅ 完成）：</b>17 个 RTL 模块 + 19 套 TB（CI 18/18）+ Python 全套（109 单测 + 1175 向量 + NSA KAT）<br>
+<b style="color:var(--brd)">板级验证（基本完成）：</b>ZC706 双板验收、真硅片认证 PASS（hd=0 + CONFIRM）、断电重放 3×PASS；剩板 B 交叉、温度曲线、无线上链<br>
+<b style="color:var(--sys)">系统联调（USB 完成）：</b>PC↔板 300+ 帧端到端 + 抓帧排查工具链；HC-12 无线联调待做<br>
+<b style="color:var(--dim)">交付（进行中）：</b>报告骨架+方案文档+runbook 实测化已有；终稿/ML 图/视频/复现包待 11-03
 </div>
 </div>
 
 <footer>
-118 commits · 204 files · 15 RTL模块 · 16 TB套件 · 109 单测+1175 向量+金丝雀<br>
-<b>仿真通过≠板级验证</b> · 当前所有"✅"均指仿真级别 · 上板验证 = 0 · 系统联调 = 0
+172 commits · 385 files · 17 RTL 模块 · 19 TB · CI 18/18 · 109 单测 + 1175 向量<br>
+<b>真硅片已收官</b> · hd=0 + CONFIRM + 断电重放 3×PASS（2026-10-27）· 剩：板 B 交叉 / 无线 / 论文交付
 </footer>
 </div>
 </body>
