@@ -61,6 +61,15 @@ module tb_w3_top;
     integer tx_bits = 0;
     always @(negedge radio_txd) tx_bits = tx_bits + 1;
 
+    // RX 正向证据（2026-10-27 补）：数 uart_rx 的 rx_valid 脉冲。
+    // 背景：原判据只看 TX 活动 + 超时 BLOCKED——uart_rx 整个挂死时
+    // 同样超时进 BLOCKED，判据对 RX 死亡失明（真硅片 0 字节两天才定位）。
+    integer rx_valid_cnt = 0;
+    always @(posedge sys_clk) if (dut.u_rx.rx_valid) rx_valid_cnt = rx_valid_cnt + 1;
+    // 审查加固（auto-review 2026-10-27）：TX 侧 done 计数——回环下 RX 必须逐字节等于 TX
+    integer tx_done_cnt = 0;
+    always @(posedge sys_clk) if (dut.u_tx.tx_done) tx_done_cnt = tx_done_cnt + 1;
+
     initial begin
         // 复位
         repeat (10) @(negedge sys_clk);
@@ -139,6 +148,17 @@ module tb_w3_top;
             $display("[T1 FAIL] radio_txd inactive (tx_bits=%0d, expect >10)", tx_bits);
         end else
             $display("  [T1] radio_txd active: %0d falling edges (UART data sent)", tx_bits);
+
+        // RX 正向锁（2026-10-27 审查加固版）：TX/RX 等价锁——回环同 CPB 下
+        // 每个发出的字节必须被收到（不多不少），并保留 TX 活性下界防"双零假过"。
+        if (tx_done_cnt < 20) begin
+            errors = errors + 1;
+            $display("[T1 FAIL] TX dead: tx_done_cnt=%0d expect >=20", tx_done_cnt);
+        end else if (rx_valid_cnt !== tx_done_cnt) begin
+            errors = errors + 1;
+            $display("[T1 FAIL] RX mismatch: rx_valid_cnt=%0d != tx_done_cnt=%0d (uart_rx hang/drop/extra!)", rx_valid_cnt, tx_done_cnt);
+        end else
+            $display("  [T1] rx==tx==%0d (loopback frame fully received, no loss/extra)", rx_valid_cnt);
 
         if (led_result == 2'd3 && led_busy == 1'b0) begin
             $display("  [T1] led_result=3 (BLOCKED), busy=0 — correct timeout behavior");

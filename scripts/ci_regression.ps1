@@ -120,7 +120,7 @@ $tbs = @(
     "sim\tb\tb_gap_regression.v",
     "sim\tb\tb_challenge_decode.v",
     "sim\tb\tb_crc16.v", "sim\tb\tb_mavlink_frame.v", "sim\tb\tb_frame_parser.v",
-    "sim\tb\tb_byte_fifo.v", "sim\tb\tb_uart_tx.v", "sim\tb\tb_terminal_fsm.v",
+    "sim\tb\tb_byte_fifo.v", "sim\tb\tb_uart_tx.v", "sim\tb\tb_uart_rx.v", "sim\tb\tb_terminal_fsm.v",
     "sim\tb\tb_tx_chain.v", "sim\tb\tb_level3_protocol.v", "sim\tb\tb_w3_top.v",
     "sim\tb\ro_array_sim.v",
     "sim\tb\tb_puf_path.v",
@@ -131,7 +131,7 @@ $tbs = @(
 )
 $tbNames = @("tb_speck", "tb_gap_regression",
              "tb_challenge_decode","tb_crc16","tb_mavlink_frame","tb_frame_parser",
-             "tb_byte_fifo","tb_uart_tx","tb_terminal_fsm","tb_tx_chain","tb_level3_protocol",
+             "tb_byte_fifo","tb_uart_tx","tb_uart_rx","tb_terminal_fsm","tb_tx_chain","tb_level3_protocol",
              "tb_w3_top", "tb_puf_path", "tb_key_derive", "tb_w3top_keyloop", "tb_ro_entropy",
              "tb_w3_top_seedgate")
 # Test-only overrides (W4-P0 timeout experiment).  Deliberately plain

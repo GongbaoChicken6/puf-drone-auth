@@ -182,9 +182,14 @@ always @ ( posedge clk ) begin
             bit_idx <= bit_idx + 3'd1;
         end
     end
-    else begin
-        bit_idx <= 3'd0;
+    else if( curr_state != S_DATA ) begin
+        bit_idx <= 3'd0;                          // 仅非 DATA 态清零
     end
+    // S_DATA 态非边界拍：bit_idx 保持（不赋值 = 寄存器保持原值）
+    // ⚠ 2026-10-27 修复：原版此处无条件清零，导致 bit_idx 在 DATA 态
+    //   非边界拍被反复归零（0→1→0→1...），永远到不了 7，FSM 永久挂死
+    //   在 S_DATA——与 uart_tx 曾有的 P0-1 缺陷同源（同一次重构引入，
+    //   当时只修了 tx 漏了 rx）。真硅片实证：PC→板方向 0 字节两天。
 end
 
 //////////////////////////////////////////////////////////////////
