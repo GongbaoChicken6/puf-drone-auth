@@ -512,3 +512,97 @@ class TestReviewFixes(SerialLoopTest):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+# ---------------------------------------------------------------------
+# 2026-10-27 board-B regression: pyserial read(N) timeout semantics
+# ---------------------------------------------------------------------
+class PyserialSemanticsIO:
+    """Fake serial port reproducing pyserial's blocking-read semantics:
+    read(n) returns only once n bytes have arrived OR the deadline
+    (timeout) expires -- it never hands back 'whatever is there' early
+    (serialposix.py: while len(read) < size).  The stock FakeIO above
+    ignores n and pops whole chunks, which is exactly why the board-B
+    serve regression (idle read(256) pinning every 44-byte R1 frame to
+    the 3 s timeout boundary -> board 2 s S_WAIT_RESULT window blown ->
+    BLOCK, serve 0/12 vs probe 7/7) was invisible to this suite."""
+
+    def __init__(self, arrivals, timeout_s=3.0):
+        self._arrivals = sorted(arrivals)      # [(ms, bytes), ...]
+        self._buf = bytearray()
+        self.now_ms = 0.0
+        self.timeout_s = timeout_s
+        self.written = []
+        self.on_write = None                   # callable(frame) hook
+
+    @property
+    def in_waiting(self) -> int:
+        return len(self._buf)
+
+    def _absorb_upto(self, upto_ms: float) -> None:
+        while self._arrivals and self._arrivals[0][0] <= upto_ms:
+            t, blob = self._arrivals.pop(0)
+            self.now_ms = max(self.now_ms, t)
+            self._buf.extend(blob)
+
+    def read(self, n):
+        deadline = self.now_ms + self.timeout_s * 1000.0
+        while len(self._buf) < n:
+            if not self._arrivals or self._arrivals[0][0] >= deadline:
+                self.now_ms = deadline
+                break
+            self._absorb_upto(self._arrivals[0][0])
+        data = bytes(self._buf[:n])
+        del self._buf[:n]
+        return data
+
+    def write(self, data):
+        self.written.append(bytes(data))
+        if self.on_write is not None:
+            self.on_write(bytes(data))
+
+    def flush(self):
+        return None
+
+
+class TestServeReadSemantics(SerialLoopTest):
+    """serve_forever must react to a short frame within milliseconds, not
+    sit on an oversized blocking read until the timeout boundary."""
+
+    def test_result_written_promptly_after_r1_arrival(self) -> None:
+        protocol = self.build_protocol()
+        term = self.make_terminal()
+        self.enroll_ideal(protocol, term)
+
+        request = term.access_request()
+        r1_arrival_ms = 150.0                     # 100 ms ACCESS + 50 ms board
+
+        io = PyserialSemanticsIO([(100.0, request)], timeout_s=3.0)
+        result_ms = []
+
+        def on_write(frame) -> None:
+            msg_id = HFIDAProtocol.parse(frame)[0]
+            if msg_id == HFIDAProtocol.MSG_CHALLENGE:
+                # R1 arrives 50 ms after whatever challenge the SERVER
+                # actually chose (pool seeds -- never compare byte-wise).
+                io._arrivals.append((io.now_ms + 50.0, term.on_reply(frame)))
+            elif msg_id == HFIDAProtocol.MSG_RESULT:
+                result_ms.append(io.now_ms)
+
+        io.on_write = on_write
+        code = serve_forever(io, protocol, on_event=lambda m: None,
+                             stop=lambda: bool(result_ms),
+                             read_size=256)
+        self.assertEqual(code, 0)
+        self.assertTrue(result_ms, "RESULT frame was never written")
+        latency = result_ms[0] - r1_arrival_ms
+        # Fixed code: in_waiting drains the frame on the very next spin
+        # (latency ~0 ms).  Regressed code returns at the 3 s boundary
+        # (~2950 ms after arrival) -- threshold well between the two.
+        self.assertLess(
+            latency, 500.0,
+            "RESULT written %.0f ms after R1 arrival -- idle read(read_size)"
+            " is pinning short frames to the timeout boundary again"
+            " (board-B 2026-10-27 regression)" % latency,
+        )
+

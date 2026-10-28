@@ -526,6 +526,7 @@ class HFIDAProtocol:
             hds = self.templates.hamming_distances(tid, session.seeds, list(r1s))
             session.hd_sum = sum(hds)
             session.n_responses = len(hds)
+            self._debug_dump_r1(tid, session.seeds, list(r1s), hds)
             decision = decide_scaled(session.hd_sum, session.n_responses)
             session.last_decision = decision
             if decision == DECISION_PASS:
@@ -576,6 +577,7 @@ class HFIDAProtocol:
             hds = self.templates.hamming_distances(
                 tid, session.extra_seeds, list(r1s)
             )
+            self._debug_dump_r1(tid, session.extra_seeds, list(r1s), hds)
             session.hd_sum += sum(hds)
             session.n_responses += len(hds)
             decision = decide_scaled(session.hd_sum, session.n_responses)
@@ -611,6 +613,40 @@ class HFIDAProtocol:
                 f"session is {session.state}"
             )
         return session
+
+    def _debug_dump_r1(
+        self,
+        tid: int,
+        seeds: Sequence[bytes],
+        r1s: Sequence[bytes],
+        hds: Sequence[int],
+    ) -> None:
+        """DIAGNOSTIC (W3 board bring-up 2026-10-27; remove once the serve
+        REJECT is resolved).  Dumps the exact scored material -- seeds, raw
+        R1 bytes, per-seed HD and the closest entry over the WHOLE template
+        -- so a REJECT can be autopsied offline: pairing shift shows up as
+        best_match=some_other_seed@0, garbage as best_match@~32, drift as
+        small nonzero hd everywhere.  Never raises into the protocol path.
+        """
+        try:
+            device = self.templates.templates.get(str(tid), {})
+            print(f"[DIAG] tid={tid} scored {len(r1s)} responses, "
+                  f"hd_sum={sum(hds)}")
+            for i, (s, r, hd) in enumerate(zip(seeds, r1s, hds)):
+                best_seed, best_hd = "-", 65
+                for cand_seed in device:
+                    try:
+                        d = self.templates.hamming_distance(tid, r, seed=cand_seed)
+                    except KeyError:
+                        continue
+                    if d < best_hd:
+                        best_seed, best_hd = cand_seed, d
+                s_hex = s.hex() if isinstance(s, (bytes, bytearray)) else str(s)
+                r_hex = r.hex() if isinstance(r, (bytes, bytearray)) else str(r)
+                print(f"[DIAG]   #{i} seed={s_hex} r1={r_hex} hd={hd} "
+                      f"best_template_match={best_seed}@{best_hd}")
+        except Exception as exc:  # noqa: BLE001 -- diagnostics must not kill scoring
+            print(f"[DIAG] dump failed: {type(exc).__name__}: {exc}")
 
     def _remember_c2(self, tid: int, c2: bytes) -> bool:
         """Record C2 as seen; return False when it was seen before.

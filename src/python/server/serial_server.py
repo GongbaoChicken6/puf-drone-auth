@@ -58,7 +58,9 @@ _SYNC_BUFFER_CAP = 1024
 
 
 def _default_event_printer(message: str) -> None:
-    print(f"[WIRE]   {message}")
+    import time as _time
+    print(f"[WIRE {_time.strftime('%H:%M:%S')}."
+          f"{int(_time.monotonic() * 1000) % 1000:03d}] {message}")
 
 
 class FrameSync:
@@ -145,6 +147,7 @@ class SerialServer:
 
     def handle_frame(self, frame: bytes) -> bytes | None:
         """Route one complete frame; return the reply frame or None."""
+        self._emit(f"RXRAW {frame.hex()}")  # DIAGNOSTIC (bring-up)
         msg_id, fields = HFIDAProtocol.parse(frame)
         if msg_id == HFIDAProtocol.MSG_ACCESS_REQUEST:
             return self._handle_access_request(fields)
@@ -281,11 +284,19 @@ def serve_forever(
             if stop is not None and stop():
                 return 0
             waiting = int(getattr(io, "in_waiting", 0))
-            chunk = max(1, min(waiting or read_size, read_size))
+            # Idle reads ask for ONE byte, not read_size: a blocking read(N>1)
+            # with a multi-second timeout only returns at the timeout boundary
+            # even when a short frame (R1 = 44 B) is already buffered -- which
+            # stalled RESULT ~3 s behind R1 and past the board's 2 s window
+            # (board B bring-up 2026-10-27, serve 0/10 vs probe 3/3).  With
+            # chunk=1 the first byte wakes the loop and in_waiting drains the
+            # rest on the next spin.
+            chunk = max(1, min(waiting or 1, read_size))
             data = io.read(chunk)
             if not data:
                 continue
             for reply in server.pump(data):
+                server._emit(f"TXRAW {reply.hex()}")  # DIAGNOSTIC (bring-up)
                 try:
                     _write_all(reply)
                 except OSError as exc:
