@@ -115,7 +115,7 @@ export interface EnrollDone {
 export interface PoolWarning { terminal_id: number; remaining: number; pct: number; }
 export interface ReplayReject { run_id: string; terminal_id: number; result: 4; }
 export interface ServerLog { level: 'info' | 'warn' | 'error'; msg: string; }
-export interface RunError { run_id: string; stage: string; error: string; }
+export interface RunError { run_id: string; stage: string; error: string; terminal_id?: number | null; }
 
 /* 事件 type → payload 类型映射 */
 export interface PayloadMap {

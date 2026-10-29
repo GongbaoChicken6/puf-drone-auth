@@ -345,8 +345,13 @@ class Store {
       r.errors.push(e);
       r.endedAt = performance.now();
     }
+    // job 失败时复位该终端的忙标志,否则注册失败卡片永远"注册中…"
+    // (HTTP 层失败的复位在 main-console.ts 的 catch;这里兜 SSE 异步失败)
+    if (e.terminal_id != null && e.stage === 'enroll') {
+      this.upsertTerminal(e.terminal_id, { enrolling: false });
+    }
     this.log({
-      tone: 'error', sev: 'error', terminalId: null, runId: e.run_id,
+      tone: 'error', sev: 'error', terminalId: e.terminal_id ?? null, runId: e.run_id,
       type: 'run.error', text: `[${e.stage}] ${e.error}`,
     });
   }

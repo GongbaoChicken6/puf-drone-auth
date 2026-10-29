@@ -509,7 +509,10 @@ class Orchestrator:
                 job.error = f"{type(exc).__name__}: {exc}"
                 self.hub.publish("run.error", {
                     "run_id": job.run_id or self.next_run_id(),
-                    "stage": job.kind, "error": job.error})
+                    "stage": job.kind, "error": job.error,
+                    # 2026-10-29: terminal_id lets the frontend reset the
+                    # terminal's enrolling flag (spinner stuck otherwise)
+                    "terminal_id": job.tid})
             finally:
                 job.done.set()
 
