@@ -627,7 +627,16 @@ class HFIDAProtocol:
         -- so a REJECT can be autopsied offline: pairing shift shows up as
         best_match=some_other_seed@0, garbage as best_match@~32, drift as
         small nonzero hd everywhere.  Never raises into the protocol path.
+
+        2026-10-29: gated behind PUF_DIAG_R1=1 -- the serve REJECT it chased is
+        fixed and verified (570b5c2, board B CONFIRM 2/2); the dump leaked into
+        the web bridge's loopback demo path where it spams stdout inside the
+        protocol lock (freeze risk under Windows QuickEdit). Set PUF_DIAG_R1=1
+        to resurrect the bring-up-era autopsy output.
         """
+        import os
+        if not os.environ.get("PUF_DIAG_R1"):
+            return
         try:
             device = self.templates.templates.get(str(tid), {})
             print(f"[DIAG] tid={tid} scored {len(r1s)} responses, "
