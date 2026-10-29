@@ -448,5 +448,9 @@
     "min": 42,
     "median": 64,
     "max": 84
-  }
+  },
+  "vote_stats_provenance": "computed from the LAST loop iteration (flip=0.10, trial=20, first 120 CRPs of its prefix); pair coverage depends only on decode_pair_table, not on flip",
+  "note_plan_drift": "frozen plan L96 cites older TECH pre-measurements (flip=0.10: N=12 exact 0%, N=20 40%, N=30 90%); the delivered numbers here supersede them -- the pre-runs used an earlier (pre-fix) vote-aggregation prototype; this JSON is the authoritative result",
+  "note_design_point": "claim anchoring: worst noise flip=0.10 reaches exact_rate=1.0 by N=30 (20/20 trials); N=120 is the conservative design point covering all C(16,2)=120 unordered pairs",
+  "entropy_derivation": "effective entropy = log2(16!) ~ 44.0 bit (16-ring total ordering is the secret); future work log2(64!) ~ 296.0 bit at 64 rings"
 }

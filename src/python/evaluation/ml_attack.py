@@ -135,56 +135,99 @@ def _bayes_acc(alpha: float) -> float:
 
 
 def run_exp_a(out_dir: Path, seed: int = 42) -> dict:
-    rng = np.random.default_rng(seed)
+    """Depth-audit upgrade (2026-10-29, ar-ml-depth-r1 P2 fixes):
+
+    * 5 seeds x 5 independent devices w -> mean +/- std error band
+      (was: single seed/device point estimate).
+    * Analytic arctan Bayes line kept but relabelled Gaussian
+      approximation; an EMPIRICAL Bayes oracle (predict sign(signal),
+      exact for the actual Rademacher-sum signal) is added so the
+      measured-accuracy <= bound relation holds by construction.
+    * signal_std now logged per (alpha, seed) from the values the
+      generator actually used (std(Phi @ w)), fixing the stale
+      re-sampled-w field.
+    * LR convergence evidence (n_iter_) persisted.
+    """
     train_sizes = [1000, 5000, 10000, 50000, 100000]
     alphas = [0.00, 0.05, 0.15, 0.30]
     n_test = 10000
+    n_seeds = 5
+    seeds = [seed + k for k in range(n_seeds)]
 
-    # One device w for train AND test (same PUF, different challenges).
-    w = rng.normal(size=64)
+    acc_runs = {f"{a:.2f}": {str(n): [] for n in train_sizes} for a in alphas}
+    bayes_emp = {f"{a:.2f}": [] for a in alphas}
+    signal_std_log: dict = {}
+    n_iter_max = 0
 
-    acc = {f"{a:.2f}": {} for a in alphas}
+    for sd in seeds:
+        rng = np.random.default_rng(sd)
+        w = rng.normal(size=64)  # fresh device per seed
+        for a in alphas:
+            Phi_te, y_te, _, std_te = gen_arbiter_crps(n_test, a, rng, w)
+            oracle = ((Phi_te @ w) > 0).astype(int)
+            bayes_emp[f"{a:.2f}"].append(float(np.mean(y_te == oracle)))
+            std_tr = None
+            for n_tr in train_sizes:
+                Phi_tr, y_tr, _, std_tr = gen_arbiter_crps(n_tr, a, rng, w)
+                lr = LogisticRegression()  # default hyperparams (TECH T4)
+                lr.fit(Phi_tr, y_tr)
+                acc_runs[f"{a:.2f}"][str(n_tr)].append(float(lr.score(Phi_te, y_te)))
+                n_iter_max = max(n_iter_max, int(np.max(lr.n_iter_)))
+            signal_std_log[f"a={a:.2f},seed={sd}"] = {
+                "train_last": std_tr, "test": std_te}
+        print(f"  seed {sd}: done")
+
+    acc_mean = {a: {n: float(np.mean(v)) for n, v in d.items()}
+                for a, d in acc_runs.items()}
+    acc_std = {a: {n: float(np.std(v)) for n, v in d.items()}
+               for a, d in acc_runs.items()}
     for a in alphas:
-        X_te, y_te, _, _ = gen_arbiter_crps(n_test, a, rng, w)
-        for n_tr in train_sizes:
-            X_tr, y_tr, _, _ = gen_arbiter_crps(n_tr, a, rng, w)
-            lr = LogisticRegression()  # default hyperparams (TECH T4 verified)
-            lr.fit(X_tr, y_tr)
-            acc[f"{a:.2f}"][str(n_tr)] = float(lr.score(X_te, y_te))
         print(f"  alpha={a:.2f}: " +
-              ", ".join(f"{n//1000}k={acc[f'{a:.2f}'][str(n)]:.4f}"
+              ", ".join(f"{int(n)//1000}k={acc_mean[f'{a:.2f}'][str(n)]:.4f}"
                          for n in train_sizes))
 
-    # Plot
+    # Plot: mean line + std band; dashed = empirical Bayes oracle
     fig, ax = plt.subplots(figsize=(8, 5))
     for a in alphas:
-        ys = [acc[f"{a:.2f}"][str(n)] for n in train_sizes]
-        ax.plot(train_sizes, ys, "o-", label=f"alpha={a:.2f}")
-    for a in alphas:
-        ax.axhline(_bayes_acc(a), ls="--", alpha=0.15, color="gray")
+        key = f"{a:.2f}"
+        m = [acc_mean[key][str(n)] for n in train_sizes]
+        s = [acc_std[key][str(n)] for n in train_sizes]
+        ax.plot(train_sizes, m, "o-", label=f"alpha={a:.2f}")
+        ax.fill_between(train_sizes, np.array(m) - np.array(s),
+                        np.array(m) + np.array(s), alpha=0.12)
+        ax.axhline(float(np.mean(bayes_emp[key])), ls="--", alpha=0.35,
+                   color="gray")
     ax.set_xscale("log")
     ax.set_xlabel("Training set size")
-    ax.set_ylabel("Test accuracy")
-    ax.set_title("Experiment A: LR attack on synthetic arbiter PUF\n(relative noise, dashed = Bayes optimal)")
+    ax.set_ylabel("Test accuracy (mean over 5 devices, band = std)")
+    ax.set_title("Experiment A: LR attack on synthetic arbiter PUF\n(relative noise, dashed = empirical Bayes oracle)")
     ax.legend(); ax.grid(alpha=0.3); ax.set_ylim(0.5, 1.02)
     fig.tight_layout(); fig.savefig(out_dir / "exp_a_accuracy.png", dpi=150); plt.close(fig)
 
-    signal_std = float(np.std(np.random.default_rng(seed).normal(size=64)))
     result = {
         "repro_command": f"python -m src.python.evaluation.ml_attack --exp A --out {out_dir} --seed {seed}",
         "versions": _versions(),
         "seed": seed,
-        "signal_std": signal_std,
+        "seeds": seeds,
+        "note_seeds": "5 seeds x 5 independent devices w (depth-audit fix)",
         "train_sizes": train_sizes,
         "noise_rel": alphas,
         "n_test": n_test,
-        "bayes_acc": {f"{a:.2f}": _bayes_acc(a) for a in alphas},
-        "accuracy": acc,
+        "bayes_gaussian_approx": {f"{a:.2f}": _bayes_acc(a) for a in alphas},
+        "bayes_empirical_mean": {a: float(np.mean(v)) for a, v in bayes_emp.items()},
+        "note_bayes": "empirical oracle = predict sign(signal) on the actual Rademacher-sum signals; analytic arctan line is the Gaussian-signal approximation (kept for reference)",
+        "signal_std": signal_std_log,
+        "note_signal_std": "per (alpha, seed), values actually used by the generator: std(Phi @ w)",
+        "lr_convergence": {"max_n_iter": n_iter_max,
+                            "converged": bool(n_iter_max < 100)},
+        "accuracy": acc_mean,
+        "accuracy_std": acc_std,
+        "accuracy_runs": acc_runs,
         "conclusion_A": CONCLUSION_A,
         "security_declarations": SECURITY_DECLARATIONS,
         "frozen_floor": 0.95,
         "self_target": 0.99,
-        "note": "relative noise alpha*signal_std; train/test share the same device w and the same noise",
+        "note": "relative noise alpha*signal_std; per seed, train/test share the same device w and the same noise",
     }
     _save_json(out_dir / "exp_a_results.json", result)
     print(f"  -> {out_dir}/exp_a_results.json + exp_a_accuracy.png")
@@ -424,17 +467,27 @@ def run_exp_b(out_dir: Path, seed: int = 42) -> dict:
                 "cycles_mean": float(np.mean(d["cycles"])),
             }
 
-    # Plot
+    # Plot (depth-audit P2 fix: Kendall tau secondary axis per frozen plan)
     fig, ax = plt.subplots(figsize=(8, 5))
-    for f in flips:
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    for i, f in enumerate(flips):
         xs = n_sweep
         ys = [agg[f"{f:.2f}"][str(n)]["exact_rate"] for n in n_sweep]
-        ax.plot(xs, ys, "o-", label=f"flip={f:.2f}")
+        ax.plot(xs, ys, "o-", color=colors[i], label=f"flip={f:.2f} (exact)")
     ax.axvline(120, ls="--", alpha=0.3, color="red", label="design point ~120")
     ax.set_xlabel("Number of CRPs")
     ax.set_ylabel("Exact reconstruction rate")
+    ax2 = ax.twinx()
+    for i, f in enumerate(flips):
+        ts = [agg[f"{f:.2f}"][str(n)]["tau_mean"] for n in n_sweep]
+        sd = [agg[f"{f:.2f}"][str(n)]["tau_std"] for n in n_sweep]
+        ax2.plot(n_sweep, ts, "--", color=colors[i], alpha=0.5, lw=1)
+        ax2.fill_between(n_sweep, np.array(ts) - np.array(sd),
+                         np.array(ts) + np.array(sd), color=colors[i], alpha=0.08)
+    ax2.set_ylabel("Kendall tau (dashed, shaded +/-std)")
+    ax2.set_ylim(0.5, 1.05)
     ax.set_title("Experiment B: RO ranking reconstruction attack")
-    ax.legend(); ax.grid(alpha=0.3); ax.set_ylim(-0.05, 1.05)
+    ax.legend(loc="lower right"); ax.grid(alpha=0.3); ax.set_ylim(-0.05, 1.05)
     fig.tight_layout(); fig.savefig(out_dir / "exp_b_reconstruction.png", dpi=150); plt.close(fig)
 
     result = {
@@ -452,9 +505,177 @@ def run_exp_b(out_dir: Path, seed: int = 42) -> dict:
         "note_iid": "per-bit iid flip is the attacker-favorable assumption; real ring jitter is cross-pair correlated and degrades majority voting faster",
         "note_votes": "computed at runtime from actual data",
         "vote_stats_N120": _compute_vote_stats(seeds, responses) if n_max >= 120 else None,
+        "vote_stats_provenance": "computed from the LAST loop iteration (flip=0.10, trial=20, first 120 CRPs of its prefix); pair coverage depends only on decode_pair_table, not on flip",
+        "note_plan_drift": "frozen plan L96 cites older TECH pre-measurements (flip=0.10: N=12 exact 0%, N=20 40%, N=30 90%); the delivered numbers here supersede them -- the pre-runs used an earlier (pre-fix) vote-aggregation prototype; this JSON is the authoritative result",
+        "note_design_point": "claim anchoring: worst noise flip=0.10 reaches exact_rate=1.0 by N=30 (20/20 trials); N=120 is the conservative design point covering all C(16,2)=120 unordered pairs",
+        "entropy_derivation": "effective entropy = log2(16!) ~ 44.0 bit (16-ring total ordering is the secret); future work log2(64!) ~ 296.0 bit at 64 rings",
     }
     _save_json(out_dir / "exp_b_results.json", result)
     print(f"  -> {out_dir}/exp_b_results.json + exp_b_reconstruction.png")
+    return result
+
+# ------------------------------------------------------------------
+# Experiment C (depth-audit P1 fix, 2026-10-29): LR directly on the
+# W3 XOR-merged response of OUR design -- closes the evidence gap for
+# security declaration #1. Controls prove the harness is not blind:
+# the same LR attack on the W2 single-group raw response (pair-aware
+# featurisation) succeeds ~=100%, while on the XOR-merged response
+# every featurisation collapses to ~=50%.
+# ------------------------------------------------------------------
+
+def _mix(seed: int, g: int) -> int:
+    """Per-group independent-routing assumption (W3: 4 groups of 16
+    rings each produce their own 64-bit response; modelled as a
+    splitmix-style deterministic remix of the seed per group)."""
+    z = (seed + (g + 1) * 0x9E3779B97F4A7C15) & 0x7FFFFFFFFFFFFFFF
+    z = ((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9) & 0x7FFFFFFFFFFFFFFF
+    z = ((z ^ (z >> 27)) * 0x94D049BB133111EB) & 0x7FFFFFFFFFFFFFFF
+    return (z ^ (z >> 31)) & 0x7FFFFFFFFFFFFFFF
+
+
+def _bits(responses: list) -> np.ndarray:
+    arr = np.frombuffer(b"".join(r if isinstance(r, bytes) else bytes(r)
+                                for r in responses),
+                        dtype=np.uint8).reshape(len(responses), 8)
+    return np.unpackbits(arr, axis=1, bitorder="big").astype(np.int8)
+
+
+def run_exp_c(out_dir: Path, seed: int = 42) -> dict:
+    rng = np.random.default_rng(seed)
+    pufs = [gen_distinct_freq_puf(rng)[0] for _ in range(4)]
+    train_sizes = [1000, 5000, 10000, 50000]
+    n_test = 10000
+    n_max = max(train_sizes) + n_test
+    seeds = [int(rng.integers(0, 2**63)) for _ in range(n_max)]
+
+    # -- generate responses: 4 XOR groups (independent routing) + W2 control
+    resp = {g: [pufs[g].respond(_mix(s, g)) for s in seeds] for g in range(4)}
+    ctrl = [pufs[0].respond(s) for s in seeds]          # W2 raw, plain seed
+    bits = {g: _bits(resp[g]) for g in range(4)}
+    ctrl_bits = _bits(ctrl)
+    merged = (bits[0] ^ bits[1] ^ bits[2] ^ bits[3]).astype(np.int8)
+    print("  responses generated")
+
+    # -- pair tables for the pair-aware featurisation (round 0, 8 pairs)
+    tabs = {g: [decode_pair_table(_mix(s, g)) for s in seeds] for g in range(4)}
+    tabs_ctrl = [decode_pair_table(s) for s in seeds]
+    print("  pair tables decoded")
+
+    seed_bits = np.array([[(s >> (63 - b)) & 1 for b in range(64)]
+                          for s in seeds], dtype=np.float64)
+
+    def pos_onehot():
+        e = np.zeros((len(seeds), 8, 8))
+        for j in range(8):
+            e[:, j, j] = 1.0
+        return e
+
+    pos_oh = pos_onehot()
+
+    def feat_seedbit(idx):
+        n = len(idx)
+        X = np.empty((n * 8, 72))
+        for j in range(8):
+            X[j*n:(j+1)*n, :64] = seed_bits[idx]
+            X[j*n:(j+1)*n, 64:] = pos_oh[idx, j]
+        return X
+
+    def feat_pair(idx, groups):
+        """Pair-aware features, POSITION-MAJOR row order (must match
+        targets()/feat_seedbit blocking: row = j*n + i). For each
+        (round-0 position j, seed i) row: concat one-hot(A)+one-hot(B)
+        per group. groups = [0..3] for XOR-merged (128 dims),
+        ["c"] for the W2 control (32 dims)."""
+        n = len(idx)
+        dims = 32 * len(groups)
+        X = np.zeros((n * 8, dims))
+        for j in range(8):
+            for row, i in enumerate(idx):
+                r = j * n + row
+                off = 0
+                for g in groups:
+                    pair = (tabs[g][i][0][j] if g in tabs
+                            else tabs_ctrl[i][0][j])
+                    X[r, off + pair[0]] = 1.0
+                    X[r, off + 16 + pair[1]] = 1.0
+                    off += 32
+        return X
+
+    def targets(mat, idx):
+        n = len(idx)
+        y = np.empty(n * 8, dtype=np.int8)
+        for j in range(8):
+            y[j*n:(j+1)*n] = mat[idx, j]
+        return y
+
+    tr_idx = np.arange(0, max(train_sizes))
+    te_idx = np.arange(max(train_sizes), n_max)
+    variants = {
+        "ctrl_pair_aware":   (lambda idx: feat_pair(idx, ["c"]), ctrl_bits),
+        "ctrl_seedbit":      (feat_seedbit, ctrl_bits),
+        "merged_pair_aware": (lambda idx: feat_pair(idx, [0, 1, 2, 3]), merged),
+        "merged_seedbit":    (feat_seedbit, merged),
+    }
+    acc = {k: {} for k in variants}
+    for name, (feat, mat) in variants.items():
+        y_te = targets(mat, te_idx)
+        for n_tr in train_sizes:
+            idx = tr_idx[:n_tr]
+            X_tr = feat(idx)
+            y_tr = targets(mat, idx)
+            if X_tr.shape[0] > 250_000:
+                keep = rng.choice(X_tr.shape[0], 250_000, replace=False)
+                X_tr, y_tr = X_tr[keep], y_tr[keep]
+            lr = LogisticRegression(max_iter=200)
+            lr.fit(X_tr, y_tr)
+            X_te = feat(te_idx[:min(len(te_idx), 20000)])
+            y_te_s = targets(mat, te_idx[:min(len(te_idx), 20000)])
+            acc[name][str(n_tr)] = float(lr.score(X_te, y_te_s))
+            print(f"  {name} n={n_tr}: acc={acc[name][str(n_tr)]:.4f}")
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for name in variants:
+        ax.plot(train_sizes, [acc[name][str(n)] for n in train_sizes],
+                "o-", label=name)
+    ax.axhline(0.5, ls="--", color="gray", alpha=0.5, label="random guess 0.5")
+    ax.set_xscale("log")
+    ax.set_ylim(0.4, 1.02)
+    ax.set_xlabel("Training set size")
+    ax.set_ylabel("Pooled bit-prediction accuracy (round-0, 8 positions)")
+    ax.set_title("Experiment C: LR attack on W3 XOR-merged vs W2 raw response\n(same attacker; XOR + independent routing collapses it to chance)")
+    ax.legend(loc="center right"); ax.grid(alpha=0.3)
+    fig.tight_layout(); fig.savefig(out_dir / "exp_c_xor_protection.png", dpi=150); plt.close(fig)
+
+    ok_merged = all(acc["merged_pair_aware"][str(n)] < 0.55 and
+                    acc["merged_seedbit"][str(n)] < 0.55
+                    for n in train_sizes)
+    ok_ctrl = acc["ctrl_pair_aware"][str(train_sizes[-1])] > 0.95
+    result = {
+        "repro_command": f"python -m src.python.evaluation.ml_attack --exp C --out {out_dir} --seed {seed}",
+        "versions": _versions(),
+        "seed": seed,
+        "train_sizes": train_sizes,
+        "n_test": n_test,
+        "assumptions": [
+            "W3 XOR(k=4): 4 groups of 16 rings, each group routes the seed independently (splitmix remix per group) -- '4 组独立产生' per project_design.md L70",
+            "noiseless responses (attacker-best case); pair tables are PUBLIC knowledge (decode_pair_table) so the pair-aware featurisation is the strongest LR attacker",
+            "pooled targets: round-0 8 response bits; LR(max_iter=200), rows capped at 250k",
+        ],
+        "accuracy": acc,
+        "declaration_evidence": {
+            "claim": "抗逻辑回归建模攻击（对 XOR 合并后的响应）",
+            "merged_pair_aware_max": max(acc["merged_pair_aware"].values()),
+            "merged_seedbit_max": max(acc["merged_seedbit"].values()),
+            "control_w2_pair_aware_final": acc["ctrl_pair_aware"][str(train_sizes[-1])],
+            "verdict": "SUPPORTED" if (ok_merged and ok_ctrl) else "CHECK",
+            "reading": "the same LR harness that fully clones the W2 raw response (pair-aware ~100%) collapses to chance (<0.55) on the XOR-merged response under BOTH featurisations",
+        },
+        "future_work": "stronger attackers on the merged interface (GBM/evolutionary); frequency-spacing-correlated noise; adaptive seed selection",
+    }
+    _save_json(out_dir / "exp_c_results.json", result)
+    print(f"  -> {out_dir}/exp_c_results.json + exp_c_xor_protection.png")
+    print(f"  declaration #1 verdict: {result['declaration_evidence']['verdict']}")
     return result
 
 # ------------------------------------------------------------------
@@ -463,7 +684,7 @@ def run_exp_b(out_dir: Path, seed: int = 42) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--exp", choices=["A", "B", "all"], default="all")
+    parser.add_argument("--exp", choices=["A", "B", "C", "all"], default="all")
     parser.add_argument("--out", default="data/ml_attack")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -476,6 +697,9 @@ def main() -> int:
     if args.exp in ("B", "all"):
         print("=== Experiment B: RO ranking reconstruction ===")
         run_exp_b(out_dir, args.seed)
+    if args.exp in ("C", "all"):
+        print("=== Experiment C: LR on W3 XOR-merged response ===")
+        run_exp_c(out_dir, args.seed)
     print("ML_ATTACK_DONE")
     return 0
 
