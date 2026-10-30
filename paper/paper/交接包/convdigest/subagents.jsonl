@@ -1,0 +1,153 @@
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792413719388,"child":"ad2c903b-c2c5-41ac-b8b3-098ef37bbd8b","label":"ZC706 UG954 hardware facts","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792413722591,"child":"8b481554-2858-44ee-bc4d-501db5a50c2c","label":"Repo operational facts extraction","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792453797596,"child":"ec119550-7e19-442d-a754-2281a152812d","label":"AMD Ross official doc verification","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792453798718,"child":"22679612-d68b-4610-810d-82e2130574b7","label":"Plan consistency executability review","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792453799768,"child":"03af07e8-ce0f-45cd-b2e7-6032002010f5","label":"Hardware ops electrical review","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792455829190,"child":"40e1d2dc-6505-4824-9b60-f63874657156","label":"Round-2 fix verification review","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792460167980,"child":"7bd921e0-42f0-44d8-8d0b-5129f0a4093c","label":"RTL defect review of exec diff","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792460169053,"child":"3c13ff15-3e09-4c44-92bc-a3b7e44f5a7f","label":"Plan compliance review of exec","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792460170258,"child":"15902f9f-2e8d-4185-a2cd-7aab02c1f100","label":"Silent failure hunt verification gaps","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792585605970,"child":"8d2c0487-2bbf-4380-83bb-f7b8aabcd540","label":"Pin facts accuracy review","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792585605999,"child":"050343d1-0ed6-49e9-927d-a81ff37ee84b","label":"Safety and operability review","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792674908939,"child":"bf95b04b-84fb-4bdb-9340-d1e2344bda69","label":"缺陷审查：RTL修复回归","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792674908993,"child":"f2379b3e-caa3-4a0c-82f3-a52ad82d0e66","label":"合规审查：安全契约偏离","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792674909044,"child":"270d987d-7d76-40c4-a1c3-dd22c0e63582","label":"静默失败审查：门控旁路","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792674935591,"child":"1f239a72-ee10-46ae-aae7-5f758105930d","label":"测试覆盖审查：极性与门控","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792675444058,"child":"0629f196-f129-4456-88fe-ff6dc47e943a","label":"缺陷审查重派：聚焦三点","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792675850374,"child":"79f06fd5-100b-4db0-8be4-b1d05b76189f","label":"共识综合：22项发现裁决","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792676889456,"child":"8ae3e565-3158-4a56-bded-cdc2ee8341e6","label":"复验：RTL与TB修复落地","mode":"continuable"}
+{"s":"session-02f27093-bb98-4166-827d-4109b7fee16c","t":1792676889499,"child":"64cdecd6-bd04-4d66-bf98-57c8f2b46b5c","label":"复验：文档与流程处置","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1791292779846,"child":"2e091c08-769e-4a99-bc31-74f9323b999d","label":"Defect reviewer for A1 phase-4 changes","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1791292792100,"child":"559b5cf0-8f9f-493a-bcbe-33ebcc5d5a27","label":"Spec compliance reviewer for A1 phase-4","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1791292805143,"child":"a556e193-0289-4178-9792-f27b1cc03b33","label":"Silent failure hunter for A1 phase-4","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1791293792455,"child":"992d4005-d2a4-42fc-8c7b-8a2e5afa2cbe","label":"Type/design analyzer for A1 phase-4","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1791293796972,"child":"237e9a21-3fe1-4d7f-a8b5-3feb93b81e06","label":"Test coverage analyzer for A1 phase-4","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1791335532922,"child":"f73df279-1510-457b-8e0e-069b2d5b115c","label":"Type/design analyzer (re-dispatch)","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1791335542099,"child":"3d5c4ed5-df0b-4ef9-8c43-93c8ad1330cd","label":"Silent-failure re-verification round","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1791335550510,"child":"b3b4b1f6-6235-4e59-ad34-73a5b414e275","label":"Test-coverage re-verification round","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1791592078780,"child":"c66b6da4-2753-4f87-adbb-d8a18fcb2790","label":"Repo fact-check tutorial","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1791592080424,"child":"b30707ac-3498-418c-9a5f-05138d185b30","label":"Board hardware fact-check","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1791592081865,"child":"ff0221ef-3568-4432-9dc5-c21675332c1d","label":"Tutorial walkthrough review","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1791592876458,"child":"99cef700-4d23-448a-affd-79e8aa93e3f7","label":"Re-verify tutorial fixes","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1791592878621,"child":"b53e8fcb-db1d-480a-936e-fcf415fcecc1","label":"Fresh walkthrough of rewritten sections","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1792386447509,"child":"0d6dc5e3-7861-4923-8a74-741c3ed80f53","label":"Verify chip/package/voltage diffs","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1792386451465,"child":"f34157d6-05a8-4223-86b8-8957fb41113f","label":"Migration effort re-assessment","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1792386455055,"child":"2ff23681-2ac2-47ca-b505-79c755fab0d7","label":"PYNQ-Z2 board file search","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1792411417763,"child":"ccba895f-d61f-4ed4-ae80-180ceca6f612","label":"Verify handoff vs repo state","mode":"continuable"}
+{"s":"session-0674ca76-af70-4eb8-bab4-000daebdd19e","t":1792411419202,"child":"f747ac40-50f1-4144-ac63-0482485c3e8c","label":"Check handoff completeness","mode":"continuable"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1791876677382,"child":"a6ca6178-acf8-41d3-99d0-5f78ab4a33c3","label":"Plan completeness review of design doc","mode":"continuable"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1791876679118,"child":"30b96dbc-2bd5-4f1c-ba84-ef2782c748d8","label":"Technical feasibility review vs server code","mode":"continuable"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1791876680980,"child":"a362e0e5-15ca-4236-9b1e-8c4450e2492d","label":"Competition practicality and data discipline review","mode":"continuable"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1791876787006,"child":"6f30d369-0754-4f85-abbe-1a148fb6b5ad","label":"Competition practicality and data review","mode":"one-shot"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1791876788045,"child":"b755dc43-c2c4-4f38-9722-8590288ca233","label":"Plan completeness review of design doc","mode":"one-shot"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1791876789145,"child":"6f62e04b-7c72-4faa-a4be-baec74a3c686","label":"Technical feasibility review vs server code","mode":"one-shot"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1791876920993,"child":"c1f839e4-a01d-43a6-a3d7-25ca1caf2aa7","label":"Subagent channel smoke test","mode":"one-shot"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1791877085292,"child":"43c9b96d-e322-46b3-ac4b-d5ead3e03c9b","label":"Design completeness review round 1","mode":"one-shot"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1791878319309,"child":"9d326c72-7c14-4149-a6ca-e15915ea762e","label":"Round-2 fix verification review","mode":"one-shot"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1792205914569,"child":"fd95bb69-629f-48d4-b2c7-b779659d443c","label":"Round-1 plan completeness review","mode":"one-shot"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1792206147528,"child":"aa41f176-0016-4026-819b-5392d99efbac","label":"Round-1 feasibility risk review","mode":"one-shot"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1792206480667,"child":"3974be7a-6f85-4e2d-8a78-10e93a847d53","label":"Round-2 plan fix verification","mode":"one-shot"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1792207436686,"child":"b76cb747-ac03-40ec-aa9f-b2407cae8780","label":"Static UI wiring audit","mode":"one-shot"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1792207699771,"child":"bea0eec6-2d41-452c-aa72-b4548b1735ee","label":"Flow correctness and state audit","mode":"one-shot"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1792213109891,"child":"19d7437c-aa8f-4d68-9ad7-9c516179aabe","label":"Round-2 fix verification","mode":"one-shot"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1792288724697,"child":"729464fd-ea24-49c1-880b-580725198d67","label":"Bridge code review post-merge","mode":"one-shot"}
+{"s":"session-49a45105-a06a-469d-b64f-d7058840ce31","t":1792289025244,"child":"0e1c6e41-b40a-4b69-9578-bfdddc10477b","label":"Frontend completeness review","mode":"one-shot"}
+{"s":"session-74aac390-4465-439d-9866-24943065ee83","t":1791893238430,"child":"ff15ff73-85ea-4355-af40-a1d340a2cc18","label":"事实缺陷审查契约文档","mode":"continuable"}
+{"s":"session-74aac390-4465-439d-9866-24943065ee83","t":1791893240361,"child":"cd351752-cb55-4ace-89ec-4a9498f950a9","label":"覆盖完整性审查契约文档","mode":"continuable"}
+{"s":"session-74aac390-4465-439d-9866-24943065ee83","t":1791893242163,"child":"ba035780-a5c0-414a-807b-2c6a1de5126c","label":"模糊可信度审查契约文档","mode":"continuable"}
+{"s":"session-74aac390-4465-439d-9866-24943065ee83","t":1791894575869,"child":"0b10f63e-b31e-4059-95f2-2445c7bb3f95","label":"复验契约文档v1.1修复项","mode":"continuable"}
+{"s":"session-86651d8b-4afa-4427-bbe2-5aca10b163f6","t":1792720867697,"child":"bc650d08-04e9-4a67-952d-b5e5f34859bf","label":"盘点文档极性污染","mode":"continuable"}
+{"s":"session-86651d8b-4afa-4427-bbe2-5aca10b163f6","t":1792720867713,"child":"28afb04b-3463-48c6-bff3-d2094f37e9c0","label":"盘点RTL/仿真/构建极性污染","mode":"continuable"}
+{"s":"session-86651d8b-4afa-4427-bbe2-5aca10b163f6","t":1792720867731,"child":"40402b5e-f272-4203-98ef-3639f63e0f48","label":"盘点CI与构建管线事实","mode":"continuable"}
+{"s":"session-86651d8b-4afa-4427-bbe2-5aca10b163f6","t":1792722190173,"child":"a06dad16-44ac-458e-a7d8-10056e933501","label":"Round1 计划审查子代理","mode":"continuable"}
+{"s":"session-86651d8b-4afa-4427-bbe2-5aca10b163f6","t":1792723201562,"child":"90d4873e-1ce6-4503-ad78-52277374512f","label":"Round2 计划复审子代理","mode":"continuable"}
+{"s":"session-86651d8b-4afa-4427-bbe2-5aca10b163f6","t":1792725578110,"child":"b43a8d6c-90b5-4775-8ce3-354898f4ed2f","label":"Spec合规与范围蔓延审查","mode":"continuable"}
+{"s":"session-86651d8b-4afa-4427-bbe2-5aca10b163f6","t":1792725578128,"child":"917e5789-36b9-4b3c-8dc7-e75bc5e111ed","label":"静默失效与断言盲点审查","mode":"continuable"}
+{"s":"session-86651d8b-4afa-4427-bbe2-5aca10b163f6","t":1792725578146,"child":"410a6bb5-6ae7-4b81-9b76-af8d365f4915","label":"缺陷审查本次极性修复","mode":"continuable"}
+{"s":"session-86651d8b-4afa-4427-bbe2-5aca10b163f6","t":1792726231219,"child":"4a3d4cf6-fa2e-409e-92fe-caa6b2cf8465","label":"类型位宽纪律审查","mode":"continuable"}
+{"s":"session-86651d8b-4afa-4427-bbe2-5aca10b163f6","t":1792726231238,"child":"97b24caf-4cd3-4ebf-98c7-fd2974152cd2","label":"测试覆盖质量审查","mode":"continuable"}
+{"s":"session-86651d8b-4afa-4427-bbe2-5aca10b163f6","t":1792727027227,"child":"1bf59d6e-4005-4c8e-b3d5-edec3d470d4d","label":"共识综合裁决五代理发现","mode":"continuable"}
+{"s":"session-86651d8b-4afa-4427-bbe2-5aca10b163f6","t":1792755667140,"child":"b4950842-4f18-497c-a239-69e5d1186b27","label":"复审代理验证11项修复","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1789988248704,"child":"1540b440-273b-4cc6-838c-38b4656a04bd","label":"Round1 review of PUF V2 plan","mode":"one-shot"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1789995276894,"child":"f3b6ef19-7291-4a19-b24a-b3f0f1f3a05f","label":"Round1 review of PUF V2 plan","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1789995894767,"child":"f57bffe6-68ec-4e56-8616-f622d2565c46","label":"Round2 verification review of PUF V2","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1790336371492,"child":"d81ab3d1-2f55-4659-9c06-d831398d53a9","label":"RTL defect review of W1 files","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1790336371531,"child":"7457fd14-99af-474e-b997-bae6230225b3","label":"Spec compliance review of W1 docs","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1790517131835,"child":"be00ba4d-9260-449b-bf28-3d5064e0541a","label":"UI accuracy review of tutorial","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791168615458,"child":"bd50054f-6510-4029-9e52-703bb8e0254f","label":"Spec compliance review of repo structure","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791168617661,"child":"915cf731-8641-45c2-ae7c-8d57b512aeb7","label":"Silent failure hunt in new repo","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791172264199,"child":"f606f0db-0a7b-4b1d-a206-c5735b36b39e","label":"Plan review of project design","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791172266061,"child":"ba158205-55f4-4d16-9e26-7dd9446c74a3","label":"Technical feasibility review","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791172603110,"child":"5ad6db9a-3791-492e-9e59-8f7ddcc5ec75","label":"Deep review of analysis and design docs","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791176551143,"child":"15f31c07-00fe-48e4-9a8a-9f28cd91a6cd","label":"Write W2 RTL modules","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791176552934,"child":"6cef015d-1a29-4b10-bbb5-95205082afb0","label":"Write B-line Python server and evaluation tools","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791187646800,"child":"87b100c8-47ed-47fa-8f76-8d4ab21baf5c","label":"Defect review of W3 protocol RTL","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791187649251,"child":"f6aa1d01-378c-471d-a9b7-569c0ddd4720","label":"Silent failure hunt W3 integration","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791190797637,"child":"32786b61-7575-463d-aa56-2b56ce469722","label":"Defect review of frame_parser","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791190800237,"child":"f3b066cd-75fc-4fb2-9e89-72410aad5539","label":"Cross-module integration compatibility","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791198500396,"child":"5f8a152b-8d0b-42b3-9521-2d6a876c22ed","label":"Defect review byte_fifo","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791198502887,"child":"cdc60e4b-e2cb-49cf-a2d9-8f1dd0da7e37","label":"TX chain integration review","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791200514852,"child":"fba0ae58-de9a-4652-95a0-7ed97db6e0bc","label":"Deep defect review terminal_fsm","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791200517331,"child":"dcc061e5-c3e7-459b-b505-16086c88576e","label":"Cross-module integration terminal_fsm","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791201872394,"child":"3d107803-6842-47c6-bc6c-cbe8f2f1b031","label":"Verify all 35+ fixes from 7 rounds","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791201874733,"child":"a22728ee-a990-4983-83df-b61ed3abf14a","label":"Cross-module integration verification","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791272084158,"child":"097b5644-e25c-4381-b4aa-58ce6240400a","label":"Regression review of blindspot fixes","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791273810547,"child":"de504d54-e3c5-4e8d-a70c-0a7ff94ea749","label":"Deep defect review w3_top","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791273817119,"child":"7218c913-5116-4087-b6a9-32d9a33961c5","label":"Board-level synthesis review","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791277462642,"child":"d3c9d522-f3f0-42ca-bae0-c49f0811aa74","label":"Crypto review of R2 algorithm","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791279655398,"child":"d6cd33dc-ed9e-4b42-b339-70f33c0e5825","label":"Review Speck implementation plan","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791279847019,"child":"35450759-fa73-4b0e-8e3d-5f0514b42009","label":"FPGA hardware review of Speck plan","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791279849658,"child":"43dcb556-e06f-49c4-977a-3f58df6b3ed9","label":"Protocol integration review","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791279856203,"child":"3de9baeb-c742-4fce-b77d-dcfe2dfb7401","label":"Test strategy review","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791281699156,"child":"1d28df1e-720c-4e3a-b939-cb492905cdaf","label":"Crypto correctness review","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791281706242,"child":"9d383072-e5b4-4d15-bb84-ae4b596cd4c9","label":"RTL synthesis quality review","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791281713210,"child":"6af51a9b-134c-4305-bcdc-80f28691b813","label":"Test coverage analysis","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791285121473,"child":"e634bbff-5df5-46da-b2ae-aab980e7e4ed","label":"Integration correctness review","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791285123838,"child":"bebefc5d-63b3-483c-aa0e-b574de97cad2","label":"Protocol regression review","mode":"continuable"}
+{"s":"session-b34275c9-ae1f-421a-aaa1-190b99f75986","t":1791285126158,"child":"8bfbd6f0-062e-499d-b60a-d551bcf5c64c","label":"Security vulnerability review","mode":"continuable"}
+{"s":"session-c73b85c6-057b-480c-ae44-4ce39a2f14f1","t":1792672858805,"child":"8ae331f4-2511-44f7-8221-1c453ba81833","label":"Spec compliance teammate usability","mode":"continuable"}
+{"s":"session-c73b85c6-057b-480c-ae44-4ce39a2f14f1","t":1792672858826,"child":"ec473f9c-4dd8-4477-850c-e624bd61b173","label":"Defect review upload integrity","mode":"continuable"}
+{"s":"session-c73b85c6-057b-480c-ae44-4ce39a2f14f1","t":1792672858847,"child":"41283d5a-0b05-48e2-a24d-47b4aed9edd9","label":"Silent failure hunter","mode":"continuable"}
+{"s":"session-c73b85c6-057b-480c-ae44-4ce39a2f14f1","t":1792673190958,"child":"f7356548-ff36-4afd-8693-f392ecf410aa","label":"Spec compliance retry","mode":"continuable"}
+{"s":"session-c73b85c6-057b-480c-ae44-4ce39a2f14f1","t":1792673759917,"child":"7cfe7460-8037-4762-ad39-1421098b0201","label":"Security review repo","mode":"continuable"}
+{"s":"session-c73b85c6-057b-480c-ae44-4ce39a2f14f1","t":1792674855626,"child":"3d556afc-0a9c-4c4a-a82d-a4921369f7d5","label":"Consensus synthesis of review","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791800405809,"child":"3e905f07-f349-4e69-be7a-915c891f2692","label":"一致性与过度声明 C","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791800406509,"child":"9f879109-c8eb-416d-85e4-8449b096682a","label":"文档合规遗漏扫描 B","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791800407218,"child":"676d0a85-b2f9-4475-b0c3-9cd80d736719","label":"仓库事实核查 A","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791800470794,"child":"62234855-44a7-4144-940e-52fd95a778fb","label":"排期交付风险 E","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791800471494,"child":"43f3005b-550b-4a72-b395-58b8913480e5","label":"板卡事实定位 D","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791801022134,"child":"6de25da3-a757-4f08-8547-aa13ca393d80","label":"共识综合审查","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791801377493,"child":"626da344-9dad-43d6-b9c8-85bda30d06fc","label":"复审 claims v2 修正","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791876579031,"child":"0ae495dc-16ca-4d84-b8dc-739f34aaf198","label":"缺陷审查 W3 增量","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791876580793,"child":"ecc8a9cf-6f74-48a7-8c99-c33c6d30ff7f","label":"契约合规审查 W3 增量","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791876581774,"child":"13dbdeb4-81a8-419f-9112-fc0ed6e81dd4","label":"静默失败审查 W3 增量","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791877648922,"child":"01da06cb-6089-40c4-9969-22ff5594c9d8","label":"复审 W3 修复清单","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791886366896,"child":"bfb9e1d7-0a00-49a9-b95f-af680c57c715","label":"计划审查-完备性排期","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791886367964,"child":"a2e88515-abbb-466f-8c6c-7cf5ff748f23","label":"计划审查-技术设计","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791886368978,"child":"f3550f0c-d2f4-4315-bb67-759b0888aad8","label":"计划审查-事实核对","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791893571076,"child":"922ee91b-aad7-47d0-bacc-e6cafd626f6b","label":"审查 W4-P0 CI 改动","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791899191237,"child":"7d065f7a-4d1f-4a35-b073-6654c3bbc54c","label":"协同适配性专项审查","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791899191904,"child":"d8385f47-8f08-4d19-a024-52591cef50b2","label":"缺陷审查 W4 三阶段","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791899192568,"child":"10de6074-91e6-4cb3-b707-bf39a807adb1","label":"合规与账本审查","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791899218379,"child":"39f4db1d-da05-4813-a9b7-bc111dafccbb","label":"静默失败与测试覆盖","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791973793830,"child":"8ef9d325-ab99-4c22-b587-1ed878b07cdd","label":"缺陷审查 P3","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791973794532,"child":"549e8bcf-5d20-491f-8e09-b6440e444501","label":"合规与覆盖 P3","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791973795251,"child":"9c194180-9ed9-45a4-9827-bc1f5be8f8ed","label":"静默失败 P3","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791974925055,"child":"278b4931-d4b8-4b87-9839-cb162620a105","label":"缺陷审查 P4","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791974925769,"child":"186d8dfa-1c2a-4322-a45a-0cc1fbccd9ce","label":"安全+合规 P4","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791978023023,"child":"886eb85c-a20a-4141-b3a2-e1abe3381421","label":"T1/T2 方案计划审查","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791982791679,"child":"8ab51194-4bd8-450e-819e-18489bad1c63","label":"S3/S4 缺陷审查","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791982792475,"child":"5004ed78-52af-4f15-951c-398f967e9393","label":"S3/S4 静默失败审查","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1791982793268,"child":"eca8d56d-bb5a-4a8b-99e9-ea1de8bb4fb3","label":"S3/S4 安全+合规","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1792066379523,"child":"b7329a8a-8afb-43f6-8a1b-142403226fe0","label":"T1/T2 跨侧黄金值复算","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1792066380561,"child":"1b30ea84-6e2d-4e3e-9fef-882c4367883b","label":"T1/T2 对抗性攻击验证","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1792066381520,"child":"944b0819-15f8-43b6-9d4d-ff169a360d8b","label":"T1/T2 端到端执行验证","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1792069809947,"child":"d2dbbbe8-1255-4d56-95b7-808ef957a907","label":"P5 计划规格合规审查","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1792069811283,"child":"d8e3c0de-1375-4601-96e0-31dadf142657","label":"P5 计划技术审查","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1792071670223,"child":"c9957446-191e-498f-af9c-c992cf59e162","label":"P5 规格合规+交付物","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1792071670972,"child":"09a2a12f-bc2c-47b2-b790-87b837058433","label":"P5 数学正确性+缺陷","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1792071671704,"child":"4ed403a0-3e3d-4dc2-a527-9bccc7e12e9d","label":"P5 静默失败+边界","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1792150916338,"child":"2cb9d4e6-37a1-41b1-b31f-ba0a388a0229","label":"W4 文档一致性与里程碑验证","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1792150919098,"child":"b0ad8bb6-eb59-4e2d-b599-c48b492061b8","label":"W4 端到端工作流执行","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1792150921961,"child":"7b3a09f0-3bf2-4dd4-8304-75ae83a0cb9f","label":"W4 跨特性整合验证","mode":"continuable"}
+{"s":"session-e9d7501e-dcf8-4e0a-9918-d7dd55daa4ac","t":1792156209562,"child":"d10ea9e0-e7c2-48dd-9cbf-f840eaaae76d","label":"目录结构完整性审查","mode":"continuable"}

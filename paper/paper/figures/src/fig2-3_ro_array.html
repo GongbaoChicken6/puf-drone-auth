@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<style>
+  /* 图 2-3 16 环 RO-PUF 阵列与挑战解码结构 —— 定稿管线（HTML/CSS → Edge 无头截图）。
+     2026-10-27 四版竞标 D 胜出（A academic-figures 引擎 / B matplotlib / C pptx / D 本版），
+     观感与图1-1 同族；成品 figures/fig2-3_ro_array.png 3200px@447dpi（无矢量，Word 插图用位图）。
+     基准：图表制作方案 §3 调色板 + §5 结构图纪律（白底/墨线/浅调填充/圆角≤6/无阴影渐变）。
+     内容锚点（正文 2.2.2(3)/2.2.3(1) 一字不差）：16 环 XOR 交叉耦合成阵列、挑战解码按种子
+     配 8 对逐对比较、8 轮 × 8 对 → 64 bit 指纹响应；图内零注释、无数值、无线电（红线）。
+     重生成（改本文件后重跑）：
+       EDGE="/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
+       "$EDGE" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=2 \
+         --window-size=1600,664 --default-background-color=FFFFFFFF \
+         --screenshot="paper/figures/fig2-3_ro_array.png" \
+         "file:///C:/Users/<teammate>/Desktop/puf-drone-auth/paper/figures/src/fig2-3_ro_array.html"
+     未选中的竞标版（A 引擎/B mpl/C pptx）及源码 10-27 已按用户指示删除。 */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #ffffff; }
+  .canvas {
+    position: relative; width: 1600px; height: 664px;
+    background: #ffffff;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    color: #0b0b0b;
+  }
+  .card {
+    position: absolute; border: 1.5px solid #0b0b0b; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    background: #e8f2fe; font-size: 22px; z-index: 2;
+  }
+  .plain { background: #ffffff; }
+  .bit   { background: #ffffff; font-style: italic; font-size: 20px; }
+  .out   { background: #cde2fb; font-size: 24px; font-weight: 600; }
+  .seed  { background: #f0efec; font-size: 20px; }
+  .dec   { background: #ffffff; font-size: 26px; font-weight: 600; letter-spacing: 2px; }
+  .pill  { border-radius: 15px; font-size: 26px; }
+  .rowlab { position: absolute; font-size: 22px; z-index: 2;
+            display: flex; align-items: center; justify-content: flex-end;
+            left: 96px; width: 100px; }
+  .inset {
+    position: absolute; left: 24px; top: 352px; width: 446px; height: 284px;
+    border: 1.5px solid #0b0b0b; border-radius: 6px; background: #ffffff; z-index: 2;
+  }
+  .inset .t { text-align: center; font-size: 20px; margin-top: 10px; }
+  svg.wires { position: absolute; left: 0; top: 0; z-index: 1; }
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <svg class="wires" width="1600" height="664" viewBox="0 0 1600 664"
+       fill="none" stroke="#0b0b0b" stroke-width="1.5">
+    <defs>
+      <marker id="ah" markerWidth="8" markerHeight="8" refX="6.5" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 Z" fill="#0b0b0b" stroke="none"/>
+      </marker>
+    </defs>
+    <!-- 种子 → 挑战解码 -->
+    <line x1="472" y1="53" x2="536" y2="53" marker-end="url(#ah)"/>
+    <!-- 配对配置扇出（虚线） -->
+    <g stroke-dasharray="5 4">
+      <line x1="620" y1="80" x2="620" y2="124" marker-end="url(#ah)"/>
+      <line x1="820" y1="80" x2="820" y2="124" marker-end="url(#ah)"/>
+      <line x1="1020" y1="80" x2="1020" y2="124" marker-end="url(#ah)"/>
+    </g>
+    <!-- 逐列：环→比较器→比特格（细实线） -->
+    <!-- 由脚本生成的 8 列线段与汇流线见下 -->
+    <!-- 汇流 → 64bit 响应 -->
+    <line x1="319" y1="300" x2="1398" y2="300" stroke-width="2" marker-end="url(#ah)"/>
+    <!-- 插图虚引线 → B1 -->
+    <line x1="462" y1="392" x2="256" y2="266" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+  </svg>
+
+  <!-- 顶部：种子 + 挑战解码 -->
+  <div class="card seed" style="left:360px; top:28px;  width:110px; height:50px;">种子</div>
+  <div class="card dec"  style="left:540px; top:28px;  width:560px; height:50px;">挑战解码</div>
+
+  <!-- 行标签 -->
+  <div class="rowlab" style="top:128px; height:44px;">环 A</div>
+  <div class="rowlab" style="top:216px; height:44px;">环 B</div>
+
+  <!-- 8 列：环对 + 比较器 + 比特格（含下层线段，占位由后置脚本展开） -->
+  <script>
+    const SUB = "₁₂₃₄₅₆₇₈";
+    const svg = document.querySelector("svg.wires");
+    const NS = "http://www.w3.org/2000/svg";
+    for (let k = 0; k < 8; k++) {
+      const xk = 210 + k * 150, ck = xk + 56;
+      // A↓ / B↑ 进比较器（比较器带 y=179..209 居中于 A/B 行间）；比较器→比特格
+      for (const [x1, y1, x2, y2] of [
+        [ck, 170, ck, 181], [ck, 212, ck, 258], [ck + 21, 194, ck + 33, 194]]) {
+        const l = document.createElementNS(NS, "line");
+        l.setAttribute("x1", x1); l.setAttribute("y1", y1);
+        l.setAttribute("x2", x2); l.setAttribute("y2", y2);
+        svg.appendChild(l);
+      }
+      // 比特格 ↓ 汇流 + 结点圆点
+      const d = document.createElementNS(NS, "line");
+      d.setAttribute("x1", ck + 53); d.setAttribute("y1", 208);
+      d.setAttribute("x2", ck + 53); d.setAttribute("y2", 300);
+      svg.appendChild(d);
+      const dot = document.createElementNS(NS, "circle");
+      dot.setAttribute("cx", ck + 53); dot.setAttribute("cy", 300);
+      dot.setAttribute("r", 4); dot.setAttribute("fill", "#0b0b0b");
+      dot.setAttribute("stroke", "none");
+      svg.appendChild(dot);
+      // 卡片
+      const mk = (cls, left, top, w, h, text) => {
+        const el = document.createElement("div");
+        el.className = cls;
+        el.style.cssText = `left:${left}px;top:${top}px;width:${w}px;height:${h}px;position:absolute;`;
+        el.textContent = text;
+        document.querySelector(".canvas").appendChild(el);
+      };
+      mk("card",      xk, 128, 112, 44, "A" + SUB[k]);
+      mk("card",      xk, 216, 112, 44, "B" + SUB[k]);
+      mk("card pill plain", ck - 22, 179, 44, 30, "≥");
+      mk("card bit",  ck + 32, 179, 42, 30, "b" + SUB[k]);
+    }
+  </script>
+
+  <!-- 右：64 bit 指纹响应 -->
+  <div class="card out" style="left:1404px; top:262px; width:172px; height:76px;">64 bit<br>指纹响应</div>
+
+  <!-- 左下插图：环单元（XOR 交叉耦合） -->
+  <div class="inset">
+    <div class="t">环单元（XOR 交叉耦合）</div>
+    <svg x="0" y="0" width="446" height="240" viewBox="0 0 446 240"
+         fill="none" stroke="#0b0b0b" stroke-width="1.5">
+      <!-- 上环 / 下环 -->
+      <rect x="70"  y="52" width="330" height="52"/>
+      <rect x="70"  y="136" width="330" height="52"/>
+      <!-- 交叉耦合竖线（左右两处） -->
+      <line x1="70"  y1="104" x2="70"  y2="136"/>
+      <line x1="400" y1="104" x2="400" y2="136"/>
+      <!-- 反相器：上环右行（三角+泡），下环左行 -->
+      <polygon points="290,62 290,84 312,73"/>
+      <circle cx="316" cy="73" r="4"/>
+      <polygon points="180,156 180,178 158,167"/>
+      <circle cx="154" cy="167" r="4"/>
+      <!-- XOR 门（⊕）：覆盖在交叉竖线上 -->
+      <g>
+        <circle cx="70"  cy="120" r="13" fill="#ffffff"/>
+        <line x1="62" y1="120" x2="78" y2="120"/>
+        <line x1="70" y1="112" x2="70" y2="128"/>
+        <circle cx="400" cy="120" r="13" fill="#ffffff"/>
+        <line x1="392" y1="120" x2="408" y2="120"/>
+        <line x1="400" y1="112" x2="400" y2="128"/>
+      </g>
+    </svg>
+  </div>
+
+</div>
+</body>
+</html>

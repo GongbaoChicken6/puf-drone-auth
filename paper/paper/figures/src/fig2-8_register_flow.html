@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>图 2-8 终端注册模式程序流程（10-27 五版竞标 D 版转正；HTML/SVG→Edge 截图，同图 2-3/2-4 管线）</title>
+<!-- 内容锚点：正文 02 第 121 行（一字不差）。设计同 vB：纵向主链 7 节点 + 逐组循环；
+     语义色同图 2-6/2-7（起点终点灰/过程 slot1 蓝族浅调/注册完成 slot3 绿族浅调）；
+     图内零注释。CSS 800×776（单栏 §5 规格）。
+     坐标：y_px = (152 - y_mpl) * 8（100 单位↔800px 等宽，y 翻转）。
+     再生成（Edge 无头截图，输出到 ../）：
+     "/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" --headless=new \
+       --disable-gpu --hide-scrollbars --force-device-scale-factor=2 \
+       --window-size=800,776 --default-background-color=FFFFFFFF \
+       --screenshot="../fig2-8_register_flow.png" \
+       "file:///C:/Users/<teammate>/Desktop/puf-drone-auth/paper/figures/src/fig2-8_register_flow.html"
+-->
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:800px; height:776px; background:#fff;
+              font-family:"Segoe UI","Microsoft YaHei",sans-serif;
+              color:#0b0b0b; overflow:hidden; }
+  #cv { position:relative; width:800px; height:776px; }
+  #svg { position:absolute; inset:0; z-index:1; }
+  .nd { position:absolute; z-index:2; transform:translate(-50%,-50%);
+        display:flex; align-items:center; justify-content:center;
+        border:2px solid #0b0b0b; font-size:22px; }
+  .box { border-radius:9px; height:72px; }
+  .std { border-radius:40px; height:56px; }
+  .lb  { position:absolute; z-index:2; transform:translate(-50%,-50%); font-size:21px; }
+</style>
+</head>
+<body>
+<div id="cv">
+  <svg id="svg" width="800" height="776" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6"
+              markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#0b0b0b"/>
+      </marker>
+    </defs>
+    <!-- 纵向主链箭头（上一节点底 → 下一节点顶；y_mpl 中心 145/133/120/107/94/81/68） -->
+    <line x1="400" y1="84"  x2="400" y2="108" stroke="#0b0b0b" stroke-width="2.2" marker-end="url(#ah)"/>
+    <line x1="400" y1="188" x2="400" y2="212" stroke="#0b0b0b" stroke-width="2.2" marker-end="url(#ah)"/>
+    <line x1="400" y1="292" x2="400" y2="316" stroke="#0b0b0b" stroke-width="2.2" marker-end="url(#ah)"/>
+    <line x1="400" y1="396" x2="400" y2="420" stroke="#0b0b0b" stroke-width="2.2" marker-end="url(#ah)"/>
+    <line x1="400" y1="500" x2="400" y2="524" stroke="#0b0b0b" stroke-width="2.2" marker-end="url(#ah)"/>
+    <line x1="400" y1="604" x2="400" y2="636" stroke="#0b0b0b" stroke-width="2.2" marker-end="url(#ah)"/>
+    <!-- 逐组循环（回传右缘 → 右绕 → 下发右缘） -->
+    <polyline points="616,256 664,256 664,152 620,152" fill="none"
+              stroke="#0b0b0b" stroke-width="2.2" marker-end="url(#ah)"/>
+  </svg>
+  <!-- 节点：top = (152 - y_mpl) * 8 -->
+  <div class="nd std" style="left:400px; top:56px; width:368px; background:#f0efec;">注册开始（安全环境）</div>
+  <div class="nd box" style="left:400px; top:152px; width:432px; background:#cde2fb;">基站下发注册种子</div>
+  <div class="nd box" style="left:400px; top:256px; width:432px; background:#cde2fb;">终端测量并回传指纹响应</div>
+  <div class="nd box" style="left:400px; top:360px; width:432px; background:#cde2fb;">归档为该终端指纹模板</div>
+  <div class="nd box" style="left:400px; top:464px; width:432px; background:#cde2fb;">连同判决阈值写入模板库</div>
+  <div class="nd box" style="left:400px; top:568px; width:496px; background:#cde2fb;">设备密钥存储（0600 · 原子写回滚）</div>
+  <div class="nd std" style="left:400px; top:672px; width:368px; background:#d3f0e4;">注册完成</div>
+  <div class="lb" style="left:668px; top:204px;">逐组</div>
+</div>
+</body>
+</html>
