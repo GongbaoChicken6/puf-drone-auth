@@ -1,0 +1,64 @@
+=== D1 假冒实验终局：双板均 PASS，PUF 唯一性存疑（2026-11-01 00:40-00:47） ===
+结论：两块物理不同的 ZC706（JTAG 210251A0195C 与 210251A04F2C，两颗不同 FPGA）对同一 tid=1 模板：
+  04F2C: auth 1 -> verdict PASS, total HD = 1
+  0195C: auth 1 -> verdict PASS, total HD = 0（烧写按序列号锁定该板，PROGRAM_OK；JTAG 确认仅此板在电）
+  spoof 1（内置假冒演示）: verdict PASS, total HD = 0
+过程要点：00:11-00:21 serve 三轮均 PASS；帧手工解码两次误读（先误为 REJECT hd=7 后修正）；
+最终以 auth 1 官方打印为准。假冒实验未取得 REJECT 数据；论文唯一性主张（hd≈32）当前无数据支撑。
+待根因：RTL 响应生成是否真依赖硅片差异（SEED_GATE_EN=1/ENROLL_EN=1 参数下响应可能为挑战的确定函数）；
+或同型号板 RO 频率差异不足以在当前量化方案下区分。明日 D2 首要任务：RTL 根因 + TB 双硅参数仿真。
+
+=== pty-2 会话实录（尾部） ===
+[SERVE]  receive loop on COM11 (Ctrl-C to return)
+[WIRE 00:11:37.153] RXRAW fd10000000010290000001000000deadbeef88458761be7c2b8bd5fc
+[WIRE 00:11:37.155] ACCESS_REQUEST tid=1 nonce=0xefbeadde c2=88458761be7c2b8b -> CHALLENGE
+[WIRE 00:11:37.155] TXRAW fd200000000102910000e60cc4d56170bae4b16cd3e699d114939a2232770703934bc979f436b3433221b84d
+[WIRE 00:11:37.173] RXRAW fd20000001010292000099a8e6a42c9412ce0f11b66f26b3ab96d86d365aaa35591644136554cbaa13365a25
+[WIRE 00:11:37.173] RESPONSE_R1 tid=1 x4 (CHALLENGED) -> RESULT
+[WIRE 00:11:37.173] TXRAW fd0a000001010293000000049248b8905ae1aaf15f2c
+[WIRE 00:11:37.178] RXRAW fd0500000201029400000100000000f317
+[WIRE 00:11:37.178] CONFIRM tid=1 OK -- mutual authentication complete (terminal verified R2 = Speck(K_term, C2))
+[WIRE 00:11:42.832] RXRAW fd10000003010290000001000000deadbeef89468862bf7d2c8cc96a
+[WIRE 00:11:42.833] ACCESS_REQUEST tid=1 nonce=0xefbeadde c2=89468862bf7d2c8c -> CHALLENGE
+[WIRE 00:11:42.834] TXRAW fd200000020102910000e0e5477db8b8577f36942ad08f3419effa7c726f6490ba55d4606289d23f6be56af5
+[WIRE 00:11:42.852] RXRAW fd200000040102920000268edfa0af3024c904cfb24adc35725bb297399bd5a1373e451b741ace692b92d297
+[WIRE 00:11:42.853] RESPONSE_R1 tid=1 x4 (CHALLENGED) -> RESULT
+[WIRE 00:11:42.853] TXRAW fd0a00000301029300000001072c5fd3f68a47206a83
+[WIRE 00:11:42.858] RXRAW fd05000005010294000001000000006b95
+[WIRE 00:11:42.858] CONFIRM tid=1 OK -- mutual authentication complete (terminal verified R2 = Speck(K_term, C2))
+[WIRE 00:21:11.138] RXRAW fd10000000010290000001000000deadbeef5066753fbf5a258a787d
+[WIRE 00:21:11.144] ACCESS_REQUEST tid=1 nonce=0xefbeadde c2=5066753fbf5a258a -> CHALLENGE
+[WIRE 00:21:11.146] TXRAW fd2000000401029100003fd12d05091d83b5e79b894a0033447af3811dbdf3b953ef8c14d32d6aad66526fbd
+[WIRE 00:21:11.165] RXRAW fd200000010102920000535ab24b19d17551c30413a99d110bd1efdabaf27bcf886986f102c61626742c0757
+[WIRE 00:21:11.166] RESPONSE_R1 tid=1 x4 (CHALLENGED) -> RESULT
+[WIRE 00:21:11.166] TXRAW fd0a000005010293000000032f37c7ab36a4fca61ed7
+[WIRE 00:21:11.171] RXRAW fd0500000201029400000100000000f317
+[WIRE 00:21:11.172] CONFIRM tid=1 OK -- mutual authentication complete (terminal verified R2 = Speck(K_term, C2))
+puf-server> enroll 3 100
+[ERROR] TimeoutError: terminal timeout on COM11: got 0/44 bytes
+puf-server> c2reset 3
+[C2]     terminal 3: replay window cleared (power-cycled terminal may authenticate again)
+puf-server> enroll 3 100
+[ERROR] TimeoutError: terminal timeout on COM11: got 0/44 bytes
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+[ERROR] TimeoutError: terminal timeout on COM11: got 0/44 bytes
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 1
+  R2 (HSM): 49372cf73f9702e2
+  pool    : 76/500 remaining (15%)
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 9053526246c6ea4a
+  pool    : 72/500 remaining (14%)
+puf-server> spoof 1
+[SPOOF] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 7963e66e7a96d6a6
+  pool    : 68/500 remaining (14%)
+puf-server>
