@@ -1,6 +1,8 @@
 # 队友上手指南：板 B 无线认证（2026-10-31 D1）
 
-> 前提：仓库已 clone、Python 环境已配好。你的角色 = **板 B 的基站管理员**。
+> 前提：仓库已 clone（github.com/GongbaoChicken6/puf-drone-auth，私有库需协作者权限）、Python 环境已配好。
+> 如果还没 clone：`git clone https://github.com/GongbaoChicken6/puf-drone-auth.git` + `pip install pyserial`
+> 你的角色 = **板 B 的基站管理员**。
 
 ## 你需要领的硬件
 
@@ -17,7 +19,7 @@
 
 在仓库根目录执行：
 
-    vivado -mode batch -source scripts/prog_w3_b.tcl
+    vivado -mode batch -source "paper/paper/交接包/板卡交接_ZC706板B调试/脚本/prog_w3_b.tcl"
 
 - 预期：8 秒烧完，终端无 ERROR
 - FPGA 是易失的：断电后每次都要重烧
@@ -42,7 +44,7 @@
 
 REPL 中依次输入：
 
-    setkey 2 0001020308090a0b10111213
+    setkey 2 0001020308090a0b10111213    ← 必须在 enroll 之前！跳过会铸随机钥→恒BLOCKED
     enroll 2 100
 
 等约 1 分钟，采集 100 CRP，看到 enroll complete 即成功。
@@ -77,7 +79,8 @@ REPL 中依次输入：
 |------|------|------|
 | serve 无输出 | 串口线 RX/TX 接反 | 断电对调 pin1/pin5 的两根线 |
 | AMBIGUOUS 错误 | 串口被其他程序占用 | 关掉串口助手/另一个 serve |
-| RESULT_REJECT | C2 重放窗脏 | REPL 输入 c2reset 2 清窗重试 |
+| RESULT_REPLAY | C2 重放窗脏 | REPL 输入 c2reset 2 清窗重试 |
+| RESULT_REJECT | 指纹不匹配（模板错板） | 核对 enroll 是否用本板录的（不是板 A 的） |
 | DS10 单亮 | 认证被拒 | 检查模板是否用本板的（不是板 A 的） |
 | 上一轮通过这轮不通过 | 挑战池种子轮换 | 正常，多按几轮 SW7 |
 
