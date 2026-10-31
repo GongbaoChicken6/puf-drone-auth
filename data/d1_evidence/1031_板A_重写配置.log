@@ -1,0 +1,21 @@
+=== 重写配置 COM6 @ 2026-10-31 22:50:55 ===
+    'AT' -> b'OK\r\n'
+[INFO] COM6: AT 会话波特率 = 115200
+    'AT+FU3' -> b'OK+FU3\r\n'
+    'AT+B115200' -> b'OK+B115200\r\n'
+    'AT+C001' -> b'OK+C001\r\n'
+    'AT+RX' -> b'OK+B115200\r\nOK+RC001\r\nOK+RP:+20dBm\r\nOK+FU3\r\n'
+[PASS] COM6: FU3=True B115200=True C001=True 回读全对=True
+AT+RX 回读原文: 'OK+B115200\r\nOK+RC001\r\nOK+RP:+20dBm\r\nOK+FU3\r\n'
+提醒: 完成后断开 SET 与 GND（>=80ms 后自动进 115200 透传）
+=== 重写配置 COM9 @ 2026-10-31 22:51:00 ===
+    'AT' -> b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+    'AT' -> b'OK\r\n'
+[INFO] COM9: AT 会话波特率 = 9600
+    'AT+FU3' -> b'OK+FU3\r\n'
+    'AT+B115200' -> b'OK+B115200\r\n'
+    'AT+C001' -> b'OK+C001\r\n'
+    'AT+RX' -> b'OK+B115200\r\nOK+RC001\r\nOK+RP:+20dBm\r\nOK+FU3\r\n'
+[PASS] COM9: FU3=True B115200=True C001=True 回读全对=True
+AT+RX 回读原文: 'OK+B115200\r\nOK+RC001\r\nOK+RP:+20dBm\r\nOK+FU3\r\n'
+提醒: 完成后断开 SET 与 GND（>=80ms 后自动进 115200 透传）

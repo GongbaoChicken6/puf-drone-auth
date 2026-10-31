@@ -1,0 +1,23 @@
+=== A对毕业测试(容错判据) COM6 <-> COM9 @115200, 22:56:21 ===
+R0 COM6->COM9: 475241445f50494e475f5230 strict=True tolerant=True
+R0 COM9->COM6: 475241445f504f4e475f5230 strict=True tolerant=True
+R1 COM6->COM9: fe475241445f50494e475f5231 strict=False tolerant=True
+R1 COM9->COM6: 475241445f504f4e475f5231 strict=True tolerant=True
+R2 COM6->COM9: fe475241445f50494e475f5232 strict=False tolerant=True
+R2 COM9->COM6: 475241445f504f4e475f5232 strict=True tolerant=True
+R3 COM6->COM9: fe475241445f50494e475f5233 strict=False tolerant=True
+R3 COM9->COM6: 475241445f504f4e475f5233 strict=True tolerant=True
+R4 COM6->COM9: fe475241445f50494e475f5234 strict=False tolerant=True
+R4 COM9->COM6: 475241445f504f4e475f5234 strict=True tolerant=True
+R5 COM6->COM9: fe475241445f50494e475f5235 strict=False tolerant=True
+R5 COM9->COM6: 475241445f504f4e475f5235 strict=True tolerant=True
+R6 COM6->COM9: fe475241445f50494e475f5236 strict=False tolerant=True
+R6 COM9->COM6: 475241445f504f4e475f5236 strict=True tolerant=True
+R7 COM6->COM9: fe475241445f50494e475f5237 strict=False tolerant=True
+R7 COM9->COM6: 475241445f504f4e475f5237 strict=True tolerant=True
+R8 COM6->COM9: fe475241445f50494e475f5238 strict=False tolerant=True
+R8 COM9->COM6: 475241445f504f4e475f5238 strict=True tolerant=True
+R9 COM6->COM9: fe475241445f50494e475f5239 strict=False tolerant=True
+R9 COM9->COM6: 475241445f504f4e475f5239 strict=True tolerant=True
+RESULT: A->B strict 1/10 tolerant 10/10 | B->A strict 10/10 tolerant 10/10 | 杂散0xFE共 9 个
+WIRELESS_PAIR_VERDICT: GRADUATED (双向载荷零误码, 容忍已知0xFE自回声)

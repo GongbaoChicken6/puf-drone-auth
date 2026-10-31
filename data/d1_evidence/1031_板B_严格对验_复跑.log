@@ -1,0 +1,3 @@
+=== 无线对验证 COM6 <-> COM9 @115200, 2026-10-31 23:07:17 ===
+[PASS] R0 COM6->COM9: sent b'PING_R0_A2B' recv b'PING_R0_A2B'
+[PASS] R0 COM9->COM6: sent b'PONG_R0_B2A' recv b'PONG_R0_B2A'
