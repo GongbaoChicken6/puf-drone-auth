@@ -20,9 +20,14 @@ if {$SN ne ""} {
 }
 if {[llength $ts] > 1} { puts "ERROR: 多个 target，请传序列号二选一: $ts"; exit 5 }
 open_hw_target [lindex $ts 0]
-set dev [lindex [get_hw_devices] 0]
-if {[llength $dev] == 0} { puts "ERROR: 打开 target 后未发现 hw_device"; exit 6 }
-if {[get_property PART $dev] ne "xc7z045ffg900"} { puts "ERROR: PART 不符: [get_property PART $dev]"; exit 7 }
+set dev ""
+foreach d [get_hw_devices] {
+    set p [get_property PART $d]
+    puts "CHAIN: $d PART=$p"
+    if {[string match "xc7z045*" $p]} { set dev $d; break }
+}
+if {$dev eq ""} { puts "ERROR: JTAG 链上未找到 xc7z045ffg900（链上器件: [get_hw_devices]）"; exit 6 }
+if {![string match "xc7z045*" [get_property PART $dev]]} { puts "ERROR: PART 不符: [get_property PART $dev]"; exit 7 }
 set_property PROGRAM.FILE $BIT $dev
 program_hw_devices $dev
 refresh_hw_device $dev
