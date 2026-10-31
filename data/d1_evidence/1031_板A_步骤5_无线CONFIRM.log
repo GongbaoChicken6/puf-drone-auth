@@ -1,0 +1,27 @@
+=== 板A D1 Step5：无线认证 CONFIRM（2026-10-31 23:52，COM9 丢石头+A-PC，C001 空中链路） ===
+链路：板A J58 HC-12(A板/C001, LinkE 5V供电) <-> A-PC(丢石头CH340/COM9)
+排障记录：①板侧模块VCC未接=上行断(双亮BLOCKED) ②断电丢bit(三灯全亮) 重烧后通过
+
+serial mode on COM9 @ 115200 baud
+PUF drone authentication server
+commands:
+  auth <terminal_id>          authenticate a terminal (full round)
+  spoof <terminal_id>         authenticate with an impostor device (demo)
+  enroll <terminal_id> [n]    enroll device template (default n=100 CRPs)
+  setkey <terminal_id> <hex>  install Speck64/96 device key (24 hex chars)
+  provisionkey <terminal_id>  derive device key from the terminal PUF (loopback)
+  c2reset <terminal_id>       clear C2 replay window (power-cycle recovery)
+  serve                       serial mode: terminal-initiated receive loop
+                              (Ctrl-C returns to the prompt)
+  status                      sessions / templates / CRP pools
+  quit                        exit
+puf-server> serve
+[SERVE]  receive loop on COM9 (Ctrl-C to return)
+[WIRE 23:52:34.431] RXRAW fd10000000010290000001000000deadbeef5792190603976e6ac869
+[WIRE 23:52:34.433] ACCESS_REQUEST tid=1 nonce=0xefbeadde c2=5792190603976e6a -> CHALLENGE
+[WIRE 23:52:34.433] TXRAW fd200000000102910000822db4aed1c59adf5048f4d4b17cde6c652bde2fa8534a9b03e2c75571679495b9bc
+[WIRE 23:52:34.465] RXRAW fd2000000101029200007ddcef623ce6fccbd0c08124e9754532aa395494b8343b44d2ef93e239193d527ec7
+[WIRE 23:52:34.465] RESPONSE_R1 tid=1 x4 (CHALLENGED) -> RESULT
+[WIRE 23:52:34.465] TXRAW fd0a00000101029300000000a1bd89b60f12e91a65a7
+[WIRE 23:52:34.486] RXRAW fd0500000201029400000100000000f317
+[WIRE 23:52:34.486] CONFIRM tid=1 OK -- mutual authentication complete (terminal verified R2 = Speck(K_term, C2))
