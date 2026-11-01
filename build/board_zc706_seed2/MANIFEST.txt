@@ -1,0 +1,11 @@
+# seed2（布局变体B）构建清单
+bitstream: w3_top_zc706_seed2.bit
+SHA256: 0F4E605D481E81C825C2F028F78B9428EE0214C3ABCDF25FE294EF433ABB9D3B
+size: 13321607 bytes
+built: 2026-11-01 17:29 (Vivado 2026.1, script build/tcl/build_w3_board_seed2.tcl, SHA256 B550A01FA7DAC1632EB59D4ECBE8DB5EB79EE49607056C1BC7FC43CF58F545E6 ※加固前版本)
+differentiation: 32 ring cells (ro_array 16 + ro_entropy 16) pblock-forced into CLOCKREGION_X1Y0
+placement evidence: ring_sites_seed2.rpt (160 leaf LUTs X125..141 x Y34..51; 150 in X1Y0, 10 in legal X1Y0/X1Y1 seam grid)
+timing: WNS=+1.213ns WHS=+0.055ns DRC=0 errors
+baseline: production bit SHA256 24ED4EED6A175C980FF718529647EC2F3AF7ABA3650E8F6B58461EF18F468173 (data/bitstreams/w3_top_zc706_prod_20261027.bit)
+RTL delta vs baseline: uart_rx fix 6b942af (NOT in PUF response path; +4 LUT) -- disclosed
+layout-difference proof: defect-review rerun -- production natural placement X1Y4/X1Y5, zero site overlap with seed2 (NOT whole-file SHA256, which embeds timestamps)

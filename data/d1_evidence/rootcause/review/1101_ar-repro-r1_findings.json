@@ -1,0 +1,198 @@
+[
+  {
+    "severity": "P1",
+    "file": "data/templates/templates.json",
+    "line": 1,
+    "category": "raw-data-availability/核心输入未入库",
+    "description": "模板取证三路（analyze_template.py / analyze_template2.py / rtl_r1_order_reconstruction{.py,_v3.py}）的唯一核心输入 data/templates/templates.json 未被 git 跟踪（git status 显示 ?? 未跟踪，且无任何快照/哈希固定）。仅持仓库的第三方克隆后三个脚本全部 FileNotFoundError，无法复现'两两HD均值32.0''6400比较位反推全序 HD=0'这两个支柱数字。该文件是服务器运行时可变数据库（enroll 会改写），不固定版本即使本机日后重跑也可能漂移。本机当前实测可复现且数字为真，故未升 P0；但对外部第三方等效于复现阻断。",
+    "evidence": "git status: '?? data/templates/templates.json'；analyze_template2.py:6 'path = r\"D:\\puf-drone-auth\\data\\templates\\templates.json\"'；rtl_r1_order_reconstruction_v3.py:24 同一绝对路径 open()。仓库内无该文件的任何副本或 SHA256 记录。",
+    "function_context": "模板取证输入（tid=1 的 100 CRP enrolled 响应），支撑共识报告机理 1/2 与服务器审计 finding 8",
+    "sources": [
+      "ar-repro-r1",
+      "ar-server-hd-r1",
+      "ar-rtl-r1(未署名)"
+    ]
+  },
+  {
+    "severity": "P1",
+    "file": "build/board_zc706/w3_top_zc706.bit",
+    "line": 0,
+    "category": "git-evidence-chain/生产bit缺失+提交信息失实",
+    "description": "根因命题'两板同 bitstream ⇒ 同环序'的另一半证据——生产 W3 bitstream 本体未入库：git ls-files 全库 *.bit 仅有 board_zc706_seed2/w3_top_zc706_seed2.bit 和 W1 时代的 data/bitstreams/{ro_ratio_top,w1_waived}.bit（各 2192215B，10 月早期产物）。而 1760b72 提交信息声称 'production bit already tracked'，与事实不符。第三方无法从仓库取得两块板当晚实际运行的 bit，'同 bitstream' 前提只能采信口述。生产 bit 在工作树存在（13321607B，2026-10-27），可 force-add 补录。",
+    "evidence": "commit 1760b72 message: 'artifact: layout-variant-B bitstream + placement/timing evidence (force-added past *.bit ignore; production bit already tracked)'；git ls-files -- '*.bit' 输出仅 3 个：build/board_zc706_seed2/w3_top_zc706_seed2.bit、data/bitstreams/ro_ratio_top.bit、data/bitstreams/w1_waived.bit。",
+    "function_context": "范围尾提交 1760b72 的证据完整性",
+    "sources": [
+      "ar-repro-r1",
+      "lead"
+    ]
+  },
+  {
+    "severity": "P1",
+    "file": "data/d1_evidence/rootcause/seed2_board_preregistration.md",
+    "line": 21,
+    "category": "integrity/关键bit无SHA256记录",
+    "description": "全链（预登记、共识、EXPERIMENT_LOG、seed2 tcl、提交信息）无任何一处记录生产 bit 或 seed2 bit 的 SHA256/哈希。报告数字与 bit 内容之间没有密码学绑定：事后替换 bit 文件不会使任何文档报警。本审查现测：seed2 w3_top_zc706_seed2.bit SHA256=0F4E605D481E81C825C2F028F78B9428EE0214C3ABCDF25FE294EF433ABB9D3B；生产 build/board_zc706/w3_top_zc706.bit SHA256=24ED4EED6A175C980FF718529647EC2F3AF7ABA3650E8F6B58461EF18F468173，建议写入预登记。",
+    "evidence": "git grep -i 'sha256|filehash|md5' -- 全库（除 paper.zip）在 rootcause/ 与 build/tcl/ 下零命中；预登记 21-23 行证据文件清单只列文件名不列哈希：'## 证据文件' / '- 构建：rootcause/build_seed2.log、board_zc706_seed2/ring_sites_seed2.rpt'。",
+    "function_context": "板端验收判据预登记的证据绑定（烧板前立靶）",
+    "sources": [
+      "ar-repro-r1",
+      "lead"
+    ]
+  },
+  {
+    "severity": "P1",
+    "file": "data/d1_evidence/rootcause/seed2_board_preregistration.md",
+    "line": 22,
+    "category": "raw-data-availability/被引用证据文件未入库",
+    "description": "预登记把 rootcause/build_seed2.log 列为证据文件，但该文件（2338 行，含 DRC 0 Errors、BITSTREAM_SUCCESS WNS=1.213 SEED2_REGION=X1Y0 等唯一完整过程记录）被 .gitignore 第 8 行 '*.log' 规则忽略、未 force-add，不在仓库。e5/e6/e7_raw.log 等同类 .log 已被 force-add 入库，唯独构建日志漏掉。timing.rpt（已入库，WNS 1.213）可部分补偿，但 opt/place 两阶段 DRC 结果与 BITSTREAM_SUCCESS 哨兵只存在于该未入库日志。",
+    "evidence": "git check-ignore -v 输出: '.gitignore:8:*.log\tdata/d1_evidence/rootcause/build_seed2.log'（exit=0）；git ls-files 无此文件；本机日志尾部（未入库）: 'BITSTREAM_SUCCESS WNS=1.213 SEED2_REGION=X1Y0'、'INFO: [Project 1-461] DRC finished with 0 Errors'。",
+    "function_context": "seed2 构建过程证据（a94775f/1760b72 两提交主张的 WNS/DRC 依据）",
+    "sources": [
+      "ar-repro-r1",
+      "lead"
+    ]
+  },
+  {
+    "severity": "P1",
+    "file": "data/d1_evidence/rootcause/rtl_r1_order_reconstruction.py",
+    "line": 114,
+    "category": "evidence-integrity/硬编码帧抄录损坏，重跑结果与结论矛盾",
+    "description": "v1 脚本第 3 轮在线验证的实测 R1 字面量为 66 个 hex 字符（第 16 位后多插一个 '5'），与入库 1101 日志第 32 行 RXRAW 载荷（64 字符+CRC）不一致——抄录损坏。后果：本审查照原样重跑 v1，第 3 轮输出 '每 seed HD=[2, 28, 35, 32]，总 HD=97'，与共识报告 4/1/3、v3 官方解帧结果（轮3 总=3）、以及服务器 RESULT 帧 hd 字节 0x03 三方矛盾。脚本头部却宣称'本脚本即证据，可复跑'且'取自 1101 log TXRAW 0x0091 / RXRAW 0x0092'（107 行）——来源声明对该行不成立。第三方重跑两个脚本会得到打架的数字。核心反推部分（6400 比较/全序/HD=0）不受影响（已复现）。",
+    "evidence": "v1:114 原文: '\"535ab24b19d175551c30413a99d110bd1efdabaf27bcf886986f102c61626742c0\"'（66 字符）；1101 日志:32 载荷: '535ab24b19d17551c30413a99d110bd1efdabaf27bcf886986f102c61626742c0757'；重跑对照: v1 '轮3: 每 seed HD=[2, 28, 35, 32]，总 HD=97' vs v3 '轮3: 每 seed HD=[1, 0, 2, 0] 总=3 | 服务器 RESULT: result=0 hd=3'。",
+    "function_context": "RTL 根因 v1 脚本 E 节（1101 日志 3 轮在线验证）",
+    "sources": [
+      "ar-repro-r1",
+      "ar-rtl-r1(未署名)"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "data/d1_evidence/rootcause/sim/EXPERIMENT_LOG.md",
+    "line": 61,
+    "category": "number-consistency/汇总表与原始日志不符(±1%)",
+    "description": "系统级注入表 '±1%/环 → 1' 与同目录原始日志 e_system_matrix.log 不符：chip_pm1 的四个 R1（A=6677fea45a09061f B=d5b6f7144a4181df C=872e6a55e752cf34 D=aed5f9a3967ed9c2）与基线 chipA_base 逐位完全一致，重算 HD=0/256。±2% 行才是 1（chip_pm2 的 C=...cf36 差 1 位）。方向上不改变结论（0 与 1 同属'±1% 量级失配近乎不可见'），但第三方逐行对账会失败。",
+    "evidence": "EXPERIMENT_LOG.md:61 '| ±1%/环 | 1 |'；e_system_matrix.log '##### chip_pm1 exit=0 / INJECT_R1 A=6677fea45a09061f B=d5b6f7144a4181df C=872e6a55e752cf34 D=aed5f9a3967ed9c2'（与 base 节完全相同）→ 重算 HD=0。",
+    "function_context": "仿真注入系统矩阵汇总表（H2 定量闭环）",
+    "sources": [
+      "ar-repro-r1",
+      "ar-sim-inject-r1"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "data/d1_evidence/rootcause/sim/EXPERIMENT_LOG.md",
+    "line": 63,
+    "category": "number-consistency/汇总表与原始日志不符(±5%)",
+    "description": "'±5%/环 → 6' 与原始日志重算不符：chip_pm5 四 R1 对 base 的逐 seed HD=[3,2,2,0]，总 7/256（A: 6677fea45a09061f^6677fea45a8b061e=3 位；B: d5b6..81df^d596..81cf=2 位；C: ..e752cf34^..c752cf34=2 位；D: 0）。裁决节 74 行重复引用同一错误值'±5% -> HD 6/256@2.85x展开'。同表 ±0.5%/±2%/±10%/共模各行经重算全部正确。",
+    "evidence": "EXPERIMENT_LOG.md:63 '| ±5%/环 | 6 |'；:74 '差分频偏注入下 R1 改变（±5% -> HD 6/256@2.85x展开...'；e_system_matrix.log chip_pm5 行 'INJECT_R1 A=6677fea45a8b061e B=d596f7144a4181cf C=872e6a54c752cf34 D=aed5f9a3967ed9c2' → 重算 3+2+2+0=7。",
+    "function_context": "系统级注入汇总表与 H1 排除论证",
+    "sources": [
+      "ar-repro-r1",
+      "ar-sim-inject-r1"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "data/d1_evidence/rootcause/1101_ROOTCAUSE_consensus.md",
+    "line": 32,
+    "category": "cross-reference/仿真来源引用张冠李戴(dieC)",
+    "description": "修复路径 1 称'跨板 HD 回到 ≈32/64（仿真 dieC 预测）'。E7 的 dieC（chipC=A±10%/环）实测 HD=224/256（e7_raw.log 与 EXPLOG E7 表一致），不是 ≈128/256；'≈32/64'（即 ≈128/256、中位 127）实际出自 rtl_r1_order_reconstruction_v3.py 的 G3（独立随机频率×50 抽样中位 127/256）与预登记'独立排序理论中位 127'。数值本身正确，引用对象错误——评审按 dieC 追溯会得到 224 而非 128。",
+    "evidence": "consensus:32 '⇒ 跨板 HD 回到 ≈32/64（仿真 dieC 预测）'；e7_raw.log 'E7 HD(256bit) chipC vs chipA = 224'；v3 重跑 'G3 独立随机频率×50 次抽样: HD 中位=127/256，min=63，max=195'；prereg:11 '独立排序理论中位 127'。",
+    "function_context": "共识报告修复路径第 1 条（按板差异化 P&R 的预期效果）",
+    "sources": [
+      "ar-repro-r1",
+      "lead"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "data/d1_evidence/rootcause/sim/EXPERIMENT_LOG.md",
+    "line": 26,
+    "category": "reproducibility/命令含占位符非照抄可跑",
+    "description": "EXPERIMENT_LOG 的 xvlog 命令用 '<repo ro_ring.v ro_div.v ro_array.v challenge_decode.v>'、33 行 '<全部仓库 RTL> <repo ro_array_sim.v>'、36 行 '<repo 三文件>' 等占位符，不能照抄执行；fixture 注入依赖'cwd 默认路径机制'（run_*/sim/testvectors/puf_tb_freqs.mem 副本+快照拷贝，34-35 行有说明）。缓解：run_*/xsim.jou 记录了真实 xsim 命令行与 cwd，xvlog.log 记录编译清单，且 iverilog E5 命令本审查按字面重组后一次跑通、输出与 e5_raw.log 逐行一致——但拼接真实 xvlog/xelab 命令仍需读者自行完成。",
+    "evidence": "EXPERIMENT_LOG.md:26 'D:\\vivado\\2026.1\\Vivado\\bin\\xvlog.bat  <repo ro_ring.v ro_div.v ro_array.v challenge_decode.v> ro_ring_timed.v ro_array_timed.v tb_ro_real_x.v tb_ro_real_en.v tb_chip_inject.v'；:33 'xvlog -d PUF_MODEL_SIM <全部仓库 RTL> <repo ro_array_sim.v> tb_puf_path_inject.v ; xelab tb_puf_path_inject -s snap_pufinj'。",
+    "function_context": "仿真注入 E5-E7 与系统级注入的复现入口",
+    "sources": [
+      "ar-repro-r1",
+      "ar-sim-inject-r1"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "data/d1_evidence/rootcause/rtl_r1_order_reconstruction_v3.py",
+    "line": 8,
+    "category": "portability/绝对路径硬编码",
+    "description": "四个分析脚本全部硬编码本机绝对路径 D:\\puf-drone-auth（v3:8 sys.path、v3:24 与 v1:48 templates.json、v3:51 1101 日志、mc_hd_curve.py:12 ROOT），无一支持从仓库根相对定位（__file__ 推导）。换盘符/换机器/Linux 即全挂。对'未来的自己换环境重跑'是硬伤；对当下本机复现无碍（本审查全部跑通）。",
+    "evidence": "v3:8 'sys.path.insert(0, r\"D:\\puf-drone-auth\")'；mc_hd_curve.py:12 'ROOT = Path(r\"D:\\puf-drone-auth\")'；v1:48 'd = json.load(open(r\"D:\\puf-drone-auth\\data\\templates\\templates.json\", encoding=\"utf-8\"))'。",
+    "function_context": "rootcause 分析脚本族的可移植性",
+    "sources": [
+      "ar-repro-r1",
+      "ar-rtl-r1(未署名)",
+      "ar-sim-inject-r1"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "data/d1_evidence/rootcause/1101_ROOTCAUSE_consensus.md",
+    "line": 1,
+    "category": "git-evidence-chain/报告不引用commit SHA",
+    "description": "三份报告+预登记+全部脚本无一处引用本范围 4 个提交的 SHA（c348baa/062c776/a94775f/1760b72），也未记录产出时的工作树 HEAD。报告与提交之间只有时间戳弱关联（consensus 落款 16:20 vs 提交 16:22）。第三方无法验证'报告引用的 RTL 行号/文件对应哪个提交'（好在范围零源码改动、行号在 base..head 稳定，本审查抽验 terminal_fsm.v:168、threshold.py:87-91 等均命中）。",
+    "evidence": "对 rootcause/*.md、sim/*.md、*.py、build/tcl/*.tcl 全文 grep 'sha256|commit|[0-9a-f]{40}' 仅命中 v1 的线上帧 hex 字面量，零 commit SHA 引用。",
+    "function_context": "报告↔git 提交的绑定",
+    "sources": [
+      "ar-repro-r1",
+      "lead"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "data/d1_evidence/rootcause/",
+    "line": 0,
+    "category": "documentation/无README复现入口",
+    "description": "rootcause/ 目录 170+ 文件（3 份报告、5 个脚本、9 个 fixture、9 个 run_* 运行目录、xsim.dir 快照树）没有 README/索引说明'哪个脚本→读哪些输入→产出哪个报告数字→对应哪条命令'。复现路径散落在 consensus 产物清单、EXPERIMENT_LOG 命令节和脚本 docstring 三处，拼图成本高。这是评委体验的第一道门槛。",
+    "evidence": "Get-ChildItem rootcause -Filter 'README*' 零命中；复现信息分布三处：consensus:39-42 产物清单、EXPERIMENT_LOG:24-37 命令节、各脚本 docstring。",
+    "function_context": "证据包整体导航",
+    "sources": [
+      "ar-repro-r1"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "data/d1_evidence/rootcause/sim/e_mc_curve.log",
+    "line": 0,
+    "category": "artifact-hygiene/日志编码非UTF-8",
+    "description": "e_mc_curve.log 为 UTF-16LE 带 BOM（git 识别为二进制，diffstat 显示 Bin），e7_raw.log 为 GBK 编码（含中文注释与 ± 符号，UTF-8 工具读取乱码/报 invalid UTF-8）。内容本身完整且与报告一致（本审查已按对应编码解码核验），但编码未在任何地方标注，跨平台工具链容易读坏。",
+    "evidence": "e_mc_curve.log 首 16 字节 'FF FE 62 00 61 00 73 00 65 00 20 00 66 00 72 00'（UTF-16LE BOM+base）；e7_raw.log 以 GBK 解码方得 'E7 chip卤1% jitter)'（± 的 GBK 字节）。",
+    "function_context": "原始日志归档",
+    "sources": [
+      "ar-repro-r1",
+      "ar-sim-inject-r1"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "data/d1_evidence/rootcause/sim/e5_raw.log",
+    "line": 0,
+    "category": "artifact-hygiene/iverilog交叉复核输出未存档",
+    "description": "EXPERIMENT_LOG:36 声称 iverilog 与 xsim 对 E5 交叉复核一致，但包内只存了编译产物 e5_iverilog.vvp（160KB 二进制），vvp 的运行输出没有单独日志（e5_raw.log 是 xsim 会话）。本审查已照命令重跑 iverilog+vvp 并将输出存至 review/rerun_e5_iverilog.log，结论一致（16 环计数全 0、R1 恒 0）——原主张为真，但原包内证据不完整。",
+    "evidence": "EXPERIMENT_LOG.md:36 'iverilog -g2001 tb_ro_real_x.v <repo 三文件> && vvp   # E5 交叉复核'；本审查重跑输出（review/rerun_e5_iverilog.log）: 'E5 RESULT: all 16 counters = 0 -> any freq[B]>freq[A] is false -> R1 == 64'h0 for EVERY challenge (chip-independent constant)'。",
+    "function_context": "E5 双工具链交叉验证",
+    "sources": [
+      "ar-repro-r1",
+      "ar-sim-inject-r1"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "data/d1_evidence/rootcause/sim/xsim.dir/",
+    "line": 0,
+    "category": "artifact-hygiene/仿真器二进制产物入库",
+    "description": "062c776 将 xsim.dir/ 下 xsimk.exe、*.wdb、*.sdb、xsim.dbg/mem/reloc 等约 4MB 工具二进制一并提交（184 个新增文件中约 2/3 是此类产物）。作为'快照即证据'可以理解（含 Compile_Options.txt 版本信息），但无文档说明哪些文件是载荷（*.jou/*.log/R1 输出/mem fixture）哪些是可再生的副产品；克隆体积与评审噪音显著增加。",
+    "evidence": "062c776 diffstat 含 'xsim.dir/snap_chip/xsimk.exe | Bin 0 -> 385868 bytes'、'snap_chip.wdb | Bin 0 -> 271862 bytes' 等约 60 项二进制；EXPERIMENT_LOG:19 'run_*/ | 每个 fixture 的隔离运行目录（cwd 相关默认路径机制）'。",
+    "function_context": "rootcause/sim 证据包构成",
+    "sources": [
+      "ar-repro-r1",
+      "ar-sim-inject-r1"
+    ]
+  }
+]

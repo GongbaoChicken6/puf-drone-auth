@@ -1,0 +1,146 @@
+[
+  {
+    "severity": "P1",
+    "file": "(git commit 1760b72 message)",
+    "line": 1,
+    "category": "claim-vs-fact / 证据链不可复现",
+    "description": "提交信息声称生产 bit 已被 git 跟踪，实际从未跟踪：`git ls-files '*.bit'` 无 build/board_zc706/w3_top_zc706.bit；`git log --all -- build/board_zc706/w3_top_zc706.bit` 为空；.gitignore:85 整目录忽略 build/board_zc706/。后果：修复方案的核心对照主张『seed2 SHA256 与生产 bit 不同，确认布局真实差异』中，对照基线（生产 bit 24ED4EED…）仅存在于本机磁盘，任何 fresh clone 无法复现该对比；板上实验前的双 bit 哈希登记缺乏版本库背书。建议：将生产 bit 复制入 data/bitstreams/（符合 .gitignore:29-31 自述政策）或在提交信息/预登记中更正记录并登记其 SHA256。",
+    "evidence": "artifact: layout-variant-B bitstream + placement/timing evidence (force-added past *.bit ignore; production bit already tracked) ‖ 实测: git ls-files '*.bit' → 仅 build/board_zc706_seed2/w3_top_zc706_seed2.bit、data/bitstreams/ro_ratio_top.bit、data/bitstreams/w1_waived.bit；git check-ignore → .gitignore:85:build/board_zc706/ build/board_zc706/w3_top_zc706.bit",
+    "function_context": "1760b72 变体 bitstream 工件提交（审查范围 HEAD）",
+    "sources": [
+      "ar-spec-r1"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "data/d1_evidence/rootcause/1101_ROOTCAUSE_consensus.md",
+    "line": 32,
+    "category": "引用源错误（spec 内部数据一致性）",
+    "description": "共识修复路径把跨板 HD 预测值 ≈32/64 归因于『仿真 dieC 预测』，但 EXPERIMENT_LOG E7 表中 dieC（C=A±10%/环）实测 HD=224/256（=56/64），并非 ≈32/64。≈128/256（每响应 32/64）的真实来源是 rtl_r1_order_reconstruction_v3.py 的 G3 段（独立随机频率×50 抽样，均值≈128，理论期望 128），而 G3 的运行输出未落盘入库。spec 头条预测数字引用了错误的实验，正确来源又无归档输出——预登记 P1 的『独立排序理论中位 127』与 G3/理论一致，但证据链在共识报告这一环断裂。",
+    "evidence": "跨板 HD 回到 ≈32/64（仿真 dieC 预测） ‖ EXPERIMENT_LOG.md:52: | C = A ±10%/环 | 2673..3251 | 4806..5845 | dd987b0d7cb6e6ca | 224 | ‖ v3:96: print(f\"   G3 独立随机频率×50 次抽样:          HD 中位={hds3[25]}/256，min={hds3[0]}，max={hds3[-1]}（均值≈128）\")",
+    "function_context": "共识报告 §修复路径 第 1 条（首选方案预测依据）",
+    "sources": [
+      "ar-spec-r1"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "data/d1_evidence/rootcause/seed2_board_preregistration.md",
+    "line": 11,
+    "category": "预登记数值不可溯 / 失败分支不完备",
+    "description": "P1 判据中阈值部分可溯（≥64 即 REJECT、≤24 即 PASS 溯源到服务器审计报告第 16 行 threshold.py:87-91 的 TAU_PASS=6/TAU_REJECT=16×4 轮），但核心预测带 90~170/256 在三份调查报告及全部 rootcause 文件中无任何推导或蒙特卡洛出处（grep 90/170 仅命中预登记自身）。且 256 个比较位由 16 环全序决定、位间强相关（同一环对跨种子重复出现），二项 σ=8 不适用，带宽需要『两个独立随机全序→HD 分布』的 MC 支撑（G3 仅 50 次抽样且输出未归档）。失败分支另有三处缺口：(a) HD∈25~63 的协议灰区无分支；(b) HD>170（REJECT 但超出预测带）无分支；(c) P3（seed2 自模板 auth2）FAIL 无任何预案——布局迁移破坏自一致性时无处置路径。另第 18 行『P1 REJECT 但 HD<64 边缘』自相矛盾（REJECT 判定本身要求 HD≥64）。",
+    "evidence": "| P1 | seed2 板对 tid=1 模板（生产排序）跑 auth 1 | **REJECT**，total HD 落在 90~170/256（独立排序理论中位 127；≥64 即 REJECT） | 唯一性成立=根因修复实锤 | ‖ - P1 REJECT 但 HD<64 边缘：排序部分相关 → 记录数据，追加 seed3 变体 ‖ 审计报告:16: 门限：TAU_PASS=6/TAU_REJECT=16（每 64bit 响应），4 响应轮 PASS≤24、REJECT≥64（threshold.py:87-91）",
+    "function_context": "预登记 §预登记判据 P1 行 与 §失败分支预案",
+    "sources": [
+      "ar-spec-r1"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "build/tcl/build_w3_board_seed2.tcl",
+    "line": 89,
+    "category": "证据声称夸大（单向落位证据）",
+    "description": "注释称 ring_sites_seed2.rpt 是『与生产 bit 对比的直接证据』，但对比的另一半不存在：生产脚本 build_w3_board.tcl 从不输出落位报告（以 write_bitstream 结束），build/board_zc706/ 整目录被 git 忽略，生产 32 环的历史站点无处可查。已入库证据只能证明 seed2 侧落位。本审查独立复核了 seed2 侧的真实性：Vivado 实测 xc7z045 CLOCKREGION_X1Y0 = SLICE_X90Y0..X163Y49，rpt 全部落点（X125~141, Y35~48）确在其内；但『对比』二字在版本库层面不成立。附带：脚本未 write_checkpoint，无 routed DCP 存档，落位事后无法从设计工件重验。建议：补一次生产流构建（或打开旧工程）导出 ring_sites.rpt 入库，形成双侧证据。",
+    "evidence": "# SEED2 落位证据：32 环的物理站点（与生产 bit 对比的直接证据） ‖ 生产脚本尾部: write_bitstream -force $OD/w3_top_zc706.bit（无任何落位输出） ‖ 本审查实测: CRBOUND X1Y0 : SLICE_X90Y0 .. SLICE_X163Y49；rpt:18: u_top/u_ro_array/gen_ro_ring[0].u_ro_ring/n1_inferred_i_1 SLICE_X127Y39",
+    "function_context": "构建脚本 write_bitstream 前的落位证据导出段",
+    "sources": [
+      "ar-spec-r1"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "data/d1_evidence/rootcause/rtl_r1_order_reconstruction_v3.py",
+    "line": 24,
+    "category": "根因取证输入未入库（可复现性缺口）",
+    "description": "根因链最强的定量证据（6400 比较位反推唯一 16 环全序零矛盾、正向复算 HD=0、在线三轮 HD=4/1/3 全预测命中）以 data/templates/templates.json 为唯一输入，但该文件处于未跟踪状态（git status: ?? data/templates/templates.json），脚本还硬编码本机绝对路径 D:\\puf-drone-auth。三路调查中 RTL 路既无报告 md 也无运行输出日志（服务器路有审计 md、仿真路有 EXPERIMENT_LOG.md），结论只存在于共识报告转述——fresh clone 无法复核。建议：入库 templates.json（或其 tid=1 副本+SHA256）并补跑 v3 存输出日志。",
+    "evidence": "d = json.load(open(r\"D:\\puf-drone-auth\\data\\templates\\templates.json\", encoding=\"utf-8\")) ‖ git status --short: ?? data/templates/templates.json",
+    "function_context": "RTL 路调查 v3 脚本 §反推全序（模板取证输入）",
+    "sources": [
+      "ar-spec-r1"
+    ]
+  },
+  {
+    "severity": "P2",
+    "file": "data/d1_evidence/rootcause/seed2_board_preregistration.md",
+    "line": 22,
+    "category": "引用证据文件未入库",
+    "description": "预登记把 rootcause/build_seed2.log 列为证据文件，但该文件被 .gitignore:8（*.log）忽略、未提交（本审查已在磁盘核验其内容：BITSTREAM_SUCCESS WNS=1.213 SEED2_REGION=X1Y0、三阶段 DRC 0 Errors、LUTLP-1 waiver nets: 32，与已入库 timing.rpt 的 WNS=1.213/WHS=0.055 一致）。证据在本机落盘但未进版本库，同目录的 1101_假冒实验 log 当初是 force-add 入库的，此处标准不一致。建议 force-add 或将关键门禁行摘录为 md。",
+    "evidence": "- 构建：rootcause/build_seed2.log、board_zc706_seed2/ring_sites_seed2.rpt ‖ git check-ignore: .gitignore:8:*.log\tdata/d1_evidence/rootcause/build_seed2.log ‖ 磁盘核验: BITSTREAM_SUCCESS WNS=1.213 SEED2_REGION=X1Y0",
+    "function_context": "预登记 §证据文件",
+    "sources": [
+      "ar-spec-r1"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "data/d1_evidence/rootcause/1101_ROOTCAUSE_consensus.md",
+    "line": 32,
+    "category": "spec 与实现机制偏差（已披露）",
+    "description": "共识首选路径表述为『每块板用不同 placement seed 重 Implementation』『换 seed 重烧一块板』，实际实现是 PBlock 强制重定位（无 seed 变更）。目标等价（按板差异化布局使排序独立），且预登记与 a94775f 提交信息均如实描述了 PBlock 机制，无隐瞒；但 spec 文本未更新，且 PBlock 与改 seed 的『排序独立性』置信机理不同（区域强制 vs 随机扰动），预登记失败分支已诚实覆盖『PBlock 不足以致变』。属文档漂移而非不忠实。",
+    "evidence": "每块板用不同 placement seed 重 Implementation ⇒ 各板排序独立 ‖ build_w3_board_seed2.tcl:71-73: create_pblock pb_rings_seed2 / add_cells_to_pblock pb_rings_seed2 $ringcells / set pbrange \"CLOCKREGION_$pick:CLOCKREGION_$pick\"",
+    "function_context": "共识报告 §修复路径 1 与 build_w3_board_seed2.tcl §SEED2 差异化",
+    "sources": [
+      "ar-spec-r1"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "data/d1_evidence/rootcause/sim/EXPERIMENT_LOG.md",
+    "line": 75,
+    "category": "引用数值与原始记录不符",
+    "description": "仿真路裁决句称『与两板实测 HD≤1~2 定量吻合』，原始记录中两板实测为 HD=1（04F2C）与 HD=0（0195C），全仓库无任何『2』的出处；共识报告第 4/18 行与 c348baa 提交信息均正确写 HD=0/1（≤1）。EXPERIMENT_LOG 的『≤1~2』是无出处的放宽表述。",
+    "evidence": "HD=0~3 —— 与两板实测 HD≤1~2、轮内漂移 1~4 bit 定量吻合 ‖ 1101_假冒实验log:3-4: 04F2C: auth 1 -> verdict PASS, total HD = 1 / 0195C: auth 1 -> verdict PASS, total HD = 0",
+    "function_context": "仿真注入实验记录 §裁决 H2 段",
+    "sources": [
+      "ar-spec-r1"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "data/d1_evidence/rootcause/1101_ROOTCAUSE_consensus.md",
+    "line": 41,
+    "category": "产物清单计数失准",
+    "description": "产物清单称仿真路为『四 fixture+蒙特卡洛』，实际目录有 9 个 freq_*.mem 注入向量、5 颗 E7 芯片（A/B/C/M/M2）、9 个 run_* 隔离运行目录加系统级注入矩阵。为缩小方向的失准（不夸大结果），但作为三路调查的产物索引不准确。",
+    "evidence": "- rootcause/sim/EXPERIMENT_LOG.md（仿真注入四 fixture+蒙特卡洛） ‖ EXPERIMENT_LOG.md:16: | freq_*.mem ×9 | 注入频率向量（确定性公式见下） |",
+    "function_context": "共识报告 §产物清单",
+    "sources": [
+      "ar-spec-r1"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "build/tcl/build_w3_board_seed2.tcl",
+    "line": 10,
+    "category": "『逐字复用』表述与字节级差异不符",
+    "description": "头部声称『其余逐字复用生产流程』，git diff --no-index 显示功能等价但非逐字：srcdir 守卫、LUTLP-1 豁免块、时序门禁块由多行折叠为单行，生产脚本的 P0/P2 修复注释被删，ro_entropy.v 行缩进变化。文件清单、IP 配置、豁免逻辑、时序门禁逐项核对确实一致（同源/同约束/同豁免/同时序门禁的实质成立），『逐字』一词过强。",
+    "evidence": "#   3) 其余逐字复用生产流程（同源/同约束/同豁免/同时序门禁） ‖ diff 例: -if {![file isdirectory \"$SRC/rtl\"]} {（生产，4 行块） vs +if {![file isdirectory \"$SRC/rtl\"]} { puts \"ERROR: …\"; exit 2 }（seed2，单行）",
+    "function_context": "build_w3_board_seed2.tcl 头注 与 build_w3_board.tcl 全文 diff",
+    "sources": [
+      "ar-spec-r1"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": "build/board_zc706_seed2/ring_sites_seed2.rpt",
+    "line": 2,
+    "category": "报告格式缺陷（弱化证据力）",
+    "description": "前 32 行（每个 gen_ro_ring[N].u_ro_ring 层次实例）SITE 字段为空（行尾悬空空格），实际携带坐标的是 160 行叶子单元；报告标题写 region X1Y0 但文件本身不含任何区域坐标信息，脱离器件网格知识无法自证。建议过滤到叶子单元并在头部附 CLOCKREGION 网格范围一行。",
+    "evidence": "u_top/u_ro_array/gen_ro_ring[0].u_ro_ring （SITE 为空） vs :18 u_top/u_ro_array/gen_ro_ring[0].u_ro_ring/n1_inferred_i_1 SLICE_X127Y39",
+    "function_context": "ring_sites_seed2.rpt 落位证据导出（foreach c $ringcells）",
+    "sources": [
+      "ar-spec-r1"
+    ]
+  },
+  {
+    "severity": "P3",
+    "file": ".gitignore",
+    "line": 30,
+    "category": "违反仓库自述工件政策 / 仓库卫生",
+    "description": ".gitignore:29-31 自述政策为『Bitstreams: too large for git, but allow in data/bitstreams/』，seed2 却把 13.3MB bit force-add 进 build/（绕过忽略规则而非走豁免目录），与生产 bit 的处理形成不对称（见 P1 项）。同批提交还包含 xsim 二进制（xsimk.exe、.wdb、.sdb、xsim.dbg/reloc 等，合计约 8600 行插入多为二进制），有仓库膨胀风险；与『证据必须落盘』原则一致但与版本库最小化惯例冲突，建议 binaries 改放 data/bitstreams/ 与压缩包。",
+    "evidence": "# Bitstreams: too large for git, but allow in data/bitstreams/\n*.bit\n!data/bitstreams/*.bit ‖ diff stat: build/board_zc706_seed2/w3_top_zc706_seed2.bit | Bin 0 -> 13321607 bytes",
+    "function_context": ".gitignore 工件策略 与 1760b72 工件提交",
+    "sources": [
+      "ar-spec-r1"
+    ]
+  }
+]
