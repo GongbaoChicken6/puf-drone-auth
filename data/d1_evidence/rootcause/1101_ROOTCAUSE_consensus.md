@@ -29,14 +29,22 @@
 
 ## 修复路径（按可行性排序）
 
-1. **按板差异化 P&R**（首选，改动最小）：每块板用不同 placement seed 重 Implementation ⇒ 各板排序独立 ⇒ 跨板 HD 回到 ≈32/64（仿真 dieC 预测）。板上确证实验：换 seed 重烧一块板 → 对旧模板 auth → HD 跳到 ≈32 即硅上实锤，同时产出论文唯一性数据。论文口径改为「布局配置型 RO 排序 PUF」并如实陈述。
+1. **按板差异化 P&R**（首选，改动最小）：每块板用不同 placement seed 重 Implementation ⇒ 各板排序独立 ⇒ 跨板 HD 回到 ≈32/64（勘误 2026-11-01：原文误引 dieC——E7 dieC 为 ±10% 扰动实测 224/256；正确依据=独立随机排序理论中位 128/256：v3 G3 抽样中位 127 + Lead MC×2000 于真实 enrolled 配对表得 p5~p95=87~168）。板上确证实验：换 seed 重烧一块板 → 对旧模板 auth → HD 跳到 ≈32 即硅上实锤，同时产出论文唯一性数据。论文口径改为「布局配置型 RO 排序 PUF」并如实陈述。
 2. 绝对阈值量化：对固定参考计数比较（保留绝对频率信息），需重设计+稳定性处理。
 3. 近平局对 helper-data 掩蔽（稳定性补强，非唯一性修复）。
 4. 论文重定位（若不重建）：稳定性/协议/双向认证/重放防护为主张主体，唯一性改为「同 bitstream 双板一致」的诚实负结果+机理分析（机理本身是高质量的学术内容）。
+
+## 勘误与补录（2026-11-01 auto-review 五路复审后，由 Lead 共识综合）
+
+- 提交锚点：c348baa（finding）→ 062c776（consensus）→ a94775f（build+prereg）→ 1760b72（bit 工件）。**1760b72 提交信息中 "production bit already tracked" 为失实陈述**——生产 bit 从未被 git 跟踪（.gitignore:85 忽略整目录）；已于本勘误提交补录生产 bit 至 data/bitstreams/ 并在预登记钉死双 bit SHA256。
+- "两 bit SHA256 不同 ⇒ 布局不同"论证无效（.bit 头含时间戳，同布局两次构建哈希亦异）；**布局差异的合法证据改为缺陷审查复跑实测**：生产脚本原样复跑 160/160 环自然落位 X1Y4/X1Y5，seed2 强制落位 X1Y0 带（X125~141×Y34~51），零站点重叠；bitstream 载荷 2.74% 真实差异；复跑逐字节确定。
+- "同 RTL"表述失实：生产 bit 内嵌构建时间 2026-10-27 08:26，早于同日 15:04 的 uart_rx 修复 6b942af（+4 LUT）；uart_rx 不在 PUF 响应通路，结论不受影响，但"唯一差异=PBlock"应读作"PUF 通路唯一差异=PBlock；另含 uart_rx 修复"。
+- seed2 落位精度：160 叶子 LUT 中 150 个属 X1Y0、10 个（4 站点）落在 X1Y0/X1Y1 接缝的合法网格内。
+- 五路复审报告与重跑证据：rootcause/review/（ar-defect/spec/silent/repro/regress + rerun_*）。
 
 ## 产物清单
 
 - rootcause/1101_ar-server-hd-r1_服务器端审计报告.md（服务器审计全文）
 - rootcause/rtl_r1_order_reconstruction_v3.py（全序反推+自校验）
-- rootcause/sim/EXPERIMENT_LOG.md（仿真注入四 fixture+蒙特卡洛）
+- rootcause/sim/EXPERIMENT_LOG.md（仿真注入 9 组 fixture / 5 颗虚拟芯片 + 系统级注入矩阵 + 蒙特卡洛；勘误：原文写四 fixture）
 - rootcause/analyze_template.py / analyze_template2.py（模板取证）

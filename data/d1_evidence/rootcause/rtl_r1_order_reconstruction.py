@@ -7,6 +7,7 @@
   C. 用反推出的全序正向复算模板，逐位比对；再用日志(1101)里 3 组在线挑战种子
      正向预测 R1，与板上实测 R1 比 HD
 只读 templates.json 与证据日志；产物仅打印（本脚本即证据，可复跑）。
+【已废弃 2026-11-01 auto-review】以 rtl_r1_order_reconstruction_v3.py 为准：本 v1 第 114 行实测 R1 字面量抄录损坏（66 hex 字符，重跑该轮 HD=97 与 v3 官方解帧/服务器 RESULT=3 矛盾）；全序反推部分与 v3 一致，仍可参考。
 """
 import json, sys
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")

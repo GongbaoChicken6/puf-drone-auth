@@ -62,12 +62,20 @@ set_property ALLOW_COMBINATORIAL_LOOPS TRUE $loopnets
 
 # ---- SEED2 差异化：环振单元 PBlock 重定位 ----
 set ringcells [get_cells -hierarchical -filter {NAME =~ "*u_ro_ring*"}]
-puts "SEED2 ring cells: [llength $ringcells] (32 rings x ~5 LUT = ~160)"
-if {[llength $ringcells] < 32} { puts "ERROR: SEED2 ring cell match too few: [llength $ringcells]"; exit 6 }
+puts "SEED2 ring cells: [llength $ringcells] (32 hier + 160 leaf expected)"
+# auto-review P1/P2: 环级精确断言——32 个不同 gen_ro_ring[N].u_ro_ring 实例，防部分匹配静默通过
+set ring_inst {}
+foreach c $ringcells {
+    if {[regexp {gen_ro_ring\[[0-9]+\]\.u_ro_ring$} $c]} { lappend ring_inst $c }
+}
+set ring_inst_uniq [lsort -unique $ring_inst]
+puts "SEED2 ring instances: [llength $ring_inst_uniq] (expect 32)"
+if {[llength $ring_inst_uniq] != 32} { puts "ERROR: SEED2 expected 32 distinct ring instances, got [llength $ring_inst_uniq]"; exit 6 }
+set pick "X1Y0"   ;# auto-review P2: 钉死区域（原 lsort 取中位是器件相关隐式推导）
 set allcr [lsort [get_clock_regions]]
 puts "SEED2 clock regions available: $allcr"
-set pick [lindex $allcr [expr {[llength $allcr] / 2}]]
-puts "SEED2 relocate region: $pick"
+if {[lsearch -exact $allcr $pick] < 0} { puts "ERROR: SEED2 target region $pick absent on this part"; exit 8 }
+puts "SEED2 relocate region (pinned): $pick"
 create_pblock pb_rings_seed2
 add_cells_to_pblock pb_rings_seed2 $ringcells
 set pbrange "CLOCKREGION_$pick:CLOCKREGION_$pick"
@@ -85,12 +93,31 @@ report_utilization -file $OD/utilization.rpt
 report_timing_summary -file $OD/timing.rpt
 set wns [get_property SLACK [get_timing_paths -delay_type max]]
 if {$wns < 0} { puts "TIMING_FAILED WNS=$wns"; exit 4 }
+# auto-review P2: hold 门禁（环频计数捕获路径对 hold 敏感；本次构建实测中间态曾 WHS=-0.270）
+set whs [get_property SLACK [get_timing_paths -delay_type min]]
+if {$whs < 0} { puts "TIMING_FAILED WHS=$whs"; exit 10 }
+puts "TIMING_OK WNS=$wns WHS=$whs"
 
-# SEED2 落位证据：32 环的物理站点（与生产 bit 对比的直接证据）
+# SEED2 落位证据（auto-review 修正：仅叶子单元 + 区域归属计数；X1Y0 行界=SLICE_Y49/50，接缝 Y50/51 属合法网格）
+set leafcells {}
+foreach c $ringcells {
+    if {[get_property SITE $c] ne ""} { lappend leafcells $c }
+}
+puts "SEED2 placed leaf cells: [llength $leafcells] (expect 160)"
+if {[llength $leafcells] != 160} { puts "ERROR: SEED2 expected 160 placed leaf ring cells, got [llength $leafcells]"; exit 11 }
 set rf [open $OD/ring_sites_seed2.rpt w]
-puts $rf "# seed2 ring cell placement (region $pick)"
-foreach c $ringcells { puts $rf "$c [get_property SITE $c]" }
+puts $rf "# seed2 ring LEAF cell placement (target region $pick)"
+set inregion 0; set seam 0
+foreach c $leafcells {
+    set s [get_property SITE $c]
+    puts $rf "$c $s"
+    if {[regexp {Y([0-9]+)$} $s -> y]} {
+        if {$y <= 49} { incr inregion } else { incr seam }
+    }
+}
 close $rf
+puts "SEED2 region tally: X1Y0=$inregion seam=$seam"
+if {$inregion + $seam != 160} { puts "ERROR: SEED2 region tally incomplete"; exit 12 }
 
 write_bitstream -force $OD/w3_top_zc706_seed2.bit
-puts "BITSTREAM_SUCCESS WNS=$wns SEED2_REGION=$pick"
+puts "BITSTREAM_SUCCESS WNS=$wns WHS=$whs SEED2_REGION=$pick"

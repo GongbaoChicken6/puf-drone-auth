@@ -6,6 +6,8 @@
 # Vivado generated (Journals, logs, temp)
 *.jou
 *.log
+# 证据日志必须入库（auto-review 2026-11-01：预登记/根因证据曾被 *.log 静默拦截）
+!data/d1_evidence/**/*.log
 *.str
 *.bak
 *.wdb
@@ -102,6 +104,8 @@ build/gh_auth.ps1
 
 # Bring-up/debug Vivado projects (generated; keep only tcl/rtl debug assets under build/dbg/)
 build/board_zc706_*/
+# 布局变体工程产物须入库（bit/rpt/MANIFEST，auto-review 2026-11-01）
+!build/board_zc706_seed2/
 # Frontend generated output
 web/.out/
 # Vivado xsim / MCP session artifacts at repo root
