@@ -1,0 +1,57 @@
+#-----------------------------------------------------------
+# xsim v2026.1 (64-bit)
+# SW Build 6511674 on Tue Jun 16 11:02:23 MDT 2026
+# IP Build 6504888 on Tue Jun 09 09:05:25 MDT 2026
+# SharedData Build 6501428 on Mon Jun 08 17:34:18 MDT 2026
+# Start of session at: Sun Nov  1 16:12:38 2026
+# Process ID         : 11312
+# Current directory  : D:/puf-drone-auth/data/d1_evidence/rootcause/sim
+# Command line       : xsim.exe -mode tcl -source {xsim.dir/snap_chip/xsim_script.tcl}
+# Log file           : D:/puf-drone-auth/data/d1_evidence/rootcause/sim/xsim.log
+# Journal file       : D:/puf-drone-auth/data/d1_evidence/rootcause/sim\xsim.jou
+# Running On         : <host>
+# Platform           : Windows 11
+# Operating System   : 26200
+# Processor Detail   : Intel(R) Core(TM) Ultra 5 125H
+# CPU Frequency      : 2995 MHz
+# CPU Physical cores : 14
+# CPU Logical cores  : 18
+# Host memory        : 25196 MB
+# Swap memory        : 12348 MB
+# Total Virtual      : 37544 MB
+# Available Virtual  : 18526 MB
+#-----------------------------------------------------------
+source xsim.dir/snap_chip/xsim_script.tcl
+# xsim {snap_chip} -autoloadwcfg -runall
+Time resolution is 1 ps
+run -all
+E7 chipÿÿÿÂ±1% jitter)  half_ps: 2970 3007 2983 3020 2996 2972 3009 2985 3022 2998 2974 3011 2987 3024 3000 2976
+   counts: 5260 5196 5238 5174 5215 5258 5193 5235 5171 5211 5254 5189 5231 5167 5209 5250
+   analytic: 5260 5196 5238 5173 5215 5257 5192 5234 5170 5211 5253 5189 5231 5166 5208 5250
+E7 chipB (Aÿÿ±5%/ring)  half_ps: 2822 3016 2849 3044 2876 3011 2904 3039 2931 3067 2900 3095 2927 3124 2955 3089
+   counts: 5537 5181 5484 5133 5433 5189 5381 5141 5331 5094 5388 5049 5338 5002 5287 5058
+   analytic: 5536 5180 5484 5133 5432 5189 5380 5141 5330 5094 5387 5048 5338 5001 5287 5058
+E7 chipC (Aÿÿ±10%/ring) half_ps: 2673 2944 3156 2827 3041 3251 2925 3137 2807 3022 3233 2906 3118 2788 3003 3214
+   counts: 5845 5308 4951 5527 5139 4806 5342 4980 5566 5171 4833 5377 5011 5604 5203 4861
+   analytic: 5845 5307 4950 5527 5138 4806 5341 4980 5566 5170 4832 5376 5011 5604 5203 4861
+E7 chipM (matched)     half_ps: 3000 3000 3000 3000 3000 3000 3000 3000 3000 3000 3000 3000 3000 3000 3000 3000
+   counts: 5209 5209 5209 5209 5209 5209 5209 5209 5209 5209 5209 5209 5209 5209 5209 5209
+   analytic: 5208 5208 5208 5208 5208 5208 5208 5208 5208 5208 5208 5208 5208 5208 5208 5208
+E7 chipM2(matched+5%)  half_ps: 3150 3150 3150 3150 3150 3150 3150 3150 3150 3150 3150 3150 3150 3150 3150 3150
+   counts: 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960
+   analytic: 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960 4960
+E7 R1 chipA : 232785fa816959b5 ca4db6a399a07e23 5ecf801aa81d25d5 279837263390b6d6
+E7 R1 chipB : a9254ddba56ce1f1 1829244bbdaa7e11 7ed05409b93944c7 353e365c7980a696
+E7 R1 chipC : dd987b0d7cb6e6ca 34b00958675e85d8 211077ed55e05a0a 582748d84c6d412d
+E7 R1 chipM : 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+E7 R1 chipM2: 0000000000000000 0000000000000000 0000000000000000 0000000000000000
+E7 HD(256bit) chipB vs chipA = 80
+E7 HD(256bit) chipC vs chipA = 224
+E7 HD(256bit) chipM2 vs chipM = 0
+E7 HD(256bit) chipM vs chipA = 124
+TB_CHIP_INJECT_DONE
+$finish called at time : 1082160 ns : File "D:/puf-drone-auth/data/d1_evidence/rootcause/sim/tb_chip_inject.v" Line 174
+run: Time (s): cpu = 00:00:00 ; elapsed = 00:00:24 . Memory (MB): peak = 238.777 ; gain = 0.000
+exit
+INFO: xsimkernel Simulation Memory Usage: 20728 KB (Peak: 20728 KB), Simulation CPU Usage: 23374 ms
+INFO: [Common 17-206] Exiting xsim at Sun Nov  1 16:13:04 2026...

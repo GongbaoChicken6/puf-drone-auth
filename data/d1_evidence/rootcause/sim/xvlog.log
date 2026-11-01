@@ -1,0 +1,34 @@
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/w1_ratio/ro_ring.v" into library work
+INFO: [VRFC 10-311] analyzing module ro_ring
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/w1_ratio/ro_div.v" into library work
+INFO: [VRFC 10-311] analyzing module ro_div
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/w2_array/ro_array.v" into library work
+INFO: [VRFC 10-311] analyzing module ro_array
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/w2_array/challenge_decode.v" into library work
+INFO: [VRFC 10-311] analyzing module challenge_decode
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/w2_array/ro_entropy.v" into library work
+INFO: [VRFC 10-311] analyzing module ro_entropy
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/w2_array/w2_top.v" into library work
+INFO: [VRFC 10-311] analyzing module w2_top
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/common/crc16_mcrf4xx.v" into library work
+INFO: [VRFC 10-311] analyzing module crc16_mcrf4xx
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/common/mavlink_frame.v" into library work
+INFO: [VRFC 10-311] analyzing module mavlink_frame
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/common/frame_parser.v" into library work
+INFO: [VRFC 10-311] analyzing module frame_parser
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/common/byte_fifo.v" into library work
+INFO: [VRFC 10-311] analyzing module byte_fifo
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/common/uart_tx.v" into library work
+INFO: [VRFC 10-311] analyzing module uart_tx
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/common/uart_rx.v" into library work
+INFO: [VRFC 10-311] analyzing module uart_rx
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/common/speck64_96.v" into library work
+INFO: [VRFC 10-311] analyzing module speck64_96
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/w3_protocol/terminal_fsm.v" into library work
+INFO: [VRFC 10-311] analyzing module terminal_fsm
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/src/rtl/w3_protocol/w3_top.v" into library work
+INFO: [VRFC 10-311] analyzing module w3_top
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/sim/tb/ro_array_sim.v" into library work
+INFO: [VRFC 10-311] analyzing module ro_array_sim
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/puf-drone-auth/data/d1_evidence/rootcause/sim/tb_puf_path_inject.v" into library work
+INFO: [VRFC 10-311] analyzing module tb_puf_path_inject

@@ -1,0 +1,25 @@
+#-----------------------------------------------------------
+# xsim v2026.1 (64-bit)
+# SW Build 6511674 on Tue Jun 16 11:02:23 MDT 2026
+# IP Build 6504888 on Tue Jun 09 09:05:25 MDT 2026
+# SharedData Build 6501428 on Mon Jun 08 17:34:18 MDT 2026
+# Start of session at: Sun Nov  1 16:16:06 2026
+# Process ID         : 5004
+# Current directory  : D:/puf-drone-auth/data/d1_evidence/rootcause/sim/run_chip_pm1
+# Command line       : xsim.exe -mode tcl -source {xsim.dir/snap_pufinj/xsim_script.tcl}
+# Log file           : D:/puf-drone-auth/data/d1_evidence/rootcause/sim/run_chip_pm1/xsim.log
+# Journal file       : D:/puf-drone-auth/data/d1_evidence/rootcause/sim/run_chip_pm1\xsim.jou
+# Running On         : <host>
+# Platform           : Windows 11
+# Operating System   : 26200
+# Processor Detail   : Intel(R) Core(TM) Ultra 5 125H
+# CPU Frequency      : 2995 MHz
+# CPU Physical cores : 14
+# CPU Logical cores  : 18
+# Host memory        : 25196 MB
+# Swap memory        : 12348 MB
+# Total Virtual      : 37544 MB
+# Available Virtual  : 18152 MB
+#-----------------------------------------------------------
+source xsim.dir/snap_pufinj/xsim_script.tcl
+run -all

@@ -1,0 +1,42 @@
+#-----------------------------------------------------------
+# xsim v2026.1 (64-bit)
+# SW Build 6511674 on Tue Jun 16 11:02:23 MDT 2026
+# IP Build 6504888 on Tue Jun 09 09:05:25 MDT 2026
+# SharedData Build 6501428 on Mon Jun 08 17:34:18 MDT 2026
+# Start of session at: Sun Nov  1 16:16:20 2026
+# Process ID         : 12544
+# Current directory  : D:/puf-drone-auth/data/d1_evidence/rootcause/sim/run_chip_pm5
+# Command line       : xsim.exe -mode tcl -source {xsim.dir/snap_pufinj/xsim_script.tcl}
+# Log file           : D:/puf-drone-auth/data/d1_evidence/rootcause/sim/run_chip_pm5/xsim.log
+# Journal file       : D:/puf-drone-auth/data/d1_evidence/rootcause/sim/run_chip_pm5\xsim.jou
+# Running On         : <host>
+# Platform           : Windows 11
+# Operating System   : 26200
+# Processor Detail   : Intel(R) Core(TM) Ultra 5 125H
+# CPU Frequency      : 2995 MHz
+# CPU Physical cores : 14
+# CPU Logical cores  : 18
+# Host memory        : 25196 MB
+# Swap memory        : 12348 MB
+# Total Virtual      : 37544 MB
+# Available Virtual  : 18117 MB
+#-----------------------------------------------------------
+source xsim.dir/snap_pufinj/xsim_script.tcl
+# xsim {snap_pufinj} -autoloadwcfg -runall
+Time resolution is 1 ps
+run -all
+[FSM] 0 -> 12 @95000
+[FSM] 12 -> 1 @645000
+[FSM] 1 -> 2 @855000
+[FSM] 2 -> 13 @895000
+[FSM] 13 -> 14 @83215000
+[FSM] 14 -> 15 @88495000
+[FSM] 15 -> 4 @88815000
+[FSM] 4 -> 5 @89185000
+INJECT_FREQS 0c5c 0df4 0db2 0f34 1026 132c 13cf 1550 148c 16da 18d6 1b99 1aa6 2350 233b 268c
+INJECT_R1 A=6677fea45a8b061e B=d596f7144a4181cf C=872e6a54c752cf34 D=aed5f9a3967ed9c2
+INJECT_WINCOUNT 8 (warmup 7 + final 1)
+TB_PUF_INJECT_DONE
+$finish called at time : 89190 ns : File "D:/puf-drone-auth/data/d1_evidence/rootcause/sim/tb_puf_path_inject.v" Line 185
+exit
+INFO: [Common 17-206] Exiting xsim at Sun Nov  1 16:16:22 2026...

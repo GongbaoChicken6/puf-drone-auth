@@ -1,0 +1,15 @@
+
+****** xsim v2026.1 (64-bit)
+  **** SW Build 6511674 on Tue Jun 16 11:02:23 MDT 2026
+  **** IP Build 6504888 on Tue Jun 09 09:05:25 MDT 2026
+  **** SharedData Build 6501428 on Mon Jun 08 17:34:18 MDT 2026
+  **** Start of session at: Sun Nov  1 16:09:05 2026
+    ** Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+    ** Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+
+source xsim.dir/snap_ro_en/xsim_script.tcl
+# xsim {snap_ro_en} -autoloadwcfg -runall
+Time resolution is 1 ps
+run -all
+E6: ring_en=0 phase; sample ring0 ro wire = 1 (loop statically resolved)
+E6: enabling ring_en 0->1 now (expect zero-delay oscillation / iteration limit)

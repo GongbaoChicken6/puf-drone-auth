@@ -1,0 +1,26 @@
+0.7
+2020.2
+Jun 16 2026
+11:10:11
+D:/puf-drone-auth/data/d1_evidence/rootcause/sim/ro_array_timed.v,1793520122,verilog,,D:/puf-drone-auth/data/d1_evidence/rootcause/sim/tb_ro_real_x.v,,ro_array_timed,,,,,,,,
+D:/puf-drone-auth/data/d1_evidence/rootcause/sim/ro_ring_timed.v,1793520122,verilog,,D:/puf-drone-auth/data/d1_evidence/rootcause/sim/ro_array_timed.v,,ro_ring_timed,,,,,,,,
+D:/puf-drone-auth/data/d1_evidence/rootcause/sim/tb_chip_inject.v,1793520248,verilog,,,,tb_chip_inject,,,,,,,,
+D:/puf-drone-auth/data/d1_evidence/rootcause/sim/tb_puf_path_inject.v,1793520206,verilog,,,,tb_puf_path_inject,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/data/d1_evidence/rootcause/sim/tb_ro_real_en.v,1793520138,verilog,,D:/puf-drone-auth/data/d1_evidence/rootcause/sim/tb_chip_inject.v,,tb_ro_real_en,,,,,,,,
+D:/puf-drone-auth/data/d1_evidence/rootcause/sim/tb_ro_real_x.v,1793520138,verilog,,D:/puf-drone-auth/data/d1_evidence/rootcause/sim/tb_ro_real_en.v,,tb_ro_real_x,,,,,,,,
+D:/puf-drone-auth/sim/tb/ro_array_sim.v,1792068818,verilog,,D:/puf-drone-auth/data/d1_evidence/rootcause/sim/tb_puf_path_inject.v,,ro_array_sim,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/common/byte_fifo.v,1791199197,verilog,,D:/puf-drone-auth/src/rtl/common/uart_tx.v,,byte_fifo,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/common/crc16_mcrf4xx.v,1791186484,verilog,,D:/puf-drone-auth/src/rtl/common/mavlink_frame.v,,crc16_mcrf4xx,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/common/frame_parser.v,1791274587,verilog,,D:/puf-drone-auth/src/rtl/common/byte_fifo.v,,frame_parser,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/common/mavlink_frame.v,1791188608,verilog,,D:/puf-drone-auth/src/rtl/common/frame_parser.v,,mavlink_frame,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/common/speck64_96.v,1791281241,verilog,,D:/puf-drone-auth/src/rtl/w3_protocol/terminal_fsm.v,,speck64_96,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/common/uart_rx.v,1793084913,verilog,,D:/puf-drone-auth/src/rtl/common/speck64_96.v,,uart_rx,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/common/uart_tx.v,1791199197,verilog,,D:/puf-drone-auth/src/rtl/common/uart_rx.v,,uart_tx,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/w1_ratio/ro_div.v,1790339909,verilog,,D:/puf-drone-auth/src/rtl/w2_array/ro_array.v,,ro_div,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/w1_ratio/ro_ring.v,1790339910,verilog,,D:/puf-drone-auth/src/rtl/w1_ratio/ro_div.v,,ro_ring,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/w2_array/challenge_decode.v,1791178144,verilog,,D:/puf-drone-auth/src/rtl/w2_array/ro_entropy.v,,challenge_decode,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/w2_array/ro_array.v,1791270479,verilog,,D:/puf-drone-auth/src/rtl/w2_array/challenge_decode.v,,ro_array,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/w2_array/ro_entropy.v,1792676355,verilog,,D:/puf-drone-auth/src/rtl/w2_array/w2_top.v,,ro_entropy,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/w2_array/w2_top.v,1791272262,verilog,,D:/puf-drone-auth/src/rtl/common/crc16_mcrf4xx.v,,w2_top,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/w3_protocol/terminal_fsm.v,1792676355,verilog,,D:/puf-drone-auth/src/rtl/w3_protocol/w3_top.v,,terminal_fsm,,,,PUF_MODEL_SIM,,,,
+D:/puf-drone-auth/src/rtl/w3_protocol/w3_top.v,1792723752,verilog,,D:/puf-drone-auth/sim/tb/ro_array_sim.v,,w3_top,,,,PUF_MODEL_SIM,,,,

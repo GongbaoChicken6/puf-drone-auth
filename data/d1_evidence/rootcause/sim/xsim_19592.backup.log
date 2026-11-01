@@ -1,0 +1,49 @@
+#-----------------------------------------------------------
+# xsim v2026.1 (64-bit)
+# SW Build 6511674 on Tue Jun 16 11:02:23 MDT 2026
+# IP Build 6504888 on Tue Jun 09 09:05:25 MDT 2026
+# SharedData Build 6501428 on Mon Jun 08 17:34:18 MDT 2026
+# Start of session at: Sun Nov  1 16:04:40 2026
+# Process ID         : 19592
+# Current directory  : D:/puf-drone-auth/data/d1_evidence/rootcause/sim
+# Command line       : xsim.exe -mode tcl -source {xsim.dir/snap_ro_x/xsim_script.tcl}
+# Log file           : D:/puf-drone-auth/data/d1_evidence/rootcause/sim/xsim.log
+# Journal file       : D:/puf-drone-auth/data/d1_evidence/rootcause/sim\xsim.jou
+# Running On         : <host>
+# Platform           : Windows 11
+# Operating System   : 26200
+# Processor Detail   : Intel(R) Core(TM) Ultra 5 125H
+# CPU Frequency      : 2995 MHz
+# CPU Physical cores : 14
+# CPU Logical cores  : 18
+# Host memory        : 25196 MB
+# Swap memory        : 12348 MB
+# Total Virtual      : 37544 MB
+# Available Virtual  : 18468 MB
+#-----------------------------------------------------------
+source xsim.dir/snap_ro_x/xsim_script.tcl
+# xsim {snap_ro_x} -autoloadwcfg -runall
+Time resolution is 1 ps
+run -all
+E5 ring_freq (real zero-delay ring, en=1 from t0):
+  ring[0] freq = 0x0000 (0)
+  ring[1] freq = 0x0000 (0)
+  ring[2] freq = 0x0000 (0)
+  ring[3] freq = 0x0000 (0)
+  ring[4] freq = 0x0000 (0)
+  ring[5] freq = 0x0000 (0)
+  ring[6] freq = 0x0000 (0)
+  ring[7] freq = 0x0000 (0)
+  ring[8] freq = 0x0000 (0)
+  ring[9] freq = 0x0000 (0)
+  ring[10] freq = 0x0000 (0)
+  ring[11] freq = 0x0000 (0)
+  ring[12] freq = 0x0000 (0)
+  ring[13] freq = 0x0000 (0)
+  ring[14] freq = 0x0000 (0)
+  ring[15] freq = 0x0000 (0)
+E5 RESULT: all 16 counters = 0 -> any freq[B]>freq[A] is false -> R1 == 64'h0 for EVERY challenge (chip-independent constant)
+TB_RO_REAL_X_DONE
+$finish called at time : 20170 ns : File "D:/puf-drone-auth/data/d1_evidence/rootcause/sim/tb_ro_real_x.v" Line 41
+exit
+INFO: [Common 17-206] Exiting xsim at Sun Nov  1 16:04:44 2026...
