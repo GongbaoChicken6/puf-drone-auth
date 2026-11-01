@@ -46,7 +46,8 @@ def response_bits(seed_int, rank):
 def hd(x, y):
     return bin(x ^ y).count("1")
 
-d = json.load(open(r"D:\puf-drone-auth\data\templates\templates.json", encoding="utf-8"))
+from pathlib import Path as _P
+d = json.load(open(_P(__file__).resolve().parents[2] / "data/templates/templates.json", encoding="utf-8"))
 t1 = d["1"]
 seeds = sorted(t1.keys())
 print(f"A. tid=1 模板：{len(seeds)} CRP")

@@ -10,6 +10,8 @@ set SN  [lindex $argv 1]
 if {$BIT eq ""} { puts "ERROR: 用法 program_zc706.tcl <bit> [serial]"; exit 2 }
 if {![file exists $BIT]} { puts "ERROR: bit 文件不存在: $BIT"; exit 2 }
 puts "PROGRAM: 目标 $BIT"
+# auto-review P3: 变体横幅防烧错（硬校验走预登记 SHA 规约）
+if {[string match "*seed2*" $BIT]} { puts "VARIANT: seed2 (layout-variant B, rings->X1Y0) size=[file size $BIT]" } elseif {[string match "*prod*" $BIT]} { puts "VARIANT: PRODUCTION baseline size=[file size $BIT]" } else { puts "VARIANT: UNKNOWN naming -- verify against prereg SHA! size=[file size $BIT]" }
 open_hw_manager
 connect_hw_server -url localhost:3121
 set ts [get_hw_targets -quiet]

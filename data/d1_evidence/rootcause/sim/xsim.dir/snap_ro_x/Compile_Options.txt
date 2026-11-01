@@ -1,1 +1,0 @@
--debug "typical" "tb_ro_real_x" -s "snap_ro_x" 

@@ -64,6 +64,9 @@ desktop.ini
 xsim.dir/
 xsim/*.log
 glbl.v
+# rootcause 证据包内的仿真器二进制（可再生；载荷 .jou/.log/.mem 保留入库）
+data/d1_evidence/rootcause/sim/xsim.dir/
+*.vvp
 
 # Data: exclude large raw datasets
 data/crp_datasets/*.csv.gz
@@ -104,8 +107,8 @@ build/gh_auth.ps1
 
 # Bring-up/debug Vivado projects (generated; keep only tcl/rtl debug assets under build/dbg/)
 build/board_zc706_*/
-# 布局变体工程产物须入库（bit/rpt/MANIFEST，auto-review 2026-11-01）
-!build/board_zc706_seed2/
+# 布局变体工程产物须入库（bit/rpt/MANIFEST，auto-review 2026-11-01；seed* 通配覆盖未来 seed3+）
+!build/board_zc706_seed*/
 # Frontend generated output
 web/.out/
 # Vivado xsim / MCP session artifacts at repo root

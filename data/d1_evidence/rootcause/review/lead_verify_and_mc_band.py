@@ -4,7 +4,9 @@ A. 复验 EXPERIMENT_LOG 系统级注入两处数字（repro 报告称 ±1%应=0
 B. 用 tid=1 真实 enrolled 配对表，蒙特卡洛 2000 次「独立随机全序」的轮 HD(4种子) 分布
 """
 import json, re, sys, random
-sys.path.insert(0, r"D:\puf-drone-auth")
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(ROOT))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from src.python.evaluation.puf_model import decode_pair_table, N_RINGS
 
@@ -31,7 +33,7 @@ for name, arr in sorted(r1s.items()):
         print(f"   {name}: per-seed={[hd(a,b) for a,b in zip(base,arr)]} total={sum(hd(a,b) for a,b in zip(base,arr))}")
 
 # ---- B. 轮 HD 分布 MC（真实 enrolled 配对表） ----
-d = json.load(open(r"D:\puf-drone-auth\data\templates\templates.json", encoding="utf-8"))
+d = json.load(open(ROOT / "data/templates/templates.json", encoding="utf-8"))
 t1 = d["1"]
 seeds = [int(s, 16) for s in t1.keys()]
 tmpl = [int(r, 16) for r in t1.values()]

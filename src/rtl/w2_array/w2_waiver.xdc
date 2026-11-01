@@ -8,3 +8,7 @@
 # W2 的 16 个环在 ro_array 的 gen_ro_ring[0..15] 生成块里，网名带方括号索引，
 # 用 -hierarchical + name 过滤一次覆盖全部实例（层次网名经 DONT_TOUCH 保持稳定）：
 set_property ALLOW_COMBINATORIAL_LOOPS TRUE [get_nets -hierarchical -filter {NAME =~ "*gen_ro_ring*/u_ro_ring/n1"}]
+# ⚠ auto-review P3 注记（2026-11-01）：每次板级构建本 XDC 在综合前/实现前各触发一次
+#   WARNING 12-1023 + CRITICAL WARNING 17-55（静默 0 匹配，已知无害模式）——请勿以"清零
+#   CRITICAL WARNING"为由删除 build_w3_board*.tcl 里综合后重应用段，否则 32 个 LUTLP-1
+#   将回到 bitstream DRC 才暴露。

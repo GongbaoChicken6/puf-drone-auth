@@ -1,0 +1,29 @@
+﻿base freqs: [3330, 3561, 3671, 3861, 4306, 4845, 5255, 5360, 5423, 5718, 6521, 6873, 6961, 8751, 9156, 9507]
+base R1: 6677fea45a09061f d5b6f7144a4181df 872e6a55e752cf34 aed5f9a3967ed9c2
+
+=== differential per-ring mismatch (chipB = base x (1+U(-k,k)%)) ===
+k= 0.10%  mean HD=   0.0/256  min=0  median=0  max=0
+k= 0.25%  mean HD=   0.0/256  min=0  median=0  max=0
+k= 0.50%  mean HD=   0.0/256  min=0  median=0  max=0
+k= 1.00%  mean HD=   0.2/256  min=0  median=0  max=3
+k= 2.00%  mean HD=   0.8/256  min=0  median=0  max=8
+k= 5.00%  mean HD=   4.5/256  min=0  median=4  max=15
+k=10.00%  mean HD=  10.9/256  min=0  median=11  max=27
+k=20.00%  mean HD=  23.1/256  min=5  median=23  max=46
+k=30.00%  mean HD=  34.8/256  min=8  median=35  max=69
+
+=== common-mode (all rings scaled, mismatch=0) ===
+scale=1.05: HD=0
+scale=1.1: HD=0
+scale=0.9: HD=0
+
+=== matched array (all rings equal counts) ===
+R1: 0000000000000000 0000000000000000 0000000000000000 0000000000000000  HD vs base = 138
+matched x1.05: HD vs matched = 0  (chip-independent constant response)
+matched x0.95: HD vs matched = 0  (chip-independent constant response)
+
+=== pair-gap structure of the base fixture (why small mismatch cannot flip bits) ===
+256 compared pairs: relative gap min=1.16%  p25=17.9%  median=29.5%  p75=44.5%  max=65.0%
+pairs with relative gap < 1%: 0 / 256
+pairs with relative gap < 2%: 4 / 256
+pairs with relative gap < 5%: 17 / 256

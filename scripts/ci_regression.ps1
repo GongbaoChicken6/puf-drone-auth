@@ -181,6 +181,46 @@ foreach ($c in $wchecks) {
 if ($wfail -gt 0) { Write-Host "WRAPPER_LOCK_FAIL ($wfail issue(s))"; exit 1 }
 Write-Host "  [PASS] wrapper 3-element lock (reset direct / rst_n invert / SEED_GATE_EN=1)"
 
+# B-LOCK(auto-review 2026-11-01, seed2 5-way review): board-tcl invariant locks,
+# dual-build filelist consistency, artifact manifest + prereg hash pinning.
+# arm_dap lesson (7fb8e69): broken board scripts otherwise surface only on hardware.
+# Keep pure ASCII (see note above).
+Write-Host "=== CI: Board-tcl lock + manifest check ==="
+$bfail = 0
+$bchecks = @(
+    @{ f = 'build	clprogram_zc706.tcl';        pat = 'string match "xc7z045*"';            desc = 'device prefix scan (arm_dap fix 7fb8e69)' },
+    @{ f = 'build	clprogram_zc706.tcl';        pat = 'VARIANT:';                            desc = 'variant banner present' },
+    @{ f = 'build	cluild_w3_board_seed2.tcl'; pat = 'set pick "X1Y0"';                     desc = 'seed2 region pinned' },
+    @{ f = 'build	cluild_w3_board_seed2.tcl'; pat = 'ring_inst_uniq] != 32';               desc = '32-ring exact assertion' },
+    @{ f = 'build	cluild_w3_board_seed2.tcl'; pat = 'delay_type min';                      desc = 'WHS hold gate' },
+    @{ f = 'build	cluild_w3_board_seed2.tcl'; pat = 'TIMING_FAILED';                       desc = 'timing gate sentinel' },
+    @{ f = 'build	cluild_w3_board_seed2.tcl'; pat = 'BITSTREAM.CONFIG.USERID';             desc = 'bit variant USERID' },
+    @{ f = 'build	clquery_targets.tcl';        pat = 'get_hw_targets';                      desc = 'JTAG oracle query' }
+)
+foreach ($c in $bchecks) {
+    $t = Get-Content -Raw -Encoding UTF8 $c.f
+    if (-not $t.Contains($c.pat)) {
+        Write-Host "  [FAIL] BOARD_LOCK: $($c.f): $($c.desc)"
+        $bfail++
+    }
+}
+$qt = Get-Content -Raw -Encoding UTF8 'build	clquery_targets.tcl'
+if ($qt.Contains('program_hw_devices')) { Write-Host "  [FAIL] BOARD_LOCK: query_targets.tcl no longer read-only"; $bfail++ }
+$flPat = '\$SRC/rtl/[A-Za-z0-9_/]+\.v'
+$flA = [regex]::Matches((Get-Content -Raw -Encoding UTF8 'build\tcl\build_w3_board.tcl'), $flPat) | ForEach-Object { $_.Value } | Sort-Object
+$flB = [regex]::Matches((Get-Content -Raw -Encoding UTF8 'build\tcl\build_w3_board_seed2.tcl'), $flPat) | ForEach-Object { $_.Value } | Sort-Object
+if (Compare-Object $flA $flB) { Write-Host "  [FAIL] BOARD_LOCK: build filelists diverge (prod vs seed2)"; $bfail++ }
+$mani  = Get-Content -Raw -Encoding UTF8 'build\board_zc706_seed2\MANIFEST.txt'
+$bitSha = [regex]::Match($mani, 'SHA256:\s*([0-9A-F]{64})').Groups[1].Value
+$actual = (Get-FileHash 'build\board_zc706_seed2\w3_top_zc706_seed2.bit' -Algorithm SHA256).Hash
+if ($bitSha -ne $actual) { Write-Host "  [FAIL] BOARD_LOCK: seed2 bit hash drift vs MANIFEST ($bitSha != $actual)"; $bfail++ }
+$prereg = Get-Content -Raw -Encoding UTF8 'data\d1_evidence\rootcause\seed2_board_preregistration.md'
+$prodActual = (Get-FileHash 'data\bitstreams\w3_top_zc706_prod_20261027.bit' -Algorithm SHA256).Hash
+if (-not $prereg.Contains($prodActual)) { Write-Host "  [FAIL] BOARD_LOCK: production bit hash not pinned in prereg"; $bfail++ }
+if (-not $prereg.Contains($actual))     { Write-Host "  [FAIL] BOARD_LOCK: seed2 bit hash not pinned in prereg";     $bfail++ }
+if ($bfail -gt 0) { Write-Host "BOARD_LOCK_FAIL ($bfail issue(s))"; exit 1 }
+Write-Host "  [PASS] board-tcl locks + filelist consistency + manifest/prereg hash pinning"
+
 Write-Host "=== CI: Compile ==="
 Remove-Item xsim.dir -Recurse -Force -ErrorAction SilentlyContinue
 $sw = [System.Diagnostics.Stopwatch]::StartNew()

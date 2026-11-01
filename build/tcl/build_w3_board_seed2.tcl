@@ -7,7 +7,7 @@
 # 与 build_w3_board.tcl 的差异（全部标注 SEED2）：
 #   1) 环振单元 PBlock 重定位（布局差异化的唯一来源）
 #   2) 输出 w3_top_zc706_seed2.bit + ring_sites_seed2.rpt（落位证据）
-#   3) 其余逐字复用生产流程（同源/同约束/同豁免/同时序门禁）
+#   3) 其余与生产流程功能等价（同源/同约束/同豁免/同时序门禁；非逐字拷贝，见 CI 清单一致性锁）
 set PART [lindex $argv 0]
 set OD   [lindex $argv 1]
 set SRC  [lindex $argv 2]
@@ -119,5 +119,7 @@ close $rf
 puts "SEED2 region tally: X1Y0=$inregion seam=$seam"
 if {$inregion + $seam != 160} { puts "ERROR: SEED2 region tally incomplete"; exit 12 }
 
+# auto-review P3: 机内变体标识（当前入库 bit 未重建不含此属性，见 README 已知边界；自下次构建生效）
+set_property BITSTREAM.CONFIG.USERID 0x5EED0002 [current_design]
 write_bitstream -force $OD/w3_top_zc706_seed2.bit
 puts "BITSTREAM_SUCCESS WNS=$wns WHS=$whs SEED2_REGION=$pick"

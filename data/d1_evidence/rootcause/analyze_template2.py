@@ -3,12 +3,14 @@
 import json, sys, itertools
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-path = r"D:\puf-drone-auth\data\templates\templates.json"
+from pathlib import Path
+path = str(Path(__file__).resolve().parents[2] / "data/templates/templates.json")
 d = json.load(open(path, encoding="utf-8"))
 
 def bits(x, n=64):
     if isinstance(x, str):
         x = int(x, 16)
+    assert 0 <= x < (1 << n), f"条目超 64bit（数据损坏？）: {x!r}"  # auto-review P3: 防短/长条目静默
     return [(x >> (n - 1 - i)) & 1 for i in range(n)]
 
 def hd(a, b):

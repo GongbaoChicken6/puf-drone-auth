@@ -142,8 +142,10 @@ module tb_puf_path_inject;
                 @(posedge clk);
                 guard = guard + 1;
             end
-            if (guard >= 300000)
-                $display("[T] ERROR: R1 frame timeout (%0d bytes)", nbytes);
+            if (guard >= 300000) begin
+                $display("TB_PUF_INJECT_FAIL (R1 frame timeout, %0d bytes)", nbytes);
+                $fatal(1, "R1 frame timeout");  // auto-review P3: 错误即停，不再错误打印后继续出 DONE
+            end
             repeat (2) @(negedge clk);
         end
     endtask

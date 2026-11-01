@@ -9,7 +9,7 @@ import random
 import sys
 from pathlib import Path
 
-ROOT = Path(r"D:\puf-drone-auth")
+ROOT = Path(__file__).resolve().parents[4]   # data/d1_evidence/rootcause/sim -> 仓库根
 sys.path.insert(0, str(ROOT))
 from src.python.evaluation.puf_model import ROPairingPUF, decode_pair_table  # noqa: E402
 

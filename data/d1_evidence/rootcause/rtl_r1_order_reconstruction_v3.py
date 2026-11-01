@@ -5,7 +5,9 @@
   G. 双硅数值演示（仓库 puf_model，只读）
 """
 import json, re, sys, random
-sys.path.insert(0, r"D:\puf-drone-auth")
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[2]   # 仓库根（auto-review P2: 去绝对路径硬编码）
+sys.path.insert(0, str(ROOT))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from src.python.server.protocol import HFIDAProtocol
 from src.python.evaluation.puf_model import decode_pair_table, ROPairingPUF, N_RINGS
@@ -21,7 +23,9 @@ def response_int(seed_int, rank):
 def hd(x, y): return bin(x ^ y).count("1")
 
 # ---- 反推全序：胜场法（bit=1 <=> freq[B]>freq[A]，赢家=B；bit=0 赢家=A）----
-d = json.load(open(r"D:\puf-drone-auth\data\templates\templates.json", encoding="utf-8"))
+_tpl = ROOT / "data/d1_evidence/rootcause/templates_snapshot_tid1_20261101.json"
+if not _tpl.exists(): _tpl = ROOT / "data/templates/templates.json"  # 快照缺失回退运行库（可能漂移）
+d = json.load(open(_tpl, encoding="utf-8"))
 t1 = d["1"]
 wins = [0] * N_RINGS
 dirvotes = {}   # 无序对 -> {环号: 票数}
@@ -48,7 +52,7 @@ assert tot == 0, f"全序复算模板 HD={tot} != 0：反推错误！"
 print(f"    自校验通过：全序正向复算 {len(t1)} CRP 总 HD=0，胜场=15..0（无矛盾全序）")
 
 # ---- F. 官方解帧 + 在线验证 ----
-log = open(r"D:\puf-drone-auth\data\d1_evidence\1101_假冒实验_双板均PASS_唯一性存疑.log", encoding="utf-8").read()
+log = open(ROOT / "data/d1_evidence/1101_假冒实验_双板均PASS_唯一性存疑.log", encoding="utf-8").read()
 frames = re.findall(r"\[(?:WIRE [0-9:.]+)\] (?:TX|RX)RAW ([0-9a-f]+)", log)
 chal, r1f, resf = [], [], []
 for hx in frames:
