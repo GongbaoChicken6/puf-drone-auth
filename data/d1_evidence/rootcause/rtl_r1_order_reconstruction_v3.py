@@ -58,6 +58,10 @@ for hx in frames:
     elif mid == HFIDAProtocol.MSG_RESPONSE_R1: r1f.append(f["r1s"])
     elif mid == HFIDAProtocol.MSG_RESULT: resf.append((f["result"], f["hd"]))
 print(f"F1. 官方解帧: CHALLENGE={len(chal)} RESPONSE_R1={len(r1f)} RESULT={len(resf)}（CRC 全过）")
+# auto-review P1 修复（silent-failure #4）：空集合=假绿灯，必须响亮失败
+assert len(chal) > 0, "F 段空集合：日志正则 0 匹配（格式漂移？）——拒绝空洞验证"
+assert len(chal) == len(r1f) == len(resf), f"F 段帧数不齐 chal/r1/res={len(chal)}/{len(r1f)}/{len(resf)}——拒绝静默截断"
+print("F_ASSERT_OK")
 print("F2. 三轮在线验证（模板全序预测 vs 板实测 R1）：")
 for i, (seeds, r1s) in enumerate(zip(chal, r1f)):
     per = []; flip_pairs = []
