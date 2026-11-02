@@ -1,106 +1,131 @@
-# 参考工程（PUF_ARTY_S7）借鉴集成实施方案 · M1-M4
+# 参考工程（PUF_ARTY_S7）借鉴集成实施方案 · M1-M4 · v2
 
-日期：2026-11-02（D2）｜依据：docs/PUF_ARTY_S7_reference_comparison_20261102.md｜死线：11-03 保守
-原则：先虚拟后上板（全部四项先在模型/单测层验证）；证据落盘；断言正向；不碰生产 bit 与已验证 seed2。
+日期：2026-11-02（D2）｜v2 修订：第1轮计划审查（ar-spec-r1，报告 data/d1_evidence/rootcause/review/1102_ar-spec-r1_plan_review_M1-M4.md）门禁 FAIL 后全量修正
+依据：docs/PUF_ARTY_S7_reference_comparison_20261102.md｜死线 11-03 保守
+原则：先虚拟后上板；证据落盘；断言正向；零 RTL 改动；不碰生产 bit / 已验证 seed2 / prereg v2 锚点。
 
-## 0. 问题 → 措施映射（"确保问题消除"的三层防线）
+## 0. 问题 → 措施映射（v2 措辞校准）
 
 | 编号 | 问题（现状） | 措施 | 防线性质 |
 |---|---|---|---|
-| P-1 | 跨板唯一性失效（同 bit ⇒ 同指纹，11-01 实证） | seed2 已建；M4 提供逐环级细粒度差异化（seed3 备选+策略纵深） | **消除**（构建层） |
-| P-2 | 相似/相同指纹设备可静默注册（昨夜双板双模板无告警入库） | M3 enrollment 相关性守卫 | **防御**（服务层兜底：即使再来一次同布局板，第二次注册直接被拒） |
-| P-3 | 评测不成体系（无 uniformity/uniqueness/reliability/SAC 标准口径） | M1 三件套 + M2 SAC | **验证**（仪表：证明 P-1 已修复、给论文标准数字） |
-| P-4 | 布局差异化仅区域级（PBlock），无策略实验能力 | M4 逐环 LOC 生成器 | 消除+纵深 |
+| P-1 | 跨板唯一性失效（同 bit ⇒ 同布局 ⇒ 同指纹，11-01 实证；修复待板端确证） | seed2 已建（预登记待验证）；M4 逐环 LOC 为纵深/备选 | 消除（**待板端 P1 确证**） |
+| P-2 | 相似指纹设备可静默注册（11-01 经 auth 观测到同模板双板均 PASS；守卫防的是该场景进入注册库） | M3 **阶序签名守卫**（v1 共有 seed 方案被审查证伪：crp_pool 逐终端 CSPRNG 铸种、实测 10 对 tid 共有 seed=0） | 防御（服务层） |
+| P-3 | 评测不成体系 | M1 三件套 + M2 SAC | 验证 |
+| P-4 | 布局差异化仅区域级 | M4 | 纵深 |
 
-## 1. M3 · enrollment 相关性守卫（最高优先，~40 分钟）
+## 1. M3 · enrollment 阶序签名守卫（v2 重设计，90-120 分钟）
 
-### 动机（事故回放）
-11-01 夜：两块同 bitstream 板先后 enroll 成 tid=1/tid=2，两模板 mismatch≈0.4%，无任何告警——若守卫在场，第二次注册当场被拒：`ENROLL_REJECTED: new template correlates with tid=1 (mismatch=0.4% < 40%)`。
+### 动机（v2 校正史实）
+11-01 夜两块同 bitstream 板对同一 tid=1 模板 auth 均 PASS（HD=1/0），若当时执行 enroll 2 将把"同指纹"第二条模板静默入库。v1 方案按"共有 seed 算 mismatch"设计——第 1 轮审查证伪：crp_pool.py reserve() 逐终端铸全新 CSPRNG 种子（:164），实测现行库 10 对 tid 组合共有 seed=0，守卫必然空转；"mismatch≈0.4%"系将 auth 轮 HD 1/256=0.39% 误记（库里从未存在 tid=2）。v2 改用**种子无关的阶序签名**。
 
-### 设计
-- 挂载点：`TemplateDB.enroll()`（template_db.py:238，serial/loopback/web 桥全部注册路径的唯一咽喉）。
-- 规则（对齐参考工程 intra_uniqueness 的 [0.40,0.60] 区间）：
-  `mismatch(R_new, R_i) = HD(R_new, R_i) / n_bits`（只对两模板共有的 seed 取平均；无共有 seed 时跳过该模板并计数）
-  - min_i mismatch < CORR_LO(0.40) → 拒绝（CorrelatedTemplateError，含与谁、多少）
-  - mismatch > CORR_HI(0.60) → 拒绝（反相关异常，同参考工程双侧判据）
-  - 阈值为模块常量 + enroll() 形参可覆盖。
-- 豁免通道：
-  - `enroll(..., allow_correlated=True)`：显式逃生口（REPL `enroll <tid> <n> force`，供故意重录同一设备/实验场景）；
-  - 测试/演示：现有单测里"同一模型多 tid"场景改传 allow_correlated=True 或断言新错误类型（新增正向用例覆盖）。
-- REPL/日志输出：注册成功时打印与各既有模板的 mismatch 清单（一行/模板，`[GUARD] tid=1 mismatch=0.503 OK`），被拒时打印 `[GUARD] ENROLL_REJECTED ...`——证据落盘文化。
-- 决策点 D1（需你确认，默认执行）：清除运行库中演示残留 tid=7/9/55/99（rootcause/ 已有快照，两次事故源头），使守卫只面对真实终端；web 桥隔离目录（web/.dev-data）不受影响。
+### 机理与审查实证
+根因调查证明：指纹由 16 环频率全序唯一决定，全序可从任一模板反推（tid=1 真板 100 CRP：120/120 对覆盖、方向矛盾 0、复算 HD=0）。因此：
+- **同布局克隆 ⇒ 同全序 ⇒ 120 对一致度 agreement≈1.0（实测预期，仅近平局对噪声±2%）**
+- **独立布局 ⇒ 独立全序 ⇒ agreement 期望 0.5**（σ≈√(0.25/120)≈0.046，0.75 阈值≈5.5σ，假阳率可忽略）
+- 判决用 **120 对 Kendall 一致度**（与 CRP 位数无关），不用跨阶序预测 mismatch 的双侧带（审查实证独立序可低至 0.402、prereg MC p5≈0.34，双侧 [0.40,0.60] 有假阳）。
 
-### 改动文件
+### 新增模块 src/python/server/puf_order.py（骨架）
+```python
+def reconstruct_order(template: Mapping[str, str]) -> OrderResult:
+    """胜场计票反演全序（rootcause v3 同法）。
+    返回 OrderResult(order: list[int](快->慢), n_crps, pairs_covered,
+    contradiction_rate, usable: bool)
+    usable = n_crps >= MIN_CRPS(100) and pairs_covered >= 120 and contradiction_rate <= 0.02
+    —— 审查实证小模板不可靠（tid=55 24CRP 矛盾 83 处）"""
+def order_agreement(order_a, order_b) -> float:
+    """120 无序对中同向比例（Kendall 一致度，1.0=同序，0.5=独立）"""
+def predict_response(order, seed_int) -> int:
+    """decode_pair_table(seed) + order -> 64bit（M1 uniqueness 复用）"""
+```
+
+### 守卫逻辑（挂 template_db.enroll() :238，持久化之前）
+```python
+AGREE_REJECT = 0.75   # 克隆≈1.0 vs 独立≈0.5±0.046；>0.75 判相关
+new = reconstruct_order(pairs_as_template)
+for tid, existing in real_templates.items():
+    ex = cached_or_reconstruct(existing)
+    if not new.usable or not ex.usable:
+        skipped += 1; print(f"[GUARD] tid={tid} ORDER-SKIP (unreliable order)"); continue
+    a = order_agreement(new.order, ex.order)
+    print(f"[GUARD] tid={tid} agreement={a:.3f} {'REJECT' if a > AGREE_REJECT else 'OK'}")
+    if a > AGREE_REJECT and not allow_correlated:
+        raise CorrelatedTemplateError(tid, a)
+```
+- 无高侧拒绝（v1 的 mismatch>0.60 判据废除：一致度空间无此风险；重建失败→skip+WARN，**fail-open with alarm，不静默**）；
+- order 签名作为模板元数据随 enroll 落盘（templates.json 同文件 "order" 字段），比对免重算；
+- allow_correlated=True 逃生口（REPL `enroll <tid> <n> force`）；
+- serial_server 注册路径异常→RESULT_ERROR 帧（实施时核实其 enroll 调用点，沿 B-P2 文化）。
+
+### D1（清演示 tid，v2 改全库快照）
+执行顺序：先 `Copy-Item data/templates/templates.json → data/d1_evidence/rootcause/templates_snapshot_FULL_20261102.json`（**全库**快照，v1 只快照过 tid=1），再从运行库移除 7/9/55/99（演示序两两不同、不干扰阶序比对，但清理后守卫只面对真实终端）。演示数据可再生（web 桥隔离目录），快照仅为审计留底。
+
+### 改动文件（v2 补 CI 步）
 | 文件 | 改动 |
 |---|---|
-| src/python/server/template_db.py | enroll() 加 guard + CorrelatedTemplateError + 阈值常量 |
-| src/python/server/main.py | REPL enroll 命令支持 force 形参 + [GUARD] 输出 |
-| src/python/server/serial_server.py | 注册端点透传异常为 RESULT_ERROR（不炸 serve 循环，沿用 B-P2 文化） |
-| tests/test_template_guard.py（新） | 见验收表 |
-| 既有受影响单测 | 逐个对齐（预计≤3 处） |
+| src/python/server/puf_order.py | 新模块（反演/一致度/预测） |
+| src/python/server/template_db.py | enroll() 守卫 + order 元数据落盘 |
+| src/python/server/main.py | REPL enroll force 形参 + [GUARD] 输出 |
+| src/python/server/serial_server.py | CorrelatedTemplateError → RESULT_ERROR |
+| tests/test_template_guard.py | 新（用例表 v2） |
+| scripts/ci_regression.ps1 | **python 测试固定清单新增一行**（审查指出：清单逐文件硬编码，非自动发现） |
 
-### 验收（正向哨兵，全部进 CI）
-| 用例 | 输入 | 期望 |
-|---|---|---|
-| G1 独立模板 | 与既有 mismatch≈50% | 注册成功 + [GUARD] OK 行 |
-| G2 复刻昨夜事故 | 与既有 mismatch≈0.4% | CorrelatedTemplateError，模板库无写入 |
-| G3 反相关 | mismatch≈100% | 拒绝 |
-| G4 force 逃生 | G2 + allow_correlated=True | 成功 + 告警行 |
-| G5 首个终端 | 库空 | 直接成功（空集合不误杀） |
-| G6 无共有 seed | 完全不同挑战集 | 成功 + skipped 计数 |
-哨兵行：`GUARD_OK` / 用例名；CI 挂 tests/ 后 18→19+ 套全绿。
+### 验收用例 v2（全部阶序场景；命令与预期）
+| # | 构造 | 命令 | 预期输出（哨兵行） |
+|---|---|---|---|
+| G1 | 库含 tid=1；新模板=独立随机序 | `python -m pytest tests/test_template_guard.py -k G1_independent -q` | agreement≈0.5、注册成功、`GUARD_OK G1` |
+| G2 | 新模板=tid=1 同序克隆（构造同序响应） | `... -k G2_clone` | CorrelatedTemplateError、库无写入、`GUARD_REJECT G2 tid=1` |
+| G3 | 新模板仅 24 CRP（不可靠序） | `... -k G3_small` | skip+WARN、注册成功、`GUARD_SKIP G3` |
+| G4 | G2 + force | `... -k G4_force` | 成功 + 告警行、`GUARD_FORCE G4` |
+| G5 | 空库首个终端 | `... -k G5_first` | 直接成功（空集合不误杀） |
+| G6 | 既有模板自身不可靠（矛盾率>2%） | `... -k G6_unreliable_existing` | skip+WARN（对侧不可靠不拒绝新模板）、`GUARD_SKIP G6` |
+
+### 2-5 分钟步分解
+1. 写 puf_order.py 反演函数（含自校验断言）｜2. 写 order_agreement｜3. tid=1 快照上手测反演=共识全序（哨兵 ORDER_RECON_OK）｜4. template_db.enroll 挂守卫｜5. order 元数据落盘｜6. main.py force+[GUARD]｜7. serial_server 映射（先核实调用点）｜8. D1 全库快照+清理｜9. 写 tests 六用例｜10. ci_regression.ps1 清单加行｜11. 跑全套+全量回归。
 
 ### 风险与回退
-- 误杀真实设备：独立布局 mismatch 预期 0.5，带宽 0.40-0.60 极宽；万不得已 force 参数 5 秒解锁；
-- 回退：guard 常量置 None 即禁用（一行），不动其他逻辑。
+- 阶序不可靠模板→skip（不误杀）；阈值 0.75 保守可调（常量）；回退=常量置 None 禁用守卫，其余不动。
+- 工时 90-120min（v1 的 40min 按 VOC 方案失真）；若 D2 时间被论文挤压，M3 最小可用版=反演+G2 克隆拒绝两个用例先行，其余补齐。
 
-## 2. M1 · 标准三件套指标工具（~60 分钟）
+## 2. M1 · 三件套 v2（uniqueness 机制重设计，60+60 分钟）
 
-### tools/puf_metrics.py 设计
-- 输入：`--templates data/templates/templates.json --tids 1[,2,...] [--stability data/templates/templates.stability.json] [--out data/d1_evidence/puf_metrics_<date>.json]`
-- 输出（JSON+Markdown 表，论文直接贴）：
-  - **uniformity**（每 tid）：`mean(popcount(R))/ (n·64)`，期望 50%（tid=1 实测预期 48.7%，与既有画像交叉验证）
-  - **uniqueness（跨模板对）**：`HD(R_i,R_j)/共有位数` 的均值/分布（参考工程裸 mismatch + 学界标准双口径并列输出）；共挑战缺失时按共有 seed 归一
-  - **reliability v1（掩码代理）**：从 templates.stability.json 的 stable-bit 掩码算 `stable_bits/64`（tid=1 已知 100%）；**v1.1（小改）**：enroll 路径把原始 measurements dict 落入 stability 文件（enroll.py:90 → template_db.enroll 已收 measurements，加持久化），此后 reliability 升级为标准口径 `1 - 翻转位率`（参考工程 11 次测量口径，我们 3 次，论文注明）
-- 单测（tests/test_puf_metrics.py）：构造全 0/全 1/已知 HD 的合成模板，断言指标精确值（golden 数字表）；真数据 smoke：tid=1 uniformity=0.487（±0.001）。
-- 产出计划：今天用 tid=1+演示对照出表；烧板后补 tid=2（seed2 板）与跨板 uniqueness=期望≈50%——论文评测章三件套齐活。
-- 哨兵：`METRICS_OK`。
+- uniformity：不变（tid=1 金数 0.4873 已交叉验证）。
+- reliability：v1 稳定掩码代理不变；v1.1 原始测量落盘不变（enroll.py:90 已传 measurements，template_db :273-278 算完掩码即丢弃——补持久化）。
+- **uniqueness（跨模板）v2：按共有 seed 的公式废除（恒空集）**，改用阶序机制（复用 puf_order）：
+  - 口径 A（主）：order_agreement 矩阵（克隆≈1 / 独立≈0.5）；
+  - 口径 B（辅）：跨阶序预测 mismatch——用 predict_response(orderA, seed) vs predict_response(orderB, seed) 对 100 个新随机种子求均值（审查实证独立序 0.40~0.67，作为分布报告而非判决）；
+  - **声明放弃**"同板 16 环两两口径"（对照文档标可选）：现协议每挑战只出 64 位响应、无逐环读出通道，板上无法取得环内独立实例数据——留待 future work（与 M4/环频直读同章节）。
+- 命令与哨兵：`python tools/puf_metrics.py --templates data/templates/templates.json --out data/d1_evidence/puf_metrics_1102.json` → 末行 `METRICS_OK`；单测金数表（全 0/全 1/构造 HD）不变。
 
-## 3. M2 · SAC 雪崩测试工具（~40 分钟）
+## 3. M2 · SAC（40 分钟，补口径声明）
 
-### tools/puf_sac.py 设计
-- 用黄金 CRP 链：`decode_pair_table(seed) + ROPairingPUF(freqs)`（rootcause v3 已复用的同一模型，RTL↔模型等价有 tb_puf_path 黄金锚背书）。
-- 流程：nBase=256 随机种子为基；对每个基种子逐位翻转（64 位 × 1 位翻转）→ 统计每位、全局响应翻转率；输出 per-bit SAC + 全局均值 + 最差/最好位。
-- 预登记预期：全局 ≈ 50%（挑战经 LFSR+Fisher-Yates 洗牌，扩散性应良好）；若某位显著偏离（<40%），这是**发现不是失败**：写论文"挑战编码扩散性"小节 + future work（多种子混合）。
-- 单测：固定 freqs+seed 的 golden 断言 + 全 0/全 1 边界；CI 挂载；哨兵 `SAC_OK`。
+- 设计不变（nBase=256、逐位翻转、per-bit+全局、CI 哨兵 `SAC_OK`）。
+- **口径声明（论文措辞，v2 补）**：本指标在黄金模型（确定性 fixture 频率）上度量**挑战解码/配对扩散**（LFSR+Fisher-Yates），不含硬件近平局对噪声，不外推为硅上雪崩；SAC≈50% 与"可建模（ml_attack 11/11）"并排陈述、不矛盾。
+- 步分解：1. 写 tools/puf_sac.py｜2. 固定 seed 金数单测｜3. 全量跑+落盘 JSON｜4. CI 清单加行。
 
-## 4. M4 · 逐环 LOC 布局策略生成器（seed3，烧板后可选 ~90 分钟）
+## 4. M4 · 逐环 LOC 生成器（seed3，烧板后可选，90 分钟）
 
-### tools/gen_ring_layout.py
-- 策略（对齐参考工程 placementType 思想，XDC/tcl 化）：`--strategy rand --seed N`（每环独立随机 SLICE/BEL，参考工程 RAND 同款）/ `stride`（等距栅格）/ `cluster`（双簇对角）。
-- 粒度：**环间分散、环内紧凑**——每环 5 个 LUT 钉在同一 SLICE 列相邻行（保环内一致），32 环彼此散开（制造排序差异）。
-- 输出：`build/tcl/ring_loc_seed<N>.tcl` 片段（**综合后应用**，沿用 w2_waiver 教训：XDC 综合前 nets/cells 不存在会静默空匹配；片段内含逐环 get_cells 过滤 + set_property LOC/BEL + 32 环唯一性断言）。
-- 构建：`build_w3_board_seed3.tcl` = seed2 加固版流程 + source 该片段（替代/叠加 PBlock）+ 既有门禁全保留（32 环断言/WHS/落位报告/USERID=0x5EED0003）。
-- 触发时机：(a) seed2 板实验落失败分支（预登记已写）；(b) 论文"布局策略"纵深（区域级 PBlock vs 逐环 LOC 两级方法论）。
-- 风险：Vivado 2026 对 LUT LOC/BEL 语法兼容（试点：先只钉 1 环构建验证语法与时序，再全量）；时序收敛（环内紧凑+环间分散应无碍，DRC 门禁兜底）。
+- v2 明确：**替代式**（seed3 构建**不含** PBlock 段，仅逐环 LOC）——审查指出 LOC 与 PBlock 叠加会因站点越区冲突报错。
+- tools/gen_ring_layout.py：--strategy rand --seed N / stride / cluster；环内 5 LUT 同列相邻行、32 环彼此散开；输出 build/tcl/ring_loc_seedN.tcl（**综合后应用**、含 32 环唯一 LOC 断言、逐环 get_cells 过滤——w2_waiver 文化）；构建脚本 build_w3_board_seed3.tcl = seed2 加固版流程 − PBlock + source 片段，USERID=0x5EED0003，既有门禁全保留（WHS/32 环断言/落位报告）。
+- 试点：先只生成 1 环的 LOC 构建验证语法+时序，再全量（30min+60min）。
+- CI 衔接（可选）：seed3 tcl 建成后把 B-LOCK 的 filelist 一致性检查从双脚本泛化为 seed* 通配（5 分钟）。
 
-## 5. 实施顺序（今天 D2）
+## 5. 实施顺序 v2（工时重排）
 
-| 序 | 项 | 耗时 | 依赖 |
+| 序 | 项 | 工时 | 备注 |
 |---|---|---|---|
-| 1 | M3 守卫（含 D1 清演示模板） | 40min | 无 |
-| 2 | M1 指标 v1（含真数据产出） | 60min | 无 |
-| 3 | M2 SAC | 40min | 无 |
-| 4 | CI 挂载 + 全量回归（pytest+xsim） | 30min | 1-3 |
-| 5 | **烧板主线（seed2 实验，随时插入，最高优先）** | 30min | 硬件在手 |
-| 6 | M1 v1.1（measurements 落盘） | 20min | 2 |
-| 7 | M4 生成器 + seed3（仅当 5 失败或晚上有余力） | 90min | 5 结果 |
+| 1 | **烧板主线（seed2 实验，最高优先，随时插队）** | 30min | prereg v2 判据 |
+| 2 | M3 阶序守卫（步 1-11） | 90-120min | 最小可用版可裁 |
+| 3 | M1 v2（步：公式改阶序/工具/金数/真数据） | 120min | uniqueness 复用 puf_order |
+| 4 | M2 SAC | 40min | |
+| 5 | 全量回归（CI + B-LOCK） | 30min | |
+| 6 | M1 v1.1 测量落盘 | 20min | |
+| 7 | M4 seed3（仅当烧板失败分支或余力） | 90min | 替代式 |
 
-## 6. 验收与回归总口径
-- 每项都有正向哨兵行 + pytest 套件；全部合入后跑 scripts/ci_regression.ps1 全绿（含 B-LOCK）；
-- 证据：tools 输出 JSON 落 data/d1_evidence/；守卫的 [GUARD] 行天然进 REPL 日志；
-- 不碰：生产 bit、已验证 seed2 bit、prereg v2 锚点、RTL 源（本方案零 RTL 改动，纯软件+构建脚本）。
+## 6. 验收与回归总口径（v2 单位校准）
+- 新增 pytest 文件 2 个（test_template_guard / test_puf_metrics+test_puf_sac 合并或分开），**ci_regression.ps1 的 python 固定清单逐文件加行**（原"18→19+"表述作废：18 是 xsim TB 数，python 清单是独立硬编码列表）；
+- 哨兵：GUARD_OK/GUARD_REJECT/GUARD_SKIP、METRICS_OK、SAC_OK、ORDER_RECON_OK；
+- 全绿标准：scripts/ci_regression.ps1 退出 0（含既有全部 xsim TB 与 python 清单）。
 
 ## 7. 遗留衔接
-- 烧板后：M1 补跨板 uniqueness → 论文；M3 在真实 enroll 流程中验证 [GUARD] 输出；
-- GitHub push 待 VPN（9f57f8b 与后续提交一起推）。
+- 第 1 轮审查报告归档：review/1102_ar-spec-r1_plan_review_M1-M4.md；本 v2 逐条对账见其"修正优先级清单"；
+- GitHub push 待 VPN（9f57f8b/374c6ec 及后续一并推）。
