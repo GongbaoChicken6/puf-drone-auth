@@ -1,0 +1,186 @@
+
+=== 板B 完整实验数据汇总（2026-11-02, 全天） ===
+Board: seed2 layout (JTAG 210251A04F2C, PBlock rings→X1Y0, bit SHA 0F4E605D...)
+Channel: HC-12 C006 (板B模块 ↔ B-PC/丢石头CH340/COM11)
+
+--- 1. 无线攻击（假冒 tid=1）---
+5轮 auth 1: ALL REJECT
+  R1: HD=154, R2: HD=141, R3: HD=144, R4: HD=139, R5: HD=144
+  均值=144.4, 范围[139,154]
+serve+SW7 全协议: 4帧 REJECT HD=133（无CONFIRM=攻击被拦截）
+  时延: 0ms (ACCESS_REQUEST→RESULT)
+
+--- 2. 无线自认证（合法 tid=2）---
+5轮 auth 2: ALL PASS HD=0
+  R1-R5: 全部 PASS HD=0
+
+--- 3. 重放与恢复 ---
+连续 auth 2 不重烧: PASS HD=0（板子S_SESSION仍接受挑战——ENROLL_EN设计特性）
+c2reset 2 后 auth 2: PASS HD=0（服务器重放窗已清）
+重烧后 auth 2: PASS HD=0（FSM复位）
+
+--- 4. 有线数据（上午采集） ---
+跨板拒绝 vs tid=1: REJECT HD均值145.6 (5轮: 149,149,154,136,140)
+跨板拒绝 vs tid=2(生产板): REJECT HD均值146.0 (5轮: 152,150,150,134,144)
+自一致 auth 2: PASS HD=0
+
+--- 5. 模板质量 ---
+tid=2: 100 CRPs, 64/64 stable bits (100%), 
+  uniformity: (from M1 metrics)
+  pairwise HD: min=17, median=32, max=46, mean=32.1
+  阶序守卫: agreement vs tid=1 = 0.433 (independent, threshold=0.85)
+
+--- 6. 端到端时延 ---
+板A serve CONFIRM: 57ms (14:43:44.136→44.193, ACCESS_REQUEST→CONFIRM)
+板B serve REJECT: 0ms (ACCESS_REQUEST→RESULT, 无CONFIRM)
+
+--- 7. 关键发现 ---
+- 板子S_SESSION仍接受新挑战（ENROLL_EN=1设计特性，非bug）
+- 重放保护靠C2 nonce（服务器侧防重放窗），非FSM状态阻塞
+- 攻击时延36ms级（基站判定+拒绝）
+- 合法认证时延57ms级（全六帧完成）
+
+=== 终端完整记录 ===
+PS D:\puf-drone-auth> > [[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'd[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'ds[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'dsh[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'dsh>[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'dsh> [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'dsh> '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'dsh> ' > [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'dsh> ' }
+dsh> ppython -m src.python.server.main --port COM11 --bapython -m src.python.server.main --port COM11 --baupython -m src.python.server.main --port COM11 --baudpython -m src.python.server.main --port COM11 --baud python -m src.python.server.main --port COM11 --baud 1python -m src.python.server.main --port COM11 --baud 11python -m src.python.server.main --port COM11 --baud 115python -m src.python.server.main --port COM11 --baud 1152python -m src.python.server.main --port COM11 --baud 11520python -m src.python.server.main --port COM11 --baud 115200
+[INFO] serial mode on COM11 @ 115200 baud
+PUF drone authentication server
+commands:
+  auth <terminal_id>          authenticate a terminal (full round)
+  spoof <terminal_id>         authenticate with an impostor device (demo)
+  enroll <terminal_id> [n]    enroll device template (default n=100 CRPs)
+  setkey <terminal_id> <hex>  install Speck64/96 device key (24 hex chars)
+  provisionkey <terminal_id>  derive device key from the terminal PUF (loopback)
+  c2reset <terminal_id>       clear C2 replay window (power-cycle recovery)
+  serve                       serial mode: terminal-initiated receive loop
+                              (Ctrl-C returns to the prompt)
+  status                      sessions / templates / CRP pools
+  quit                        exit
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : REJECT
+  total HD: 154
+  pool    : 24/500 remaining (5%)
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : REJECT
+  total HD: 141
+  pool    : 24/500 remaining (5%)
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : REJECT
+  total HD: 144
+  pool    : 24/500 remaining (5%)
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : REJECT
+  total HD: 139
+  pool    : 24/500 remaining (5%)
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : REJECT
+  total HD: 144
+  pool    : 24/500 remaining (5%)
+puf-server> serve
+[SERVE]  receive loop on COM11 (Ctrl-C to return)
+[WIRE 14:56:19.450] RXRAW fd10000000010290000001000000deadbeeff841fe9abe321443c0c9
+[WIRE 14:56:19.452] ACCESS_REQUEST tid=1 nonce=0xefbeadde c2=f841fe9abe321443 -> CHALLENGE
+[WIRE 14:56:19.452] TXRAW fd2000000a01029100003490c2943d265c313ca21615c378f875ee9f45c724046a3e2e8d0d4f1b510097f151
+[WIRE 14:56:19.484] RXRAW fd2000000101029200008cd246c429186e6d2f0ad21beb91b62013003f52a6fb72a2654feddd1d413ef4b08f
+[WIRE 14:56:19.486] RESPONSE_R1 tid=1 x4 (CHALLENGED) -> RESULT
+[WIRE 14:56:19.486] TXRAW fd0a00000b010293000001850000000000000000a2fe
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 7b4e6b2df0b8e6bc
+  pool    : 88/500 remaining (18%)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): dcd9abbb662482b1
+  pool    : 84/500 remaining (17%)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 16d62037bdfa6b11
+  pool    : 80/500 remaining (16%)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 7dc65551b880c31a
+  pool    : 76/500 remaining (15%)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): dfd3fddc4e58aef9
+  pool    : 72/500 remaining (14%)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 890a254400471e79
+  pool    : 68/500 remaining (14%)
+puf-server> c2reset 2
+[C2]     terminal 2: replay window cleared (power-cycled terminal may authenticate again)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 1eb743d337c126ae
+  pool    : 64/500 remaining (13%)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 2dfcafc48103bba7
+  pool    : 60/500 remaining (12%)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): deea9992675ecb1a
+  pool    : 56/500 remaining (11%)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 1ff2700ac60537a7
+  pool    : 52/500 remaining (10%)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): cf20e6e04cae404a
+  pool    : 48/500 remaining (10%)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 9d68e16d84494b37
+  pool    : 44/500 remaining (9%)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 0b07ff722f051299
+  pool    : 40/500 remaining (8%)
+puf-server> c2reset 2
+[C2]     terminal 2: replay window cleared (power-cycled terminal may authenticate again)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 813ff0c70eccb3cf
+  pool    : 36/500 remaining (7%)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 847bc2562d759153
+  pool    : 32/500 remaining (6%)
+puf-server>
