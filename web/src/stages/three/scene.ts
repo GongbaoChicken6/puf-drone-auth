@@ -214,7 +214,7 @@ export class World {
     });
     const trim = new MeshStandardMaterial({
       color: c.server, roughness: .3, metalness: .25,
-      emissive: c.server, emissiveIntensity: .8,
+      emissive: c.server, emissiveIntensity: .15,
     });
     this.disposables.push(body, trim);
 
@@ -277,7 +277,7 @@ export class World {
     });
     const glow = new MeshStandardMaterial({
       color: c.comm, roughness: .25, metalness: .3,
-      emissive: c.comm, emissiveIntensity: .95,
+      emissive: c.comm, emissiveIntensity: .12,
     });
     this.disposables.push(shell, glow);
 

@@ -3,9 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- 图标用 data: URI 内联,不新增可请求文件 —— §4.3「禁 CDN/全离线」下,
+       一个 favicon.ico 会变成浏览器自动发出、桥接必然 404 的请求。
+       画的是同心弧(硬件指纹的抽象),青=主强调,底=画布色。 -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070b14'/%3E%3Cg fill='none' stroke='%2322d3ee' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 19a10 10 0 0 1 20 0'/%3E%3Cpath d='M11 21.5a5 5 0 0 1 10 0'/%3E%3Cpath d='M16 24v3.5'/%3E%3C/g%3E%3C/svg%3E" />
   <title>PUF 无人机认证 · 演示控制台</title>
-  <script type="module" crossorigin src="./assets/console-Dzy7-2Lj.js"></script>
+  <script type="module" crossorigin src="./assets/console-D2L8XhbV.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/api-DfqN_a4j.js">
   <link rel="stylesheet" crossorigin href="./assets/api-D7cmChOE.css">
   <link rel="stylesheet" crossorigin href="./assets/console-CtyDkLz3.css">
@@ -16,6 +19,7 @@
     <main id="console-layout">
       <aside id="left-panel"></aside>
       <section id="center-stage">
+        <!-- three.js 挂载点(§8.5 握手契约);2D SVG 保底由 stages/stage2d 接管 -->
         <div id="stage-3d"></div>
       </section>
       <aside id="right-panel"></aside>
@@ -26,16 +30,12 @@
 (function() {
   var colors = {1:'#22c55e',2:'#ef4444',3:'#f97316',4:'#eab308',5:'#6b7280',6:'#3b82f6',7:'#8b5cf6'};
   var icons = {1:'✓',2:'✗',3:'↻',4:'±',5:'∅',6:'⟳',7:'⚠'};
-  var overlayCreated = false;
-
   function applyStyles() {
-    // 按钮：暴力内联样式
     document.querySelectorAll('button').forEach(function(btn) {
       var txt = (btn.textContent || '').trim();
       for (var i = 1; i <= 7; i++) {
         if (txt.indexOf('S' + i) === 0) {
           btn.style.borderLeft = '4px solid ' + colors[i];
-          btn.style.boxShadow = 'inset 4px 0 0 ' + colors[i];
           if (!btn.getAttribute('data-iconed')) {
             btn.setAttribute('data-iconed', '1');
             var s = document.createElement('span');
@@ -47,25 +47,7 @@
         }
       }
     });
-
-    // 3D 强力压暗：直接给 canvas 加 CSS 滤镜 + 黑色遮罩双层保险
-    var stage = document.getElementById('stage-3d');
-    if (stage) {
-      var cv = stage.querySelector('canvas');
-      if (cv) {
-        cv.style.filter = 'brightness(0.4) contrast(1.4) saturate(0.5)';
-        if (!overlayCreated) {
-          overlayCreated = true;
-          var overlay = document.createElement('div');
-          overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;' +
-            'background:rgba(0,0,0,0.3);pointer-events:none;z-index:1;';
-          stage.style.position = 'relative';
-          stage.appendChild(overlay);
-        }
-      }
-    }
   }
-
   setInterval(applyStyles, 500);
   setTimeout(applyStyles, 100);
   setTimeout(applyStyles, 500);
