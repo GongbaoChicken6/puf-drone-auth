@@ -66,7 +66,10 @@ if __package__ in (None, ""):
         HFIDAProtocol,
     )
     from src.python.evaluation.puf_model import ROPairingPUF  # noqa: E402
-    from src.python.server.template_db import TemplateDB  # noqa: E402
+    from src.python.server.template_db import (  # noqa: E402
+    CorrelatedTemplateError,
+    TemplateDB,
+)
 else:
     from .crp_pool import PoolExhaustedError, format_pool_summary
     from .enroll import enroll_device, majority_bytes  # noqa: F401
@@ -84,7 +87,7 @@ else:
         HFIDAProtocol,
     )
     from ..evaluation.puf_model import ROPairingPUF
-    from .template_db import TemplateDB
+    from .template_db import CorrelatedTemplateError, TemplateDB
 
 #: Default per-bit flip probability of the simulated genuine terminal.
 #: 2% gives an expected Hamming distance of ~1.3 bit per 64-bit response,
@@ -597,18 +600,24 @@ def cmd_enroll(
     registration path -- the semantics-pairing rule from HANDOFF.
     """
     if not args:
-        print("usage: enroll <terminal_id> [n_challenges]")
+        print("usage: enroll <terminal_id> [n_challenges] [force]")
         return
     tid = int(args[0])
     n = int(args[1]) if len(args) > 1 else 100
+    force = "force" in args[2:]
     try:
         result = enroll_device(
             protocol, transport, tid,
             n_challenges=n, measurements=measurements,
+            allow_correlated=force,
         )
     except PoolExhaustedError as exc:
         print(f"[ERROR] {exc}")
         print("        run 'status' and consider pool maintenance (reset).")
+        return
+    except CorrelatedTemplateError as exc:
+        print(f"[GUARD]  ENROLL_REJECTED: {exc}")
+        print("        same-layout clone suspected; re-run with 'force' to override")
         return
     if result["n_challenges"] != n:
         print(f"[NOTE]   requested {n} challenges rounded up to "
@@ -622,6 +631,14 @@ def cmd_enroll(
     pool = protocol.pools.get(tid)
     print(f"[POOL]   {pool.remaining}/{pool.pool_size} challenges remaining "
           f"({pool.remaining_pct}%)")
+    guard = summary.get("guard", {})
+    if guard:
+        if guard.get("skipped"):
+            print(f"[GUARD]  order-skip (unreliable reconstruction): "
+                  f"{', '.join(map(str, guard['skipped']))}")
+        for entry in guard.get("checked", []):
+            print(f"[GUARD]  tid={entry['tid']} agreement={entry['agreement']:.3f} "
+                  f"{entry['verdict']} (threshold={guard.get('threshold')})")
     # Template exists now, so the enrollment gate in _ensure_device_key
     # passes; minting before this point would key unknown terminals.
     _ensure_device_key(store, protocol, tid)

@@ -179,6 +179,25 @@ find_stable_bits = compute_stability
 # ----------------------------------------------------------------------
 # Template database
 # ----------------------------------------------------------------------
+class CorrelatedTemplateError(RuntimeError):
+    """A new template's ring order matches an existing terminal (same-layout clone).
+
+    Raised by TemplateDB.enroll() when the Kendall agreement of the
+    reconstructed ring orders exceeds puf_order.AGREE_REJECT.  The template
+    is NOT persisted when this fires.
+    """
+
+    def __init__(self, other_tid: str, agreement: float, threshold: float):
+        self.other_tid = other_tid
+        self.agreement = agreement
+        self.threshold = threshold
+        super().__init__(
+            f"new template correlates with terminal {other_tid}: "
+            f"order agreement={agreement:.4f} > {threshold} "
+            f"(same-layout clone suspected; use allow_correlated=True to override)"
+        )
+
+
 class TemplateDB:
     """JSON-backed template store with Hamming-distance matching.
 
@@ -194,6 +213,7 @@ class TemplateDB:
         self.path = Path(path) if path is not None else None
         self.templates: dict[str, dict[str, str]] = {}
         self.stability: dict[str, str] = {}
+        self._orders_cache: dict[str, Any] = {}
         self.load()
 
     # -- persistence --------------------------------------------------
@@ -228,6 +248,7 @@ class TemplateDB:
                 json.dumps(self.stability, indent=2, sort_keys=True),
                 encoding="utf-8",
             )
+        self._persist_orders()
 
     def _sidecar_path(self) -> Path | None:
         if self.path is None:
@@ -241,6 +262,7 @@ class TemplateDB:
         crp_pairs: Mapping[Any, Any] | Iterable[Sequence[Any]],
         measurements: Mapping[str, Sequence[Any]] | None = None,
         flip_threshold: float = DEFAULT_FLIP_THRESHOLD,
+        allow_correlated: bool = False,
     ) -> dict[str, Any]:
         """Enroll (or extend) the template of one terminal.
 
@@ -266,6 +288,13 @@ class TemplateDB:
         """
         tid = str(terminal_id)
         pairs = normalize_pairs(crp_pairs)
+
+        # -- Order-signature correlation guard (M3, plan v2) -------------
+        # Blocks a new terminal whose ring ORDER matches an existing one
+        # (same-bitstream clones).  Seed-independent by construction; see
+        # src/python/server/puf_order.py and the round-2 review calibration.
+        guard_report = self._order_guard(tid, pairs, allow_correlated)
+
         device = dict(self.templates.get(tid, {}))
         device.update(pairs)
         self.templates[tid] = device
@@ -284,7 +313,94 @@ class TemplateDB:
             "stable_bits": mask.count("1"),
             "total_bits": RESPONSE_BITS,
             "stability_pct": round(100.0 * mask.count("1") / RESPONSE_BITS, 1),
+            "guard": guard_report,
         }
+
+    # -- order-signature guard (M3) --------------------------------------
+    def _order_guard(
+        self, tid: str, new_pairs: dict[str, str], allow_correlated: bool
+    ) -> dict[str, Any]:
+        """Check the incoming template against every existing real terminal.
+
+        Returns a report dict for the REPL/summary; raises
+        CorrelatedTemplateError when the order-signature agreement with any
+        existing template exceeds AGREE_REJECT (same-layout clone).
+        Unreliable reconstructions (small / partial / contradictory) are
+        skipped with a warning -- fail-open WITH alarm, never silently.
+        """
+        from .puf_order import (
+            AGREE_REJECT,
+            OrderResult,
+            order_agreement,
+            reconstruct_order,
+        )
+
+        new_res = reconstruct_order(new_pairs)
+        report: dict[str, Any] = {
+            "threshold": AGREE_REJECT,
+            "new_usable": new_res.usable,
+            "checked": [],
+            "skipped": [],
+        }
+        if not new_res.usable:
+            report["skipped"].append(f"self({new_res.reason})")
+            return report  # fail-open for unreliable new template
+
+        existing_orders = self._load_orders()
+        for other_tid, other_order in existing_orders.items():
+            if other_tid == tid:
+                continue
+            if other_order is None:
+                report["skipped"].append(other_tid)
+                continue
+            agreement = order_agreement(new_res.order, other_order)
+            verdict = "REJECT" if agreement > AGREE_REJECT else "OK"
+            report["checked"].append(
+                {"tid": other_tid, "agreement": round(agreement, 4), "verdict": verdict}
+            )
+            if agreement > AGREE_REJECT and not allow_correlated:
+                raise CorrelatedTemplateError(other_tid, agreement, AGREE_REJECT)
+        # Persist the new order to the sidecar (only on success path; the
+        # caller invokes save() which flushes both templates and orders).
+        self._orders_cache[tid] = new_res.order
+        return report
+
+    def _load_orders(self) -> dict[str, Any]:
+        """Load ring orders: sidecar first, then lazily reconstruct missing ones.
+
+        For any terminal in self.templates without a cached order entry,
+        reconstruct it now (result may be None if unreliable).  This ensures
+        templates enrolled before the guard existed still get compared.
+        """
+        from .puf_order import reconstruct_order
+
+        if not hasattr(self, "_orders_cache"):
+            cache: dict[str, Any] = {}
+            sidecar = self._orders_sidecar_path()
+            if sidecar is not None and sidecar.exists():
+                raw = json.loads(sidecar.read_text(encoding="utf-8"))
+                cache = {str(k): (list(v) if v is not None else None)
+                         for k, v in raw.items()}
+            self._orders_cache = cache
+        # Lazy reconstruction for terminals not yet in the cache.
+        for tid in self.templates:
+            if tid not in self._orders_cache:
+                res = reconstruct_order(self.templates[tid])
+                self._orders_cache[tid] = res.order if res.usable else None
+        return self._orders_cache
+
+    def _orders_sidecar_path(self) -> Path | None:
+        if self.path is None:
+            return None
+        return self.path.with_suffix(".orders.json")
+
+    def _persist_orders(self) -> None:
+        sidecar = self._orders_sidecar_path()
+        if sidecar is not None and getattr(self, "_orders_cache", None):
+            sidecar.write_text(
+                json.dumps(self._orders_cache, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
 
     # -- matching ---------------------------------------------------------
     def expected(self, terminal_id: int | str, seed: bytes | str) -> bytes | None:

@@ -1,0 +1,9 @@
+{
+  "n_base": 128,
+  "global_sac": 0.3807,
+  "per_bit_min": 0.3433,
+  "per_bit_max": 0.4365,
+  "per_bit_mean": 0.3807,
+  "ideal": 0.5,
+  "scope": "golden model (challenge-decoding diffusion, not silicon noise)"
+}

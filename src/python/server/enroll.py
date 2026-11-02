@@ -46,6 +46,7 @@ def enroll_device(
     n_challenges: int = 100,
     measurements: int = 3,
     on_progress: Callable[[int, int, int, int], None] | None = None,
+    allow_correlated: bool = False,
 ) -> dict[str, Any]:
     """Enroll (or refresh) one terminal's template through a transport.
 
@@ -87,7 +88,9 @@ def enroll_device(
         (bytes.fromhex(hex_seed), majority_bytes(responses))
         for hex_seed, responses in data.items()
     ]
-    summary = protocol.templates.enroll(tid, pairs, measurements=data)
+    summary = protocol.templates.enroll(
+        tid, pairs, measurements=data, allow_correlated=allow_correlated
+    )
     return {
         "summary": summary,
         "measurements": rounds,
