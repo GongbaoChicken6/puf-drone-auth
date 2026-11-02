@@ -107,12 +107,12 @@ export class World {
     this.buildPool();
 
     this.fpLabel = this.mkLabel('PUF 指纹 · 未注册', 'puf', 0.42,
-      new Vector3(ANCHOR.drone.x, ANCHOR.fingerY + FP_TALL + 0.68, 0));
+      new Vector3(ANCHOR.drone.x, ANCHOR.fingerY + FP_TALL + 1.15, 0));
     this.droneLabel = this.mkLabel('无人机 · 未选中', 'comm', 0.34,
-      new Vector3(ANCHOR.drone.x, 1.02, 0));
+      new Vector3(ANCHOR.drone.x, 0.55, 0));
     this.poolLabel = this.mkLabel('CRP 池 —', 'green', 0.32,
-      new Vector3(ANCHOR.pool.x, 2.3, ANCHOR.pool.z));
-    this.mkLabel('基站 · 认证服务', 'server', 0.34, new Vector3(ANCHOR.station.x, 4.35, 0));
+      new Vector3(ANCHOR.pool.x, 2.85, ANCHOR.pool.z));
+    this.mkLabel('基站 · 认证服务', 'server', 0.34, new Vector3(ANCHOR.station.x, 5.2, 0));
 
     this.buildLights();
     this.applyFingerprint(null, null);
