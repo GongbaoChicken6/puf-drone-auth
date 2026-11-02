@@ -20,8 +20,8 @@
 
 ### 机理与审查实证
 根因调查证明：指纹由 16 环频率全序唯一决定，全序可从任一模板反推（tid=1 真板 100 CRP：120/120 对覆盖、方向矛盾 0、复算 HD=0）。因此：
-- **同布局克隆 ⇒ 同全序 ⇒ 120 对一致度 agreement≈1.0（实测预期，仅近平局对噪声±2%）**
-- **独立布局 ⇒ 独立全序 ⇒ agreement 期望 0.5**（σ≈√(0.25/120)≈0.046，0.75 阈值≈5.5σ，假阳率可忽略）
+- **同布局克隆 ⇒ 同全序 ⇒ 120 对一致度 agreement≈1.0**（第 2 轮审查实测：相邻近平局换位 agreement=119/120=0.9917，3 个换位仍 0.975——克隆侧判定稳健）
+- **独立布局 ⇒ 独立全序 ⇒ agreement 期望 0.5、σ=0.0932**（第 2 轮审查 2000 随机全序对实测：mean=0.5015、max=0.8000、P(>0.75)=9/2000=0.45%/对——Kendall 对指示变量因传递性正相关，实际 σ 是独立假设值 0.046 的 2 倍，理论 σ=√(2(2n+5)/(9n(n-1)))/2≈0.0926 吻合）
 - 判决用 **120 对 Kendall 一致度**（与 CRP 位数无关），不用跨阶序预测 mismatch 的双侧带（审查实证独立序可低至 0.402、prereg MC p5≈0.34，双侧 [0.40,0.60] 有假阳）。
 
 ### 新增模块 src/python/server/puf_order.py（骨架）
@@ -40,7 +40,7 @@ def predict_response(order, seed_int) -> int:
 
 ### 守卫逻辑（挂 template_db.enroll() :238，持久化之前）
 ```python
-AGREE_REJECT = 0.75   # 克隆≈1.0 vs 独立≈0.5±0.046；>0.75 判相关
+AGREE_REJECT = 0.85   # 第2轮审查校准（原0.75基于错误独立假设已废）：独立侧实测0/2000超0.85、理论≈3.8σ；克隆≥0.975 稳判；0.75时族假阳≈K×0.45%
 new = reconstruct_order(pairs_as_template)
 for tid, existing in real_templates.items():
     ex = cached_or_reconstruct(existing)
@@ -52,7 +52,7 @@ for tid, existing in real_templates.items():
         raise CorrelatedTemplateError(tid, a)
 ```
 - 无高侧拒绝（v1 的 mismatch>0.60 判据废除：一致度空间无此风险；重建失败→skip+WARN，**fail-open with alarm，不静默**）；
-- order 签名作为模板元数据随 enroll 落盘（templates.json 同文件 "order" 字段），比对免重算；
+- order 签名持久化到 **sidecar 文件 templates.orders.json**（沿 .stability.json 先例；第 2 轮审查指出：写入 templates.json device dict 会污染 seed→resp 映射致 auth 路径把 order 键当种子处理，版本包装 schema 下又会被 load() 静默丢弃——两条路都不可取）；旧模板首次比对时现算、**不回写**（避免迁移复杂度）；
 - allow_correlated=True 逃生口（REPL `enroll <tid> <n> force`）；
 - serial_server 注册路径异常→RESULT_ERROR 帧（实施时核实其 enroll 调用点，沿 B-P2 文化）。
 
@@ -67,7 +67,7 @@ for tid, existing in real_templates.items():
 | src/python/server/main.py | REPL enroll force 形参 + [GUARD] 输出 |
 | src/python/server/serial_server.py | CorrelatedTemplateError → RESULT_ERROR |
 | tests/test_template_guard.py | 新（用例表 v2） |
-| scripts/ci_regression.ps1 | **python 测试固定清单新增一行**（审查指出：清单逐文件硬编码，非自动发现） |
+| scripts/ci_regression.ps1 | **python 测试固定清单新增一行**（清单逐文件硬编码非自动发现；CI 用 `python tests\test_x.py` 直跑——测试文件加 `if __name__ == "__main__"` + unittest.main() 直跑入口，G1-G7 用例名内嵌；本地开发可用 pytest -k 选择） |
 
 ### 验收用例 v2（全部阶序场景；命令与预期）
 | # | 构造 | 命令 | 预期输出（哨兵行） |
@@ -78,9 +78,10 @@ for tid, existing in real_templates.items():
 | G4 | G2 + force | `... -k G4_force` | 成功 + 告警行、`GUARD_FORCE G4` |
 | G5 | 空库首个终端 | `... -k G5_first` | 直接成功（空集合不误杀） |
 | G6 | 既有模板自身不可靠（矛盾率>2%） | `... -k G6_unreliable_existing` | skip+WARN（对侧不可靠不拒绝新模板）、`GUARD_SKIP G6` |
+| G7 | 独立序但 agreement≈0.80（第2轮实测 max=0.80） | `... -k G7_independent_high` | **不得拒绝**（0.80<0.85 阈值边界）、注册成功、`GUARD_OK G7` |
 
 ### 2-5 分钟步分解
-1. 写 puf_order.py 反演函数（含自校验断言）｜2. 写 order_agreement｜3. tid=1 快照上手测反演=共识全序（哨兵 ORDER_RECON_OK）｜4. template_db.enroll 挂守卫｜5. order 元数据落盘｜6. main.py force+[GUARD]｜7. serial_server 映射（先核实调用点）｜8. D1 全库快照+清理｜9. 写 tests 六用例｜10. ci_regression.ps1 清单加行｜11. 跑全套+全量回归。
+1. 写 puf_order.py 反演函数（含自校验断言）｜2. 写 order_agreement｜3. tid=1 快照上手测反演=共识全序 **且前向复算 100 CRP 位级 HD=0**（哨兵 ORDER_RECON_OK——第 2 轮审查指出仅断言反演=共识全序是后向锚，须补前向复算防位打包回归；等价性锚=rootcause v3 官方解帧含 CRC 背书）｜4. template_db.enroll 挂守卫｜5. order 元数据落盘｜6. main.py force+[GUARD]｜7. serial_server 映射（先核实调用点）｜8. D1 全库快照+清理｜9. 写 tests 六用例｜10. ci_regression.ps1 清单加行｜11. 跑全套+全量回归。
 
 ### 风险与回退
 - 阶序不可靠模板→skip（不误杀）；阈值 0.75 保守可调（常量）；回退=常量置 None 禁用守卫，其余不动。
@@ -100,13 +101,13 @@ for tid, existing in real_templates.items():
 
 - 设计不变（nBase=256、逐位翻转、per-bit+全局、CI 哨兵 `SAC_OK`）。
 - **口径声明（论文措辞，v2 补）**：本指标在黄金模型（确定性 fixture 频率）上度量**挑战解码/配对扩散**（LFSR+Fisher-Yates），不含硬件近平局对噪声，不外推为硅上雪崩；SAC≈50% 与"可建模（ml_attack 11/11）"并排陈述、不矛盾。
-- 步分解：1. 写 tools/puf_sac.py｜2. 固定 seed 金数单测｜3. 全量跑+落盘 JSON｜4. CI 清单加行。
+- 步分解：1. 写 tools/puf_sac.py｜2. 固定 seed 金数单测（`python tools/puf_sac.py --n-base 256 --seed 20261102 --out data/d1_evidence/puf_sac_1102.json` → 末行 `SAC_OK`）｜3. 全量跑+落盘 JSON｜4. CI 清单加行（`python tools\puf_sac.py --n-base 64 --seed fixed` 短跑版 + 哨兵 `SAC_OK`）。
 
 ## 4. M4 · 逐环 LOC 生成器（seed3，烧板后可选，90 分钟）
 
 - v2 明确：**替代式**（seed3 构建**不含** PBlock 段，仅逐环 LOC）——审查指出 LOC 与 PBlock 叠加会因站点越区冲突报错。
 - tools/gen_ring_layout.py：--strategy rand --seed N / stride / cluster；环内 5 LUT 同列相邻行、32 环彼此散开；输出 build/tcl/ring_loc_seedN.tcl（**综合后应用**、含 32 环唯一 LOC 断言、逐环 get_cells 过滤——w2_waiver 文化）；构建脚本 build_w3_board_seed3.tcl = seed2 加固版流程 − PBlock + source 片段，USERID=0x5EED0003，既有门禁全保留（WHS/32 环断言/落位报告）。
-- 试点：先只生成 1 环的 LOC 构建验证语法+时序，再全量（30min+60min）。
+- 试点：先只生成 1 环的 LOC 构建验证语法+时序，再全量（30min+60min）。试点命令：`tools\gen_ring_layout.py --strategy rand --seed 3 --rings 1 --out build\tcl\ring_loc_seed3.tcl` → `D:\vivado\2026.1\Vivado\bin\vivado.bat -mode batch -source build\tcl\build_w3_board_seed3.tcl -tclargs xc7z045ffg900-2 build\board_zc706_seed3 src` → 预期末行 `BITSTREAM_SUCCESS WNS=+ WHS=+ SEED3_RING_LOC_OK`。
 - CI 衔接（可选）：seed3 tcl 建成后把 B-LOCK 的 filelist 一致性检查从双脚本泛化为 seed* 通配（5 分钟）。
 
 ## 5. 实施顺序 v2（工时重排）
