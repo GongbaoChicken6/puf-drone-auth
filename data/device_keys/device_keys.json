@@ -1,0 +1,65 @@
+{
+  "schema": "puf-drone-auth/device-keys/v1",
+  "terminals": {
+    "1": {
+      "key_hex": "0001020308090a0b10111213",
+      "c2_history": [
+        "2164c6b746575c97",
+        "88458761be7c2b8b",
+        "89468862bf7d2c8c",
+        "5066753fbf5a258a",
+        "33470aa2764cdb94",
+        "5678b337e048768b",
+        "7a4eb287e04e5026",
+        "7c61acf033849824",
+        "504707f8412e78af",
+        "457857aab56f3287"
+      ]
+    },
+    "2": {
+      "key_hex": "0001020308090a0b10111213",
+      "c2_history": [
+        "64e9f16efee4086d",
+        "080a7bb6986c7ea0"
+      ]
+    },
+    "7": {
+      "key_hex": "7a97388cf9ee3eed45041827",
+      "c2_history": [
+        "a1a2a3a4a5a6a7a8",
+        "a2a3a4a5a6a7a8a9",
+        "a3a4a5a6a7a8a9aa",
+        "a4a5a6a7a8a9aaab",
+        "a5a6a7a8a9aaabac"
+      ]
+    },
+    "9": {
+      "key_hex": "5db20fa85fb8bc4590469626",
+      "c2_history": [
+        "a1a2a3a4a5a6a7a8"
+      ]
+    },
+    "55": {
+      "key_hex": "97a0ab1beafcbf979e7ce8f6",
+      "c2_history": []
+    },
+    "99": {
+      "key_hex": "cb11d689c5aed38cc40c5ebf",
+      "c2_history": [
+        "a1a2a3a4a5a6a7a8",
+        "a2a3a4a5a6a7a8a9",
+        "a3a4a5a6a7a8a9aa",
+        "a4a5a6a7a8a9aaab",
+        "a5a6a7a8a9aaabac",
+        "a6a7a8a9aaabacad",
+        "a7a8a9aaabacadae",
+        "a8a9aaabacadaeaf",
+        "a9aaabacadaeafb0",
+        "aaabacadaeafb0b1",
+        "abacadaeafb0b1b2",
+        "1718191a1b1c1d1e",
+        "1a1b1c1d1e1f2021"
+      ]
+    }
+  }
+}

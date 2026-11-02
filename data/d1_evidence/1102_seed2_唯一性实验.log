@@ -1,0 +1,90 @@
+=== D2 板端实验：seed2 布局变体唯一性验证（2026-11-02 12:30-12:40） ===
+预登记：data/d1_evidence/rootcause/seed2_board_preregistration.md (v2)
+seed2 bit SHA256: 0F4E605D481E81C825C2F028F78B9428EE0214C3ABCDF25FE294EF433ABB9D3B（烧写前验证通过）
+生产 bit SHA256: 24ED4EED6A175C980FF718529647EC2F3AF7ABA3650E8F6B58461EF18F468173
+烧写：seed2→04F2C(PROGRAM_OK+VARIANT横幅)、生产→0195C(PROGRAM_OK+VARIANT横幅)
+
+=== 结果矩阵 ===
+| 板                | vs tid=1(生产模板) | vs tid=2(seed2模板) |
+| 生产板(0195C/COM6) | PASS HD=0          | REJECT HD=149       |
+| Seed2板(04F2C/COM10)| REJECT HD=143     | PASS HD=0           |
+
+=== P1: auth 1 on seed2板(COM10) ===
+verdict: REJECT, total HD: 143
+
+=== P2: setkey 2 + enroll 2 100 on seed2板 ===
+100 CRPs stored, 64/64 stable (100.0%)
+[GUARD] tid=1 agreement=0.433 OK (threshold=0.85) — 阶序守卫首次实战
+
+=== P2c: tid=2 模板非退化 ===
+pairwise HD: min=17 p25=29 median=32 p75=35 max=46 mean=32.1 → P2C_PASS
+
+=== P3: auth 2 on seed2板 ===
+verdict: PASS, total HD: 0
+
+=== P4: auth 2 on 生产板(COM6) ===
+verdict: REJECT, total HD: 149
+
+=== 对照: auth 1 on 生产板 ===
+verdict: PASS, total HD: 0
+
+=== 预登记回填 ===
+P1: REJECT HD=143 [90,170] ✅
+P2: 100 CRP + guard 0.433 ✅
+P2c: median=32 [25,40] ✅
+P3: PASS HD=0 [≤24] ✅
+P4: REJECT HD=149 ✅
+
+=== COM10 完整终端记录 ===
+PUF drone authentication server
+commands:
+  auth <terminal_id>          authenticate a terminal (full round)
+  spoof <terminal_id>         authenticate with an impostor device (demo)
+  enroll <terminal_id> [n]    enroll device template (default n=100 CRPs)
+  setkey <terminal_id> <hex>  install Speck64/96 device key (24 hex chars)
+  provisionkey <terminal_id>  derive device key from the terminal PUF (loopback)
+  c2reset <terminal_id>       clear C2 replay window (power-cycle recovery)
+  serve                       serial mode: terminal-initiated receive loop
+                              (Ctrl-C returns to the prompt)
+  status                      sessions / templates / CRP pools
+  quit                        exit
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : REJECT
+  total HD: 143
+  pool    : 68/500 remaining (14%)
+puf-server> setkey 2 0001020308090a0b10111213
+[KEY]    terminal 2: Speck64/96 device key installed and persisted to data\device_keys\device_keys.json
+puf-server> enroll 2 100
+[ENROLL] terminal 2: 100 CRPs stored (+100), stable bits 64/64 (100.0%) over 3 measurement(s)/challenge
+[POOL]   100/500 challenges remaining (20%)
+[GUARD]  tid=1 agreement=0.433 OK (threshold=0.85)
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): 3cc4d26ad196256e
+  pool    : 96/500 remaining (19%)
+puf-server>
+
+=== COM6 完整终端记录 ===
+enroll <terminal_id> [n]    enroll device template (default n=100 CRPs)
+  setkey <terminal_id> <hex>  install Speck64/96 device key (24 hex chars)
+  provisionkey <terminal_id>  derive device key from the terminal PUF (loopback)
+  c2reset <terminal_id>       clear C2 replay window (power-cycle recovery)
+  serve                       serial mode: terminal-initiated receive loop
+                              (Ctrl-C returns to the prompt)
+  status                      sessions / templates / CRP pools
+  quit                        exit
+puf-server> auth 2
+[AUTH] terminal 2: 4 challenges issued (frame 44 B)
+  verdict : REJECT
+  total HD: 149
+  pool    : 96/500 remaining (19%)
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : PASS
+  total HD: 0
+  R2 (HSM): b9cbf939ad6cfd61
+  pool    : 64/500 remaining (13%)
+puf-server>
