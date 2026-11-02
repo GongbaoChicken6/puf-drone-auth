@@ -1,0 +1,66 @@
+=== D2 无线攻击实验：板B(seed2)假冒板A(tid=1)被拒（2026-11-02 14:50-14:56） ===
+链路：板B J58 HC-12(B/C006) <-> B-PC(丢石头CH340/COM11)
+seed2 bit SHA256: 0F4E605D...（烧写前验证通过）
+SW12=0001（冒充板A/tid=1）
+
+=== 5轮 auth 1 统计 ===
+R1: REJECT HD=154
+R2: REJECT HD=141
+R3: REJECT HD=144
+R4: REJECT HD=139
+R5: REJECT HD=144
+均值=144.4  ALL_REJECT ✅
+
+=== serve+SW7 全协议（假冒被拒） ===
+ACCESS_REQUEST tid=1 → CHALLENGE → RESPONSE_R1 → RESULT REJECT HD=133
+（无 CONFIRM——攻击被拦截，板B DS10 亮）
+
+=== 终端完整记录 ===
+PS D:\puf-drone-auth> > [[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'd[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'ds[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'dsh[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'dsh>[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'dsh> [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'dsh> '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'dsh> ' > [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $OutputEncoding = [System.Text.UTF8Encoding]::new($false); function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); 'dsh> ' }
+dsh> ppython -m src.python.server.main --port COM11 --bapython -m src.python.server.main --port COM11 --baupython -m src.python.server.main --port COM11 --baudpython -m src.python.server.main --port COM11 --baud python -m src.python.server.main --port COM11 --baud 1python -m src.python.server.main --port COM11 --baud 11python -m src.python.server.main --port COM11 --baud 115python -m src.python.server.main --port COM11 --baud 1152python -m src.python.server.main --port COM11 --baud 11520python -m src.python.server.main --port COM11 --baud 115200
+[INFO] serial mode on COM11 @ 115200 baud
+PUF drone authentication server
+commands:
+  auth <terminal_id>          authenticate a terminal (full round)
+  spoof <terminal_id>         authenticate with an impostor device (demo)
+  enroll <terminal_id> [n]    enroll device template (default n=100 CRPs)
+  setkey <terminal_id> <hex>  install Speck64/96 device key (24 hex chars)
+  provisionkey <terminal_id>  derive device key from the terminal PUF (loopback)
+  c2reset <terminal_id>       clear C2 replay window (power-cycle recovery)
+  serve                       serial mode: terminal-initiated receive loop
+                              (Ctrl-C returns to the prompt)
+  status                      sessions / templates / CRP pools
+  quit                        exit
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : REJECT
+  total HD: 154
+  pool    : 24/500 remaining (5%)
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : REJECT
+  total HD: 141
+  pool    : 24/500 remaining (5%)
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : REJECT
+  total HD: 144
+  pool    : 24/500 remaining (5%)
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : REJECT
+  total HD: 139
+  pool    : 24/500 remaining (5%)
+puf-server> auth 1
+[AUTH] terminal 1: 4 challenges issued (frame 44 B)
+  verdict : REJECT
+  total HD: 144
+  pool    : 24/500 remaining (5%)
+puf-server> serve
+[SERVE]  receive loop on COM11 (Ctrl-C to return)
+[WIRE 14:56:19.450] RXRAW fd10000000010290000001000000deadbeeff841fe9abe321443c0c9
+[WIRE 14:56:19.452] ACCESS_REQUEST tid=1 nonce=0xefbeadde c2=f841fe9abe321443 -> CHALLENGE
+[WIRE 14:56:19.452] TXRAW fd2000000a01029100003490c2943d265c313ca21615c378f875ee9f45c724046a3e2e8d0d4f1b510097f151
+[WIRE 14:56:19.484] RXRAW fd2000000101029200008cd246c429186e6d2f0ad21beb91b62013003f52a6fb72a2654feddd1d413ef4b08f
+[WIRE 14:56:19.486] RESPONSE_R1 tid=1 x4 (CHALLENGED) -> RESULT
+[WIRE 14:56:19.486] TXRAW fd0a00000b010293000001850000000000000000a2fe
