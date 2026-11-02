@@ -280,7 +280,7 @@ class Stage3d {
         new Vector3(ANCHOR.drone.x, ANCHOR.fingerY + 1.1, 0),
         { color: pal().green, count: 60, speed: 2.4, size: 0.06, life: .9, intensity: 1.8, drag: .93, jitter: .3 },
       );
-      this.fx.bloomBoost = 1;
+      this.fx.bloomBoost = 0.4;
       if (e.terminal_id === store.snapshot.selectedTerminal) void this.loadFingerprint(true);
     });
 

@@ -257,7 +257,7 @@ export class Fx {
           life: 1.1, intensity: 1.9, drag: .955, jitter: .3,
         });
         this.shake(0.004);
-        this.bloomBoost = 1;
+        this.bloomBoost = 0.4;
         break;
       case 1:   // REJECT
         this.ring(at, c.red, 0.7, 9, 0.65, at.y + 0.02);
@@ -267,7 +267,7 @@ export class Fx {
         });
         this.arcBurst(at, c.red);
         this.shake(0.05);
-        this.bloomBoost = 1;
+        this.bloomBoost = 0.4;
         break;
       case 2:   // ERROR
         this.particles.burst(at, {
@@ -286,7 +286,7 @@ export class Fx {
         this.shake(0.012);
         break;
       default:  // REPLAY(4)
-        this.bloomBoost = 1;
+        this.bloomBoost = 0.4;
         break;
     }
   }
@@ -305,7 +305,7 @@ export class Fx {
       new Vector3(at.x - 1.6, at.y, at.z), new Vector3(at.x + 1.6, at.y, at.z),
       { color: c.green, count: 34, size: 0.05, life: .8, intensity: 1.8, drag: .97, jitter: .25 },
     );
-    this.bloomBoost = Math.max(this.bloomBoost, 0.85);
+    this.bloomBoost = Math.max(this.bloomBoost, 0.35);
   }
 
   /** 电弧干扰 */

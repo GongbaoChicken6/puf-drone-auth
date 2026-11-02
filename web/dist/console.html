@@ -8,7 +8,7 @@
        画的是同心弧(硬件指纹的抽象),青=主强调,底=画布色。 -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070b14'/%3E%3Cg fill='none' stroke='%2322d3ee' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 19a10 10 0 0 1 20 0'/%3E%3Cpath d='M11 21.5a5 5 0 0 1 10 0'/%3E%3Cpath d='M16 24v3.5'/%3E%3C/g%3E%3C/svg%3E" />
   <title>PUF 无人机认证 · 演示控制台</title>
-  <script type="module" crossorigin src="./assets/console-D2L8XhbV.js"></script>
+  <script type="module" crossorigin src="./assets/console-naRKwKyM.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/api-DfqN_a4j.js">
   <link rel="stylesheet" crossorigin href="./assets/api-D7cmChOE.css">
   <link rel="stylesheet" crossorigin href="./assets/console-CtyDkLz3.css">
@@ -26,34 +26,6 @@
     </main>
     <footer id="bottom-log"></footer>
   </div>
-<script>
-(function() {
-  var colors = {1:'#22c55e',2:'#ef4444',3:'#f97316',4:'#eab308',5:'#6b7280',6:'#3b82f6',7:'#8b5cf6'};
-  var icons = {1:'✓',2:'✗',3:'↻',4:'±',5:'∅',6:'⟳',7:'⚠'};
-  function applyStyles() {
-    document.querySelectorAll('button').forEach(function(btn) {
-      var txt = (btn.textContent || '').trim();
-      for (var i = 1; i <= 7; i++) {
-        if (txt.indexOf('S' + i) === 0) {
-          btn.style.borderLeft = '4px solid ' + colors[i];
-          if (!btn.getAttribute('data-iconed')) {
-            btn.setAttribute('data-iconed', '1');
-            var s = document.createElement('span');
-            s.style.cssText = 'color:' + colors[i] + ';font-weight:900;margin-right:4px;';
-            s.textContent = icons[i] + ' ';
-            btn.prepend(s);
-          }
-          break;
-        }
-      }
-    });
-  }
-  setInterval(applyStyles, 500);
-  setTimeout(applyStyles, 100);
-  setTimeout(applyStyles, 500);
-  setTimeout(applyStyles, 1000);
-  setTimeout(applyStyles, 2000);
-})();
-</script>
+<script>(function(){var C={1:'#22c55e',2:'#ef4444',3:'#f97316',4:'#eab308',5:'#6b7280',6:'#3b82f6',7:'#8b5cf6'};var I={1:'✓',2:'✗',3:'↻',4:'±',5:'∅',6:'⟳',7:'⚠'};function applyStyles(){document.querySelectorAll('button').forEach(function(b){var t=(b.textContent||'').trim();for(var i=1;i<=7;i++){if(t.indexOf('S'+i)===0){b.style.borderLeft='4px solid '+C[i];if(!b.getAttribute('data-iconed')){b.setAttribute('data-iconed','1');var s=document.createElement('span');s.style.cssText='color:'+C[i]+';font-weight:900;margin-right:4px;';s.textContent=I[i]+' ';b.prepend(s);}break;}}});}setInterval(applyStyles,500);setTimeout(applyStyles,100);setTimeout(applyStyles,500);setTimeout(applyStyles,1000);setTimeout(applyStyles,2000);})();</script>
 </body>
 </html>

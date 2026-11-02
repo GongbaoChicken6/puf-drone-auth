@@ -145,8 +145,15 @@ export class Label {
     g.font = font;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    if (this.glow) { g.shadowColor = color; g.shadowBlur = 14; }
-    g.fillStyle = color;
+    // 光晕(shadowBlur)会把标签放大成 Bloom 光斑 → 改为深色描边 + 白色填充,清晰度优先
+    if (this.glow) {
+      g.lineWidth = 6;
+      g.strokeStyle = 'rgba(4, 8, 16, 0.92)';
+      g.strokeText(this.text, w / 2, h / 2);
+      g.fillStyle = '#ffffff';
+    } else {
+      g.fillStyle = color;
+    }
     g.fillText(this.text, w / 2, h / 2);
 
     const tex = new CanvasTexture(cv);
