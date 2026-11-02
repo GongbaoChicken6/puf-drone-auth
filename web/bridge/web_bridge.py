@@ -1640,6 +1640,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="HTTP 端口(默认 8642;仅绑 --bind)")
     p.add_argument("--bind", default="127.0.0.1", help="监听地址(默认仅回环)")
     p.add_argument("--strict-port", action="store_true", help="端口被占即失败(默认自愈顺延)")
+    p.add_argument("--serial-port", default=None,
+                   help="real serial port (e.g. COM11) for real-hardware mode")
+    p.add_argument("--serial-baud", type=int, default=115200)
     p.add_argument("--loopback", action="store_true",
                    help="回环模式(当前唯一模式;与报告 §8.1 启动命令保持兼容)")
     p.add_argument("--open", action="store_true", help="启动后打开浏览器")
@@ -1819,6 +1822,134 @@ def run_once(args) -> int:
     return 0 if ok else 1
 
 
+class RealSerialListener:
+    """D2 real-hardware mode: listens on serial for board ACCESS_REQUEST, runs full auth."""
+    def __init__(self, app, port, baud):
+        import serial as _ps
+        self.ser = _ps.Serial(port, baud, timeout=0.05)
+        self.app = app; self.hub = app.hub; self.proto = app.protocol
+        self.P = type(app.protocol)
+        self.running = False
+    def start(self):
+        self.running = True
+        # Inject real templates + pools so the protocol can authenticate real boards
+        import json as _json
+        from pathlib import Path as _P
+        root = _P(__file__).resolve().parents[2]
+        tpl_f = root / "data" / "templates" / "templates.json"
+        if tpl_f.exists():
+            real = _json.loads(tpl_f.read_text(encoding="utf-8"))
+            for tid, pairs in real.items():
+                if tid not in ("7","9","55","99"):  # skip demo tids
+                    self.proto.templates.templates[tid] = pairs
+                    self._log(f"Injected real template tid={tid} ({len(pairs)} CRPs)")
+        for tid in (1, 2):
+            pool_f = root / "data" / "crp_datasets" / "pools" / f"pool_{tid}.json"
+            if pool_f.exists():
+                pool_data = _json.loads(pool_f.read_text(encoding="utf-8"))
+                try:
+                    _p = self.proto.pools.get(tid)
+                    _p._available = set(pool_data.get("available", []))
+                    _p._used = set(pool_data.get("used", []))
+                    self._log(f"Pool tid={tid} loaded: {_p.remaining}/{_p.pool_size} available")
+                except Exception as _e:
+                    self._log(f"Pool tid={tid} inject failed: {_e}", "error")
+        threading.Thread(target=self._loop, daemon=True).start()
+        self.hub.publish("server.log", {"level":"info",
+            "msg":f"REAL SERIAL: {self.ser.port}@{self.ser.baudrate} — press SW7 on board"})
+    def _loop(self):
+        buf = b""
+        while self.running:
+            try: n = self.ser.in_waiting
+            except OSError: break
+            if not n: time.sleep(0.005); continue
+            buf += self.ser.read(n)
+            while len(buf) >= 12 and buf[0] == 0xFD:
+                total = 10 + buf[1] + 2
+                if len(buf) < total: break
+                frame, buf = buf[:total], buf[total:]
+                try: mid, fl = self.proto.parse(frame)
+                except Exception: continue
+                if mid == 0x0090:  # ACCESS_REQUEST
+                    self._auth(int(fl.get("terminal_id",0)), fl, frame)
+    def _auth(self, tid, ar_f, ar_raw):
+        rid = f"real-{int(time.time()*1000)}"
+        c2 = ar_f.get("c2", b"\0"*8)
+        self._ef(rid,tid,0x0090,ar_raw,False)
+        self._log(f"REAL auth tid={tid} run={rid}")
+        try: chal = self.proto.on_access_request(tid, c2=c2)
+        except Exception as e:
+            self._log(f"REAL error: {e}","error"); return
+        mid,chf = self.proto.parse(chal)
+        if mid == 0x0093:  # RESULT=error
+            self._ef(rid,tid,mid,chal,True); return
+        # CHALLENGE → board
+        time.sleep(1.0)
+        self._ef(rid,tid,0x0091,chal,True)
+        self.ser.write(chal); self.ser.flush()
+        # ← RESPONSE_R1
+        rl = 12 + 8*len(chf["seeds"]); rep=b""; t0=time.time()
+        while len(rep)<rl and time.time()-t0<3.0:
+            n=self.ser.in_waiting
+            if n: rep+=self.ser.read(n)
+            else: time.sleep(0.005)
+        if len(rep)<rl:
+            self._log(f"REAL timeout RESPONSE {len(rep)}/{rl}","error"); return
+        try: _,rf = self.proto.parse(rep)
+        except Exception: return
+        r1s = rf["r1s"]
+        time.sleep(1.0)
+        self._ef(rid,tid,0x0092,rep,False)
+        # RESULT → board
+        res = self.proto.on_response(tid, r1s)
+        rm,rf2 = self.proto.parse(res)
+        time.sleep(1.0)
+        self._ef(rid,tid,rm,res,True)
+        self.ser.write(res); self.ser.flush()
+        rv = int(rf2.get("result",2))
+        hd = self.proto.templates.hamming_distances(tid,chf["seeds"],list(r1s))
+        from src.python.server.threshold import TAU_PASS, TAU_REJECT
+        nr = len(hd); pool_st={"remaining":0,"pool_size":0,"pct":0}
+        try:
+            _ps=self.proto.pools.get(tid).status()
+            pool_st={"remaining":_ps["remaining"],"pool_size":_ps["pool_size"],"pct":_ps["remaining_pct"]}
+        except Exception: pass
+        vp={"run_id":rid,"terminal_id":tid,"result":rv,
+            "result_name":RESULT_NAMES.get(rv,str(rv)),
+            "n_responses":nr,"hd":int(rf2.get("hd",255)),
+            "hd_per_response":hd,"pool":pool_st,
+            "thresholds":{"tau_pass":TAU_PASS,"tau_reject":TAU_REJECT,
+                "scaled_pass":TAU_PASS*max(nr,1),"scaled_reject":TAU_REJECT*max(nr,1)}}
+        if rv==0 and "r2" in rf2: vp["r2"]=rf2["r2"].hex()
+        self.hub.publish("verdict", vp)
+        # ← CONFIRM (if PASS)
+        if rv == 0:
+            cf=b""; t0=time.time()
+            while len(cf)<19 and time.time()-t0<2.0:
+                n=self.ser.in_waiting
+                if n: cf+=self.ser.read(n)
+                else: time.sleep(0.005)
+            if len(cf)>=17 and cf[0]==0xFD:
+                try:
+                    cm,_=self.proto.parse(cf)
+                    if cm==0x0094:
+                        self._ef(rid,tid,0x0094,cf,False)
+                        self.hub.publish("confirm.done",
+                            {"run_id":rid,"terminal_id":tid,"status":0,"verified_r2":True})
+                except Exception: pass
+        self.hub.publish("session.update", {"terminal_id":tid,
+            "state":"SESSION" if rv==0 else "BLOCKED"})
+    def _ef(self,rid,tid,mid,frm,out):
+        self.hub.publish("frame.tx" if out else "frame.rx", {
+            "run_id":rid,"terminal_id":tid,"msg_id":mid,
+            "name":self.P.msg_name(mid),
+            "hex":frm.hex(),"len":len(frm),
+            "dir":"server->term" if out else "term->server",
+            "source":"real-terminal"})
+    def _log(self,m,lvl="info"):
+        self.hub.publish("server.log",{"level":lvl,"msg":m})
+
+
 def main(argv: list[str] | None = None) -> int:
     console_utf8()
     args = build_parser().parse_args(argv)
@@ -1839,6 +1970,10 @@ def main(argv: list[str] | None = None) -> int:
         app = make_app(args)
         server, port = bind_with_selfheal(app, args)
         app.start()
+        _serial_listener = None
+        if getattr(args, 'serial_port', None):
+            _serial_listener = RealSerialListener(app, args.serial_port, args.serial_baud)
+            _serial_listener.start()
         url = f"http://{args.bind}:{port}/console.html"
         print(f"[INFO] serving {server.web_dist} -> {url}")
         print("[INFO] Ctrl+C 停止;仅回环流量,不触外网")
