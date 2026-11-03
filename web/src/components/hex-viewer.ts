@@ -224,20 +224,25 @@ export class HexViewer {
       if (p && p.msgId === 0x0092) r1s.push(...groupsOf8(p.payload));
     }
 
-    const mismatched = v.hd_per_response.some(h => h > 0);
-    const nBad = v.hd_per_response.filter(h => h > 0).length;
+    /* 双阈值语义:单响应 HD≤τ_pass(TAU_PASS=6)属测量噪声内的「一致」,
+     * 只有超门限才叫「与模板不一致」——否则 PASS 判定下 HD=[2,0,1,1] 会被
+     * 误报成「3/4 不一致」,与右上角大字判定自相矛盾(录像事故源)。 */
+    const tau = v.thresholds?.tau_pass ?? 6;
+    const mismatched = v.hd_per_response.some(h => h > tau);
+    const nBad = v.hd_per_response.filter(h => h > tau).length;
     const box = document.createElement('div');
     box.className = 'hv-rdiff' + (mismatched ? ' has-diff' : '');
     const head = document.createElement('div');
     head.className = 'hv-rdiff-head';
     head.innerHTML = `<b>逐响应差异</b>
       <span class="chip ${mismatched ? 'red' : 'green'}">`
-      + `${mismatched ? `${nBad} / ${v.hd_per_response.length} 个响应与模板不一致`
-        : '全部响应与模板一致'}</span>
-      <span class="hint">数据源:verdict.hd_per_response[] × /api/viz/templates 模板响应(逐位 XOR 复算)</span>`;
+      + `${mismatched
+          ? `${nBad} / ${v.hd_per_response.length} 个响应与模板不一致(HD>τ=${tau})`
+          : `全部响应与模板一致(翻转位在噪声门限 τ=${tau} 内)`}</span>
+      <span class="hint">数据源:verdict.hd_per_response[] × /api/viz/templates 模板响应(逐位 XOR 复算;τ=TAU_PASS 单响应门限)</span>`;
     box.append(head);
 
-    if (!mismatched) {
+    if (v.hd_per_response.every(h => h === 0)) {
       const t = document.createElement('p');
       t.className = 'hv-empty';
       t.textContent = `HD 全 0(共 ${v.hd_per_response.length} 个响应)—— 无需差异高亮。`
@@ -250,8 +255,11 @@ export class HexViewer {
     void this.ensureTemplates(run.terminal_id).then(() => {
       for (let i = 0; i < r1s.length && i < v.hd_per_response.length; i++) {
         const seed = seeds[i], resp = r1s[i];
-        const tplHex = this.templates?.[String(run.terminal_id)]?.responses?.[seed] ?? null;
-        box.append(this.bitRow(i + 1, resp, tplHex, v.hd_per_response[i], seed));
+        /* 桥侧模板键为小写 hex,帧解析出的 seed 为大写 —— 统一小写再查,
+         * 否则每个 seed 都「查无此键」,面板永远显示「模板中无该 seed」。 */
+        const tplHex = this.templates?.[String(run.terminal_id)]
+          ?.responses?.[seed.toLowerCase()] ?? null;
+        box.append(this.bitRow(i + 1, resp, tplHex, v.hd_per_response[i], seed, tau));
       }
       if (r1s.length === 0) {
         const t = document.createElement('p');
@@ -268,7 +276,14 @@ export class HexViewer {
     if (this.templateTid === tid && this.templates) return;
     try {
       const raw = await api.getVizTemplates();
-      this.templates = raw.terminals;
+      /* 键统一小写(桥侧为小写;此处兜一层,防未来大小写漂移再炸查找) */
+      const norm: typeof raw.terminals = {};
+      for (const [tid, t] of Object.entries(raw.terminals)) {
+        const responses: Record<string, string> = {};
+        for (const [k, val] of Object.entries(t.responses)) responses[k.toLowerCase()] = val;
+        norm[tid] = { responses, stability_mask: t.stability_mask };
+      }
+      this.templates = norm;
       this.templateTid = tid;
     } catch {
       this.templates = null;
@@ -276,7 +291,7 @@ export class HexViewer {
   }
 
   private bitRow(idx: number, respHex: string, tplHex: string | null,
-                 claimedHd: number, seed: string): HTMLElement {
+                 claimedHd: number, seed: string, tau = 6): HTMLElement {
     const row = document.createElement('div');
     row.className = 'hv-bitrow';
     const d = tplHex ? bitDiff(tplHex, respHex) : null;
@@ -285,7 +300,7 @@ export class HexViewer {
     const head = document.createElement('div');
     head.className = 'hv-bitrow-head';
     head.innerHTML = `<b>响应 #${idx}</b>
-      <span class="chip ${claimedHd === 0 ? 'green' : 'red'}">HD ${claimedHd}</span>`
+      <span class="chip ${claimedHd <= tau ? 'green' : 'red'}" title="单响应噪声门限 τ=${tau}(TAU_PASS)">HD ${claimedHd}</span>`
       + (d ? `<span class="chip ${agree ? 'green' : 'amber'}"
         title="${agree ? '前端由模板逐位 XOR 复算的位数与桥接下发的 hd_per_response 完全一致 —— 说明该 HD 确实是从模板算出的'
           : '前端复算位数与桥接下发的 hd_per_response 不一致,须核对(可能模板在注册后被刷新)'}"
