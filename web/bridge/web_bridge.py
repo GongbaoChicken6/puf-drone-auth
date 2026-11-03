@@ -601,6 +601,20 @@ class Orchestrator:
         run_id = job.run_id or self.next_run_id()
         self.hub.publish("server.log", {
             "level": "info", "msg": f"auth start tid={tid} mode={mode} run={run_id}"})
+        # 守卫:真板终端(模板经串口实板注入)不能走 loopback 仿真认证 ——
+        # SimulatedTerminal 的 PUF 与真板是两套硬件,响应必然失配(HD≈50%),
+        # 表现为「点认证通过却显示指纹匹配未通过」的误导性 REJECT。
+        # 真板认证只能由板子主动发起(SW7 → RealSerialListener._auth)。
+        if int(tid) in getattr(self.app, "real_serial_tids", set()):
+            why = (f"tid={tid} 为真板终端:loopback 仿真无法复现其实板指纹,"
+                   f"已拦截本轮认证(避免误导性 REJECT)。演示请改用演示终端(7/9),"
+                   f"真板认证请按 SW7 由板子发起(REAL-LIVE)。")
+            self.hub.publish("server.log", {"level": "warn", "msg": why})
+            self.hub.publish("run.error", {
+                "run_id": run_id, "stage": "auth", "error": why,
+                "terminal_id": tid})
+            self._emit_verdict(run_id, tid, {"result": 2, "hd": 0xFF}, [])
+            return run_id
         try:
             self.mods.ensure_device_key(self.store, self.protocol, tid)
             if mode == "replay":
@@ -747,6 +761,17 @@ class Orchestrator:
     def _do_enroll(self, job: Job) -> str:
         tid = int(job.tid or 0)
         run_id = job.run_id or self.next_run_id()
+        # 守卫:真板终端的模板/池来自实板串口注入,loopback 重注册会先用仿真
+        # 终端重测并覆盖真板数据(_do_enroll 下方 pool.reset + templates 清空),
+        # 属于不可逆的数据污染 —— 直接拒绝。
+        if int(tid) in getattr(self.app, "real_serial_tids", set()):
+            why = (f"enroll tid={tid} 已拒绝:真板终端的模板与池来自实板注入,"
+                   f"loopback 重注册会用仿真数据将其覆盖。需要重注册请在真板上操作。")
+            self.hub.publish("server.log", {"level": "warn", "msg": why})
+            self.hub.publish("run.error", {
+                "run_id": run_id, "stage": "enroll", "error": why,
+                "terminal_id": tid})
+            return run_id
         pool = self.protocol.pools.get(tid)
         want = max(1, int(job.n))
         if job.fresh or pool.available_count + want > pool.pool_size:
@@ -1839,10 +1864,15 @@ class RealSerialListener:
         tpl_f = root / "data" / "templates" / "templates.json"
         if tpl_f.exists():
             real = _json.loads(tpl_f.read_text(encoding="utf-8"))
+            real_tids = getattr(self.app, "real_serial_tids", set())
             for tid, pairs in real.items():
                 if tid not in ("7","9","55","99"):  # skip demo tids
                     self.proto.templates.templates[tid] = pairs
+                    real_tids.add(int(tid))
                     self._log(f"Injected real template tid={tid} ({len(pairs)} CRPs)")
+            # 供 Orchestrator 守卫使用:loopback 仿真无法复现真板指纹,
+            # 对这些 tid 的 REST auth/enroll 必须拦截(见 _do_auth/_do_enroll)
+            self.app.real_serial_tids = real_tids
         for tid in (1, 2):
             pool_f = root / "data" / "crp_datasets" / "pools" / f"pool_{tid}.json"
             if pool_f.exists():

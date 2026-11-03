@@ -239,7 +239,7 @@ export class ScenarioPlayer {
     }
 
     if (!this.stopFlag && g === this.gen) {
-      await delay(700);         // 让判定大字与舞台动效停留可见
+      await delay(2000);        // 让判定大字与舞台动效停留可见(700→2000:连播时 PASS/REJECT 定格足够入镜)
       if (g !== this.gen) return;               // 停留期间被新循环取代
       this.index++;
       this.emit();

@@ -172,7 +172,11 @@ class Store {
       t.pool_pct = p.pct;
     }
     if (this.state.selectedTerminal == null && this.state.terminals.size > 0) {
-      this.state.selectedTerminal = Math.min(...this.state.terminals.keys());
+      /* 默认选中演示终端(优先 tid7):tid1/2 是真板终端,loopback 仿真无法复现
+       * 其指纹(桥侧守卫会拦截并报 ERROR),若默认落在真板上,用户第一次点
+       * 剧本就会吃到「错误」而非预期的 PASS/REJECT 叙事。 */
+      const demo = [7, 9, 55, 99].find(id => this.state.terminals.has(id));
+      this.state.selectedTerminal = demo ?? Math.min(...this.state.terminals.keys());
     }
     this.emit();
   }

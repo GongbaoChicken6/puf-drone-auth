@@ -129,6 +129,21 @@ export class Topbar {
       this.deps.onFrameMs(ms);
     });
 
+    /* 单幕键 S1…S7:只跑一幕、结束定格 —— 互斥连播 S1→S2 会把 S1 的 PASS
+     * 定格瞬间立刻覆盖成 S2 的 REJECT,录像/讲解需要「认证通过」可停在屏上。 */
+    const one = document.createElement('span');
+    one.className = 'tb-one-shots';
+    one.title = '单幕播放:只跑所选场景,结束后画面定格在判定结果';
+    for (const s of SCENARIOS) {
+      const b = document.createElement('button');
+      b.className = 'btn ghost';
+      b.textContent = s.id;
+      b.title = `${s.id} ${s.name} —— ${s.focus}\n预期:${s.expect}\n(单幕播放,结束后定格)`;
+      b.addEventListener('click', () => this.deps.onPlay([s.id]));
+      one.appendChild(b);
+    }
+    this.playBtn.parentElement!.insertBefore(one, this.playBtn);
+
     this.playBtn.addEventListener('click', () => this.deps.onPlay(QUEUE_MUTEX));
     this.q('#tb-play-all').addEventListener('click', () => this.deps.onPlay(QUEUE_ALL));
     this.stepBtn.addEventListener('click', () => this.deps.onStep());

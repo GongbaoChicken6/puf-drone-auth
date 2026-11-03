@@ -29,7 +29,7 @@
 
 /* ============================ 顶栏 ============================ */
 .topbar{
-  display:flex; align-items:center; gap:14px;
+  display:flex; align-items:center; gap:9px;
   padding:0 14px; height:var(--topbar-h);
   background:linear-gradient(180deg,var(--bg3),var(--bg2));
   border-bottom:1px solid var(--border);
@@ -86,12 +86,16 @@
 
 .tb-slider{ display:flex; align-items:center; gap:8px; font-size:var(--fs-sm); }
 .tb-slider .k{ color:var(--muted); }
-.tb-slider input[type=range]{ width:110px; accent-color:var(--cyan); }
+.tb-slider input[type=range]{ width:84px; accent-color:var(--cyan); }
 .tb-slider .v{ font-size:var(--fs-sm); color:var(--cyan); min-width:52px; }
 
 .tb-scripts{ display:flex; align-items:center; gap:6px; }
 .tb-scripts .k{ color:var(--muted); font-size:var(--fs-sm); }
 .tb-scripts .btn{ padding:3px 9px; font-size:var(--fs-sm); }
+/* 单幕键 S1…S7:比队列键更紧凑,保证顶栏在 1280 宽度下不溢出 */
+.tb-one-shots{ display:flex; align-items:center; gap:2px; }
+.tb-one-shots .btn{ padding:3px 5px; font-size:var(--fs-sm); line-height:1.2; }
+.tb-one-shots .btn:not(:hover){ border-color:transparent; }
 .tb-scen-stat{ font-size:var(--fs-sm); color:var(--muted); min-width:118px; font-variant-numeric:tabular-nums; }
 
 .tb-spacer{ flex:1; }
