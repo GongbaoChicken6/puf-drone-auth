@@ -605,7 +605,11 @@ class Orchestrator:
         # SimulatedTerminal 的 PUF 与真板是两套硬件,响应必然失配(HD≈50%),
         # 表现为「点认证通过却显示指纹匹配未通过」的误导性 REJECT。
         # 真板认证只能由板子主动发起(SW7 → RealSerialListener._auth)。
-        if int(tid) in getattr(self.app, "real_serial_tids", set()):
+        # 例外:mode=replay 放行 —— 重放在 C2 窗检查阶段即被拒,不消耗挑战池、
+        # 不请求任何指纹响应,判定语义对真板诚实;这正是「攻击者重发录制帧」的入口。
+        # 注意:on_access_request 的限流令牌在 C2 检查*之前*扣除——重放点击与真板实轮
+        # 共享每分钟配额,连点多次后真板会被限流(这本身是抗滥用语义,但须知晓)。
+        if mode != "replay" and int(tid) in getattr(self.app, "real_serial_tids", set()):
             why = (f"tid={tid} 为真板终端:loopback 仿真无法复现其实板指纹,"
                    f"已拦截本轮认证(避免误导性 REJECT)。演示请改用演示终端(7/9),"
                    f"真板认证请按 SW7 由板子发起(REAL-LIVE)。")
@@ -615,8 +619,15 @@ class Orchestrator:
                 "terminal_id": tid})
             self._emit_verdict(run_id, tid, {"result": 2, "hd": 0xFF}, [])
             return run_id
+        real_tids = getattr(self.app, "real_serial_tids", set())
+        if mode == "replay" and int(tid) in real_tids:
+            self.hub.publish("server.log", {"level": "info",
+                "msg": f"replay tid={tid}: 重放尝试与真板实轮共享限流配额(各扣 1 令牌/次)"})
         try:
-            self.mods.ensure_device_key(self.store, self.protocol, tid)
+            if mode == "replay" and int(tid) in real_tids:
+                pass  # 真板重放路径:绝不铸钥/不建仿真终端,仅走 C2 窗口拒绝
+            else:
+                self.mods.ensure_device_key(self.store, self.protocol, tid)
             if mode == "replay":
                 c2 = self._replay_c2(tid)
             else:
@@ -650,7 +661,10 @@ class Orchestrator:
             return run_id
         finally:
             self.mods.flush_c2_state(self.protocol, self.store)
-            self.app.persist_terminal(tid)
+            # persist_terminal 会经 transport.inner.terminal() 惰性创建随机仿真终端并把
+            # 伪造指纹落盘——真板 tid 绝不允许走这条路。
+            if int(tid) not in real_tids:
+                self.app.persist_terminal(tid)
 
     def _open_round(self, run_id: str, tid: int, c2: bytes):
         """代演 ACCESS_REQUEST → on_access_request → 解析返回帧。"""
@@ -748,6 +762,19 @@ class Orchestrator:
         """S3:复用「旧 C2」。无素材时先诚实跑一次 S1(需要先有捕获)。"""
         if tid in self._cached_c2:
             return self._cached_c2[tid]
+        # 真板 tid 的重放素材:串口实轮的 C2 已进协议重放窗(c2_history 即窗内集),
+        # 取最近一个 —— 等价于「攻击者重发刚录制的真实 ACCESS_REQUEST」。
+        hist = self.protocol.c2_history(tid)
+        if hist:
+            c2 = hist[-1]
+            self.hub.publish("server.log", {
+                "level": "info",
+                "msg": f"replay tid={tid}: reusing captured real C2 {c2.hex()} "
+                       f"(from serial round, inside replay window)"})
+            return c2
+        if int(tid) in getattr(self.app, "real_serial_tids", set()):
+            raise RuntimeError(f"replay tid={tid}: 真板尚无已捕获 C2 —— 请先在真板上按 SW7 "
+                               f"完成一轮真实认证,再发起重放演示")
         self.hub.publish("server.log", {
             "level": "info",
             "msg": f"replay tid={tid}: no captured C2 yet; running one normal auth first"})
@@ -842,6 +869,13 @@ class Orchestrator:
 
     def _do_setkey(self, job: Job) -> bool:
         tid = int(job.tid or 0)
+        if int(tid) in getattr(self.app, "real_serial_tids", set()):
+            # 不阻断(重烧板后的重新对钥依赖此入口),但必须留下显眼审计痕迹:
+            # 真板密钥被覆盖会直接导致后续 PASS 轮 R2 全错、CONFIRM 永不出现。
+            self.hub.publish("server.log", {
+                "level": "warn",
+                "msg": f"setkey tid={tid}: 真板终端设备密钥被显式覆盖 —— 若非有意重对钥,"
+                      f"请立即恢复,否则真板 CONFIRM 将失败"})
         key = bytes.fromhex(job.key_hex or W3_DEMO_KEY_HEX)
         self.store.set_key(tid, key)
         hsm = self.protocol.hsm
@@ -854,6 +888,17 @@ class Orchestrator:
         return True
 
     def _do_demo_reset(self, job: Job) -> bool:
+        tid = int(job.tid or 0)
+        # 守卫:demo_reset 会先删 pool_{tid}.json 并重置 C2 历史,再走 fresh enroll——
+        # 对真板 tid 前半段就已不可逆破坏实板池源文件(RealSerialListener 的注入源),
+        # 必须在一切动作之前拒绝。
+        if int(tid) in getattr(self.app, "real_serial_tids", set()):
+            why = (f"demo_reset tid={tid} 已拒绝:该终端为真板终端,重置会删除其实板"
+                   f"挑战池文件并清空重放记录(不可逆)。S5 重演请用演示终端(7/9/99)。")
+            self.hub.publish("server.log", {"level": "warn", "msg": why})
+            self.hub.publish("run.error", {"run_id": self.next_run_id(), "stage": "demo_reset",
+                                            "error": why, "terminal_id": tid})
+            return False
         """S5 重演:清小池演示终端状态并按小池容量重新注册(§8.1)。"""
         tid = int(job.tid or 0)
         self.protocol.pools.remove(tid)
@@ -1862,17 +1907,19 @@ class RealSerialListener:
         from pathlib import Path as _P
         root = _P(__file__).resolve().parents[2]
         tpl_f = root / "data" / "templates" / "templates.json"
+        real_tids = getattr(self.app, "real_serial_tids", set())
+        _demo_ids = {str(d.tid) for d in getattr(self.app.args, "demo_terminals", [])} | {"55"}
         if tpl_f.exists():
             real = _json.loads(tpl_f.read_text(encoding="utf-8"))
-            real_tids = getattr(self.app, "real_serial_tids", set())
             for tid, pairs in real.items():
-                if tid not in ("7","9","55","99"):  # skip demo tids
+                if tid not in _demo_ids:  # demo tids(含历史 55)不视为真板
                     self.proto.templates.templates[tid] = pairs
                     real_tids.add(int(tid))
                     self._log(f"Injected real template tid={tid} ({len(pairs)} CRPs)")
-            # 供 Orchestrator 守卫使用:loopback 仿真无法复现真板指纹,
-            # 对这些 tid 的 REST auth/enroll 必须拦截(见 _do_auth/_do_enroll)
-            self.app.real_serial_tids = real_tids
+        else:
+            self._log("data/templates/templates.json 缺失:真板模板未注入,real 守卫将为空集", "error")
+        # 无条件落属性:守卫生效性不再与文件存在性隐式耦合
+        self.app.real_serial_tids = real_tids
         for tid in (1, 2):
             pool_f = root / "data" / "crp_datasets" / "pools" / f"pool_{tid}.json"
             if pool_f.exists():
@@ -1901,7 +1948,10 @@ class RealSerialListener:
                 try: mid, fl = self.proto.parse(frame)
                 except Exception: continue
                 if mid == 0x0090:  # ACCESS_REQUEST
-                    self._auth(int(fl.get("terminal_id",0)), fl, frame)
+                    try:
+                        self._auth(int(fl.get("terminal_id",0)), fl, frame)
+                    except Exception as e:  # noqa: BLE001 —— 监听线程必须永死不了
+                        self._log(f"REAL auth handler error (thread kept alive): {type(e).__name__}: {e}", "error")
     def _auth(self, tid, ar_f, ar_raw):
         rid = f"real-{int(time.time()*1000)}"
         c2 = ar_f.get("c2", b"\0"*8)
@@ -1911,10 +1961,23 @@ class RealSerialListener:
         except Exception as e:
             self._log(f"REAL error: {e}","error"); return
         mid,chf = self.proto.parse(chal)
-        if mid == 0x0093:  # RESULT=error
-            self._ef(rid,tid,mid,chal,True); return
+        if mid == 0x0093:  # RESULT=error(REPLAY/ERROR/POOL_EMPTY 等)
+            # 帧必须真的写给板子,否则板侧只能等超时,而网页却展示了一条"已发送"——
+            # 那是伪造的上线证据。写失败也要落日志。
+            try:
+                time.sleep(0.2)
+                self._ef(rid,tid,mid,chal,True)
+                self.ser.write(chal); self.ser.flush()
+                self._log(f"REAL early-RESULT mid=0x{mid:04x} written to board (run={rid})")
+            except Exception as e:
+                self._log(f"REAL early-RESULT write failed: {e}", "error")
+            return
         # CHALLENGE → board
-        time.sleep(1.0)
+        # 节奏修复(1103):真串口路径的帧间 sleep 不得超过板侧等待窗——R1→RESULT 必须
+        # < S_WAIT_RESULT=2.000s。曾为看动画把三处 sleep 提到 1.0s,结果 R1→RESULT≈2.04s
+        # 恰好超窗 40ms,板子按超时处理(L+R 双亮、无 CONFIRM)。回退 0.2s(0.2+0.2+计算
+        # ≈0.42s,余量 1.6s);网页动画是事件驱动的,不依赖这些 sleep。
+        time.sleep(0.2)
         self._ef(rid,tid,0x0091,chal,True)
         self.ser.write(chal); self.ser.flush()
         # ← RESPONSE_R1
@@ -1926,14 +1989,16 @@ class RealSerialListener:
         if len(rep)<rl:
             self._log(f"REAL timeout RESPONSE {len(rep)}/{rl}","error"); return
         try: _,rf = self.proto.parse(rep)
-        except Exception: return
+        except Exception as e:
+            self._log(f"REAL RESPONSE_R1 parse failed ({len(rep)}B): {type(e).__name__}: {e}", "error")
+            return
         r1s = rf["r1s"]
-        time.sleep(1.0)
+        time.sleep(0.2)
         self._ef(rid,tid,0x0092,rep,False)
         # RESULT → board
         res = self.proto.on_response(tid, r1s)
         rm,rf2 = self.proto.parse(res)
-        time.sleep(1.0)
+        time.sleep(0.2)
         self._ef(rid,tid,rm,res,True)
         self.ser.write(res); self.ser.flush()
         rv = int(rf2.get("result",2))
