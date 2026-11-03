@@ -1938,15 +1938,24 @@ class RealSerialListener:
         buf = b""
         while self.running:
             try: n = self.ser.in_waiting
-            except OSError: break
+            except OSError as _e:
+                self._log(f"REAL serial port lost, listener exiting: {_e}", "error")
+                break
             if not n: time.sleep(0.005); continue
             buf += self.ser.read(n)
+            # 重同步:流中混入噪声时丢到下一个 0xFD 为止,否则缓冲永久卡死
+            if len(buf) >= 12 and buf[0] != 0xFD:
+                _nx = buf.find(b'\xfd', 1)
+                self._log(f"REAL resync: dropped {len(buf) if _nx < 0 else _nx} non-frame bytes", "error")
+                buf = b"" if _nx < 0 else buf[_nx:]
             while len(buf) >= 12 and buf[0] == 0xFD:
                 total = 10 + buf[1] + 2
                 if len(buf) < total: break
                 frame, buf = buf[:total], buf[total:]
                 try: mid, fl = self.proto.parse(frame)
-                except Exception: continue
+                except Exception as _e:
+                    self._log(f"REAL frame parse failed ({len(frame)}B): {type(_e).__name__}", "error")
+                    continue
                 if mid == 0x0090:  # ACCESS_REQUEST
                     try:
                         self._auth(int(fl.get("terminal_id",0)), fl, frame)
@@ -1966,8 +1975,8 @@ class RealSerialListener:
             # 那是伪造的上线证据。写失败也要落日志。
             try:
                 time.sleep(0.2)
-                self._ef(rid,tid,mid,chal,True)
                 self.ser.write(chal); self.ser.flush()
+                self._ef(rid,tid,mid,chal,True)  # 先写成功再发事件:时间线不出现"未发出的帧"
                 self._log(f"REAL early-RESULT mid=0x{mid:04x} written to board (run={rid})")
             except Exception as e:
                 self._log(f"REAL early-RESULT write failed: {e}", "error")
@@ -2020,7 +2029,7 @@ class RealSerialListener:
         # ← CONFIRM (if PASS)
         if rv == 0:
             cf=b""; t0=time.time()
-            while len(cf)<19 and time.time()-t0<2.0:
+            while len(cf)<17 and time.time()-t0<2.0:  # CONFIRM 帧 17B(10 头+5 载荷+2 校验)
                 n=self.ser.in_waiting
                 if n: cf+=self.ser.read(n)
                 else: time.sleep(0.005)
