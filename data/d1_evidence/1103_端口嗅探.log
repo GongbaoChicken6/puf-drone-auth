@@ -1,0 +1,4 @@
+=== port sniffer start 15:38:49 ports=['COM6', 'COM9', 'COM10'] baud=115200 dur=60s ===
+15:39:07.523 COM9 +19B fd10000000010290000001000000deadbeef42
+15:39:07.523 COM9 +9B 5a426240fb37a2123d
+=== sniffer end totals: COM6=0B COM9=28B COM10=0B ===
