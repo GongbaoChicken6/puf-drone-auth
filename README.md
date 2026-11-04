@@ -35,7 +35,7 @@ The recommended structure is non-mandatory; teams using a different organization
 | web/ | §3.3.5.1 · host application (PS-side software) | PC base-station bridge + demo console frontend (offline self-contained dist) |
 | data/ | §3.3.5.1 · measured output & reference comparison data | Registration templates / challenge pools / device keys (public demo keys) / ML experiment data / bitstream hash anchor / clone-attack root-cause archive |
 | metrics/ | §3.2.5-style metrics directory (voluntary) | metrics.csv (sole authoritative summary) + logs/ (23 raw logs) |
-| docs/ | §3.3.5.1 · design documents | System design (project_design.md), protocol contract (protocol_contract.md), principle visualization (visualization.html) |
+| docs/ | §3.3.5.1 · design documents | System design (project_design.md), protocol contract (protocol_contract.md), principle visualization (visualization.html), board runbook (zc706_board_runbook.md) |
 | skill/ | §3.3.5.2 · skill package | 5 reusable PYNQ skills + pitfall list + workflows (scope/usage/failure conditions in its README) |
 | report/ | §3.3.5.3 · design report | design_report.pdf / .docx / figures (23 PNGs named by figure number) / llm_log (curated AI-collaboration record, collaboration_record.md) |
 | LICENSE | §3.3.3.3 · open-source license | MIT |

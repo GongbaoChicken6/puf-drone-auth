@@ -34,7 +34,7 @@
 | web/ | 3.3.5.1 · 上位机应用（PS 侧软件） | PC 基站桥（bridge）+ 演示监控台前端（dist 自足离线） |
 | data/ | 3.3.5.1 · 实测输出与参考结果的比对数据 | 注册模板/挑战池/设备密钥（公开演示钥）/ML 实验数据/bit 哈希锚/克隆攻击根因档案 |
 | metrics/ | 3.2.5 式指标目录（自愿采用） | metrics.csv（唯一权威指标汇总）+ logs/（23 份原始日志） |
-| docs/ | 3.3.5.1 · 设计文档 | 系统设计（project_design.md）、接口协议契约（protocol_contract.md）、原理可视化页（visualization.html） |
+| docs/ | 3.3.5.1 · 设计文档 | 系统设计（project_design.md）、接口协议契约（protocol_contract.md）、原理可视化页（visualization.html）、板卡操作手册（zc706_board_runbook.md） |
 | skill/ | 3.3.5.2 · 技能包 | PYNQ 可复用技能×5 + 踩坑清单 + 工作流（适用范围/用法/失效条件见其 README） |
 | report/ | 3.3.5.3 · 设计报告 | design_report.docx / design_report.pdf / figures（23 张 PNG，按图号命名）/ llm_log（整理版协作记录 collaboration_record.md） |
 | LICENSE | 3.3.3.3 · 开源协议 | MIT |
