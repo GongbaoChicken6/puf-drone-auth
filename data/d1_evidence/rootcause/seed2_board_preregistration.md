@@ -16,7 +16,7 @@
 - 生产 bit 与 seed2 bit：**PUF 响应通路文件同源**；差异 = ①32 环振单元 PBlock 迁入 CLOCKREGION_X1Y0（生产自然布局经原样复跑实测落 X1Y4/X1Y5，零站点重叠）；②生产 bit 早于 uart_rx 修复 6b942af（不在 PUF 响应通路，+4 LUT，如实披露）。
 - 布局差异证据以**落位对比+载荷差异+复跑确定性**为准（整文件 SHA256 因头部时间戳不作布局论证，见 consensus 勘误）。
 - 根因预测：环频排序由布局决定 ⇒ 独立布局 ⇒ 独立排序 ⇒ 响应位约半数翻转。
-- **带宽推导（MC 立靶，review/lead_verify_and_mc_band.log）**：用 tid=1 真实 enrolled 配对表，2000 次独立随机全序的轮 HD（4 种子×64bit=256 位）：min=34，p5=87，**中位 129**，p95=168，max=202；落 [90,170] 占 89.8%；**低于 64（不 REJECT）概率 0.2%**（位相关性使二项带不适用，此为实证分布）。
+- **带宽推导（MC 立靶；原计算脚本与日志未随包分发）**：用 tid=1 真实 enrolled 配对表，2000 次独立随机全序的轮 HD（4 种子×64bit=256 位）：min=34，p5=87，**中位 129**，p95=168，max=202；落 [90,170] 占 89.8%；**低于 64（不 REJECT）概率 0.2%**（位相关性使二项带不适用，此为实证分布）。
 
 ## 预登记判据（烧板后逐条对账）
 
@@ -57,5 +57,5 @@
 ## 证据文件（均已入库）
 
 - 构建：rootcause/build_seed2.log、build/board_zc706_seed2/{ring_sites_seed2.rpt, timing.rpt, utilization.rpt, MANIFEST.txt}
-- 立靶：review/lead_verify_and_mc_band.{py,log}
-- 复审：review/（五路报告 + rerun_*）
+- 立靶：带宽数值固化于本文「带宽推导」段（原脚本未随包分发）
+- 复审：五路复审结论已并入 1101_ROOTCAUSE_consensus.md（原复审目录未随包分发）

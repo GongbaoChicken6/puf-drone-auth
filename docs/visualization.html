@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PUF 硬件指纹身份认证系统 · 原理与工作全景</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#121a33; --panel2:#0e1530; --line:#233358;
+    --cyan:#22d3ee; --green:#34d399; --orange:#fb923c; --red:#f87171; --amber:#fbbf24;
+    --text:#e6edf7; --muted:#8fa3c8; --term:#fb923c; --gw:#22d3ee;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;line-height:1.6}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 60px}
+  header{text-align:center;padding:34px 0 10px}
+  header h1{font-size:30px;letter-spacing:1px}
+  header h1 .hl{color:var(--cyan)}
+  header p{color:var(--muted);margin-top:8px;font-size:15px}
+  .stats{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:16px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 16px;font-size:13px;color:var(--muted)}
+  .stat b{color:var(--cyan)}
+  section{margin-top:42px}
+  h2{font-size:20px;border-left:4px solid var(--cyan);padding-left:12px;margin-bottom:6px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:18px;padding-left:16px}
+  .stage{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:22px 18px 14px}
+  .pstage{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:16px 14px 12px}
+  canvas#puf{display:block;width:100%;height:auto;border-radius:10px;background:#0a0f22}
+  .pcap{margin-top:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13.5px;min-height:52px}
+  .pcap b{color:var(--cyan)}
+  .pcap .step{font-family:Consolas,monospace;color:#a5f3fc;margin-right:8px}
+  .ctrl{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  .btn{background:linear-gradient(135deg,#0891b2,#155e75);color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:14px;cursor:pointer}
+  .btn:hover{filter:brightness(1.15)}
+  .btn.ghost{background:var(--panel);border:1px solid var(--line);color:var(--muted)}
+  .dots{display:flex;gap:6px;margin-left:auto}
+  .dot{width:9px;height:9px;border-radius:50%;background:#2c3d63}
+  .dot.on{background:var(--cyan)} .dot.done{background:var(--green)}
+  .row{display:flex;align-items:stretch;gap:0}
+  .board{width:30%;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;transition:box-shadow .3s,border-color .3s}
+  .board.term{border-color:#7c4a1e}
+  .board.gw{border-color:#155e75}
+  .board.glowT{box-shadow:0 0 0 2px var(--orange),0 0 24px rgba(251,146,60,.35);border-color:var(--orange)}
+  .board.glowG{box-shadow:0 0 0 2px var(--cyan),0 0 24px rgba(34,211,238,.35);border-color:var(--cyan)}
+  .board h3{font-size:15px;text-align:center;margin-bottom:2px}
+  .board .tagline{text-align:center;font-size:11px;color:var(--muted);margin-bottom:8px}
+  .term h3{color:var(--term)} .gw h3{color:var(--gw)}
+  .mod{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 9px;font-size:12px;margin-top:6px;color:var(--muted)}
+  .mod b{color:var(--text);font-weight:600}
+  .mod small{display:block;font-size:11px;color:#6d81ad}
+  .air{flex:1;position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:0 6px}
+  .airline{position:absolute;left:4%;right:4%;top:50%;height:0;border-top:2px dashed #3b4f7e}
+  .tower{font-size:26px;position:absolute;top:50%;transform:translateY(-140%)}
+  .tower.l{left:2%} .tower.r{right:2%}
+  .air .band{position:relative;z-index:2;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:2px 14px;font-size:12px;color:var(--muted);text-align:center}
+  .wave{position:absolute;top:50%;left:14%;width:8px;height:8px;border:2px solid var(--cyan);border-radius:50%;opacity:0;transform:translate(-50%,-50%)}
+  .wave.go{animation:wave 1.2s ease-out}
+  @keyframes wave{0%{opacity:.8;width:8px;height:8px}100%{opacity:0;width:90px;height:90px}}
+  .packet{position:absolute;top:38%;left:32%;transform:translate(-50%,-50%);z-index:5;
+    background:linear-gradient(135deg,#1e3a8a,#0e7490);border:1px solid var(--cyan);color:#fff;
+    border-radius:10px;padding:5px 12px;font-size:13px;white-space:nowrap;box-shadow:0 4px 18px rgba(34,211,238,.4);
+    transition:left 1.1s cubic-bezier(.4,.1,.3,1);opacity:0}
+  .packet.show{opacity:1}
+  .packet .pid{font-family:Consolas,monospace;color:#a5f3fc;margin-right:6px}
+  .expanel{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-height:86px}
+  .expanel .t{font-size:15px;color:var(--cyan);font-weight:700}
+  .expanel .d{font-size:13px;color:var(--muted);margin-top:4px}
+  .workbadge{position:absolute;top:12%;left:17%;transform:translateX(-50%);z-index:6;
+    background:#3b2f12;border:1px solid var(--orange);color:#fdba74;font-size:12px;border-radius:8px;padding:3px 12px;display:none}
+  .workbadge.show{display:block;animation:pulse 1s infinite}
+  @keyframes pulse{50%{box-shadow:0 0 14px rgba(251,146,60,.6)}}
+  .donebadge{margin-top:12px;text-align:center;font-size:15px;color:var(--green);display:none}
+  .donebadge.show{display:block;animation:pulse2 1.6s infinite}
+  @keyframes pulse2{50%{text-shadow:0 0 16px rgba(52,211,153,.8)}}
+  .fact{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+  .fcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;border-top:4px solid var(--cyan)}
+  .fcard.t{border-top-color:var(--orange)} .fcard.g{border-top-color:var(--green)}
+  .fcard h3{font-size:15px;margin-bottom:6px}
+  .fcard p{font-size:12.5px;color:var(--muted)}
+  .fcard b{color:var(--text)}
+  .quote{margin-top:38px;text-align:center;background:linear-gradient(135deg,#13224a,#0d1c3a);border:1px solid var(--line);border-radius:14px;padding:22px;font-size:16px}
+  .quote b{color:var(--cyan)} .quote i{color:var(--orange);font-style:normal}
+  footer{text-align:center;color:#5b6e96;font-size:12px;margin-top:40px}
+  @media(max-width:860px){
+    .board .mod small{display:none}
+    .packet{font-size:11px;padding:4px 8px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>🔑 <span class="hl">芯片即身份</span> · PUF 硬件指纹双向认证系统</h1>
+  <p>原理动画 · 协议流程 · 系统实貌（配合演示视频使用）</p>
+  <div class="stats">
+    <div class="stat">硬件平台 <b>ZC706 × 2</b>（AMD Zynq-7000）</div>
+    <div class="stat">双阈值判决 <b>6 / 16</b> · 待定区自动加测</div>
+    <div class="stat">板间指纹偏差均值 <b>57%</b></div>
+    <div class="stat">预置密钥 <b>0</b> 个</div>
+    <div class="stat">无线链路 <b>433 MHz</b></div>
+  </div>
+</header>
+
+<section>
+  <h2>原理动画 · 一枚芯片指纹是怎么长出来的</h2>
+  <div class="sub">振荡 → 挑战配对 → 逐位比较 → 64 位指纹 → 模板比对 → 双阈值判决 —— 点击播放，五步看懂 PUF</div>
+  <div class="pstage">
+    <canvas id="puf" width="1080" height="430"></canvas>
+    <div class="pcap" id="pcap"><span class="step">①</span><b>上电即振荡。</b>片内 16 个环形振荡器各自以"天生的"快慢跑起来——同一份电路设计，每颗芯片因制造微差，快慢次序都不同。这就是指纹的物理来源。</div>
+    <div class="ctrl">
+      <button class="btn" id="pPlay">▶ 播放</button>
+      <button class="btn ghost" id="pReset">↺ 重置</button>
+      <div class="dots" id="pdots"></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>一次双向认证是怎么跑起来的</h2>
+  <div class="sub">点击播放，看认证电报如何在无人机终端与基站之间完成互认（正常一轮五帧；协议共六类消息，第六类「加测」仅待定区触发，见原理动画⑤）</div>
+  <div class="stage">
+    <div class="workbadge" id="workbadge">⚙ 工作中</div>
+    <div class="row">
+      <div class="board term" id="boardT">
+        <h3>🛩 无人机终端 · ZC706</h3>
+        <div class="tagline">认证电路全片内实现 · 无密钥存储</div>
+        <div class="mod"><b>16 环振荡器阵列（PUF）</b><small>上电当场测频生成指纹</small></div>
+        <div class="mod"><b>挑战解码 × 序比较量化</b><small>按挑战指定配对方案生成 64 位</small></div>
+        <div class="mod"><b>协议状态机 + Speck 运算</b><small>反挑战校验、验基站应答 R2</small></div>
+        <div class="mod"><b>串口 ↔ 433MHz 电台</b><small>MAVLink v2 帧格式收发</small></div>
+      </div>
+      <div class="air">
+        <div class="airline"></div>
+        <div class="tower l">📡</div>
+        <div class="tower r">📡</div>
+        <div class="wave" id="waveL" style="left:14%"></div>
+        <div class="wave" id="waveR" style="left:86%"></div>
+        <div class="band">433 MHz 无线链路（演示亦可用有线）· MAVLink v2</div>
+        <div class="packet" id="packet"><span class="pid"></span><span class="pname"></span></div>
+      </div>
+      <div class="board gw" id="boardG">
+        <h3>🗼 地面基站 · PC + 监控台</h3>
+        <div class="tagline">认证服务 · 模板库 · 可视化</div>
+        <div class="mod"><b>挑战池（预置 100 组）</b><small>每轮取 4 组 · 配合已用记录</small></div>
+        <div class="mod"><b>模板比对 + 双阈值判决</b><small>≤6 通过 / ≥16 拒绝 / 待定区加测</small></div>
+        <div class="mod"><b>Speck64/96 应答</b><small>对反挑战 C2 算出 R2 回发</small></div>
+        <div class="mod"><b>已用应答记录</b><small>旧报文重发一票否决</small></div>
+      </div>
+    </div>
+    <div class="donebadge" id="donebadge">✅ 双向认证完成 —— 终端确认了基站，基站确认了终端，全程没有一枚密钥</div>
+    <div class="expanel">
+      <div class="t" id="exT">点击「播放」开始</div>
+      <div class="d" id="exD">左边是无人机终端（ZC706，认证电路全片内、无密钥存储）；右边是基站（PC，模板库 + 判决 + 监控台）。中间是无线链路——认证电报按无人机行业通用的 MAVLink 格式飞行。</div>
+    </div>
+    <div class="ctrl">
+      <button class="btn" id="btnPlay">▶ 播放</button>
+      <button class="btn ghost" id="btnReset">↺ 重置</button>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>系统实貌 · 已在真实硬件上闭环</h2>
+  <div class="sub">以下均为实测结论，非规划目标</div>
+  <div class="fact">
+    <div class="fcard t"><h3>🛩 两块 ZC706 · 两种身份</h3><p>终端一（生产布局）与终端二（专属布局变体）出自<b>同一套 RTL 设计、两种专属布局</b>（一机一布局）：本尊认证 <b>偏差为 0</b>、假冒接入<b>全部被拒</b>——板间指纹偏差均值 <b>57%</b>。</p></div>
+    <div class="fcard g"><h3>⚡ 快于眨眼</h3><p>有线一轮认证 <b>23~32 ms</b>，433 MHz 无线链路全程 <b>57 ms</b>，识别并拒绝假冒仅需 <b>36 ms</b>。指纹在真实硅片上生成，比对与判决在基站侧毫秒级完成。</p></div>
+    <div class="fcard"><h3>🛡 三道防线</h3><p>指纹比对拦<b>假冒</b>（判定帧即拒），已用应答记录拦<b>重放</b>（不消耗挑战），待定区加测拦<b>运气</b>——对滥用类攻击构成限损型缓解。</p></div>
+    <div class="fcard"><h3>🔑 零密钥落地</h3><p>芯片不存储任何密钥；指纹上电即时生成、用后即弃。演示使用公开测试密钥，密钥全程不落盘。</p></div>
+  </div>
+  <div class="quote">指纹长在<b>硅的物理差异</b>里，判决落在<i>双阈值</i>上，防线藏进<b>协议状态机</b>——同一份配置会造出相同的指纹，<b>一机一布局</b>让每台终端的指纹互不相同、互不可克隆。</div>
+</section>
+
+<footer>本页为离线自包含页面，可直接浏览器打开 · 数字口径与《设计报告》一致 · 2026-11</footer>
+</div>
+
+<script>
+/* ================= 协议五帧动画 ================= */
+var steps=[
+ {type:'work',side:'T',title:'终端发起接入',explain:'无人机上电，终端电路就绪。它发出第一封电报报到——没有任何软件参与，全部是片内电路在跑。'},
+ {type:'frame',dir:'t2g',id:'0x0090',name:'接入请求 ＋ 反挑战 C2',explain:'第 1 帧：终端向基站报到"我是终端一，请求接入"，同时附上随机反挑战数 C2——顺手考基站"那你又是谁"。'},
+ {type:'work',side:'G',title:'基站生成挑战',explain:'基站从预置的 100 组挑战里取出 4 组（每组指定一套环配对方案），与该终端已用应答记录配合——录下响应也没用。'},
+ {type:'frame',dir:'g2t',id:'0x0091',name:'挑战（4 组配对方案）',explain:'第 2 帧：基站把 4 组挑战发过去。就算有人偷听，下次也不会重复同样的挑战。'},
+ {type:'work',side:'T',title:'指纹电路生成响应',explain:'16 个环形振荡器当场测频，按每组挑战指定的配对方案两两比较快慢，逐位拼出 64 位指纹响应 ×4。这组挑战只有这颗芯片能给出正确响应——响应由它的物理天性和挑战共同决定。'},
+ {type:'frame',dir:'t2g',id:'0x0092',name:'指纹响应 R1 ×4',explain:'第 3 帧：终端交回四份 64 位指纹响应。'},
+ {type:'work',side:'G',title:'比对 ＋ 判决 ＋ 应答',explain:'基站把 R1 与注册模板逐位比对、数出汉明距离：不超过 6 位直接通过，不少于 16 位直接拒绝，待定区追加挑战重判。通过后用 Speck 全硬件电路对 C2 算出应答 R2。'},
+ {type:'frame',dir:'g2t',id:'0x0093',name:'判决结果 ＋ 基站应答 R2',explain:'第 4 帧：告知终端"指纹合格"，同时附上基站对 C2 的应答 R2。假基站给不出正确应答，到这一步就现形。'},
+ {type:'work',side:'T',title:'终端验基站',explain:'终端用自身密钥重算 R2 逐字节比对——对上了，基站的身份也成立。双向都验完，谁也没用过任何预置密钥。'},
+ {type:'frame',dir:'t2g',id:'0x0094',name:'确认',explain:'第 5 帧（确认）：双向鉴别闭环完成，链路进入可信状态。（协议共六类消息——第六类「加测 EXTRA_CHALLENGE」仅在判定落入待定区时追加下发，正常通过轮不出现。）'},
+ {type:'done',title:'双向认证完成',explain:'终端确认了基站，基站确认了终端——身份全靠芯片出厂自带的物理差异，全程没有一枚预置密钥。'}
+];
+var cur=-1,timer=null,playing=false;
+var pkt=document.getElementById('packet'),pid=pkt.querySelector('.pid'),pname=pkt.querySelector('.pname');
+var exT=document.getElementById('exT'),exD=document.getElementById('exD');
+var bT=document.getElementById('boardT'),bG=document.getElementById('boardG');
+var wb=document.getElementById('workbadge'),db=document.getElementById('donebadge');
+var dots=document.getElementById('dots');
+steps.forEach(function(){var d=document.createElement('div');d.className='dot';dots.appendChild(d);});
+function setDots(n){var ds=dots.children;for(var i=0;i<ds.length;i++){ds[i].className=i<n?'dot done':(i===n?'dot on':'dot');}}
+function wave(dir){var w=document.getElementById(dir==='t2g'?'waveL':'waveR');w.classList.remove('go');void w.offsetWidth;w.classList.add('go');}
+function step(){
+ cur++;
+ if(cur>=steps.length){playing=false;document.getElementById('btnPlay').textContent='▶ 重播';setDots(steps.length);return;}
+ setDots(cur);
+ var s=steps[cur];
+ exT.textContent=s.title;exD.textContent=s.explain;
+ bT.classList.remove('glowT');bG.classList.remove('glowG');wb.classList.remove('show');
+ if(s.type==='frame'){
+   pkt.classList.add('show');
+   pid.textContent=s.id;pname.textContent=s.name;
+   if(s.dir==='t2g'){pkt.style.left='32%';void pkt.offsetWidth;pkt.style.left='68%';bT.classList.add('glowT');wave('t2g');}
+   else{pkt.style.left='68%';void pkt.offsetWidth;pkt.style.left='32%';bG.classList.add('glowG');wave('g2t');}
+   timer=setTimeout(step,2000);
+ }else if(s.type==='work'){
+   wb.classList.add('show');
+   if(s.side==='T'){bT.classList.add('glowT');wb.style.left='17%';}else{bG.classList.add('glowG');wb.style.left='83%';}
+   wb.textContent='⚙ '+s.title;
+   timer=setTimeout(step,1900);
+ }else{
+   pkt.classList.remove('show');db.classList.add('show');bT.classList.add('glowT');bG.classList.add('glowG');
+   timer=setTimeout(step,700);
+ }
+}
+function reset(){clearTimeout(timer);playing=false;cur=-1;pkt.classList.remove('show');pkt.style.left='32%';
+ bT.classList.remove('glowT');bG.classList.remove('glowG');wb.classList.remove('show');db.classList.remove('show');
+ setDots(0);exT.textContent='点击「播放」开始';
+ exD.textContent='左边是无人机终端（ZC706，认证电路全片内、无密钥存储）；右边是基站（PC，模板库 + 判决 + 监控台）。中间是无线链路——认证电报按无人机行业通用的 MAVLink 格式飞行。';
+ document.getElementById('btnPlay').textContent='▶ 播放';}
+document.getElementById('btnPlay').onclick=function(){
+ if(playing){clearTimeout(timer);playing=false;this.textContent='▶ 继续';return;}
+ if(cur>=steps.length){reset();}
+ playing=true;this.textContent='⏸ 暂停';if(cur>=0&&cur<steps.length){cur--;}step();};
+document.getElementById('btnReset').onclick=reset;
+
+/* ================= 原理动画（画布） ================= */
+(function(){
+var cv=document.getElementById('puf'),cx=cv.getContext('2d');
+var W=cv.width,H=cv.height;
+var PH=[
+ {t0:0,t1:5,k:'ring',cap:['①','上电即振荡。','片内 16 个环形振荡器各自以"天生的"快慢跑起来——同一份电路设计，每颗芯片因制造微差，快慢次序都不同。这就是指纹的物理来源。']},
+ {t0:5,t1:11,k:'pair',cap:['②','挑战解码配对。','基站下发的挑战指定配对方案（示意 8 对）。每对比较两个环谁快谁慢：快→记 1，慢→记 0。实际每组挑战解码 64 对比较、拼出 64 位响应。']},
+ {t0:11,t1:15,k:'bits',cap:['③','逐位拼出指纹。','比较结果逐位落下，拼成 64 位指纹响应——它是"这颗芯片 × 这组挑战"的唯一响应：换一颗芯片，约一半的位会不同。']},
+ {t0:15,t1:20.5,k:'xor',cap:['④','与注册模板比对。','认证时把新测的指纹与注册时录下的模板逐位比对，数出不一样的位数——汉明距离 HD。本尊重测：HD 接近 0；换一块板：HD 约为一半。']},
+ {t0:20.5,t1:27,k:'verdict',cap:['⑤','双阈值判决。','偏差 ≤6 位：直接通过（绿）；≥16 位：直接拒绝（红）；落在两者之间的待定区：自动追加挑战重判，不赌运气（琥珀）。']}
+];
+var spd=[];for(var i=0;i<16;i++)spd.push(1.1+i*0.16);
+var pairBits=[];(function(){for(var i=0;i<8;i++){var a=(i*2)%16,b=(i*2+5)%16;pairBits.push({a:a,b:b,bit:(spd[a]>spd[b])?1:0});}})();
+var bits64=[];for(var i=0;i<64;i++)bits64.push(pairBits[i%8].bit^(i>7?((i*7+3)%5===0?1:0):0));
+var templ=[];for(var i=0;i<64;i++)templ.push(bits64[i]^(i===9||i===23||i===40?1:0));
+var HD=0;for(var i=0;i<64;i++)if(bits64[i]!==templ[i])HD++;
+var t=-1,playing=false,raf=null,last=0;
+var pdots=document.getElementById('pdots');
+PH.forEach(function(){var d=document.createElement('div');d.className='dot';pdots.appendChild(d);});
+function ringXY(i){var cols=8,rows=2,gx=(W-80)/cols,gy=150/rows;return {x:40+gx*(i%cols)+gx/2,y:44+gy*Math.floor(i/cols)+gy/2};}
+function drawRings(t,dim){
+ for(var i=0;i<16;i++){var p=ringXY(i);
+  var ph=(t||0)*spd[i]*2.2;
+  var r=9+3.4*Math.sin(ph);
+  var col=spd[i]>2.3?'#34d399':(spd[i]>1.7?'#22d3ee':'#8fa3c8');
+  if(dim)col='#2c3d63';
+  cx.beginPath();cx.arc(p.x,p.y,r,0,7);cx.strokeStyle=col;cx.lineWidth=2.6;cx.stroke();
+  cx.beginPath();cx.arc(p.x,p.y,1.8,0,7);cx.fillStyle=col;cx.fill();
+ }
+}
+function arrow(x1,y1,x2,y2,col){cx.strokeStyle=col;cx.lineWidth=2;cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y2);cx.stroke();
+ var a=Math.atan2(y2-y1,x2-x1);cx.beginPath();cx.moveTo(x2,y2);cx.lineTo(x2-9*Math.cos(a-0.4),y2-9*Math.sin(a-0.4));cx.lineTo(x2-9*Math.cos(a+0.4),y2-9*Math.sin(a+0.4));cx.closePath();cx.fillStyle=col;cx.fill();}
+function chip(x,y,txt,col){cx.fillStyle=col;cx.beginPath();
+ if(cx.roundRect){cx.roundRect(x-9,y-9,18,18,4);}else{cx.rect(x-9,y-9,18,18);}
+ cx.fill();cx.fillStyle='#0b1020';cx.font='bold 12px Consolas';cx.textAlign='center';cx.textBaseline='middle';cx.fillText(txt,x,y+1);}
+function draw(){
+ cx.clearRect(0,0,W,H);
+ var ph=null;for(var i=0;i<PH.length;i++)if(t>=PH[i].t0&&t<PH[i].t1)ph=PH[i];
+ if(!ph){ // finished
+  cx.fillStyle='#34d399';cx.font='bold 22px "Microsoft YaHei"';cx.textAlign='center';
+  cx.fillText('✅ 判决：通过（HD='+HD+' ≤ 6）',W/2,H/2);
+  return;}
+ var k=ph.k,lt=t-ph.t0,dur=ph.t1-ph.t0,prog=Math.min(1,lt/dur);
+ if(k==='ring'){
+  drawRings(t);
+  cx.fillStyle='#e6edf7';cx.font='15px "Microsoft YaHei"';cx.textAlign='left';
+  cx.fillText('16 × 环形振荡器 · 各自天生快慢不同',36,H-152);
+  if(prog>0.55){cx.fillStyle='#8fa3c8';cx.font='13px "Microsoft YaHei"';
+   cx.fillText('绿=快 · 青=中 · 灰=慢（示意）——快慢次序就是这颗芯片的"出生证"',36,H-128);}
+ }
+ if(k==='pair'){
+  drawRings(0,true);
+  var nshow=Math.min(8,Math.floor(lt/0.6)+1);
+  for(var i=0;i<nshow;i++){var pb=pairBits[i],A=ringXY(pb.a),B=ringXY(pb.b);
+   var mx=(A.x+B.x)/2,my=Math.min(A.y,B.y)-34;
+   arrow(A.x,A.y-14,mx,my+8,'#fbbf24');arrow(B.x,B.y-14,mx,my+8,'#fbbf24');
+   chip(mx,my,String(pb.bit),'#fbbf24');
+   var pA=ringXY(pb.a);cx.strokeStyle='#fbbf24';cx.lineWidth=2.6;cx.beginPath();cx.arc(pA.x,pA.y,12,0,7);cx.stroke();
+  }
+  cx.fillStyle='#fbbf24';cx.font='15px "Microsoft YaHei"';cx.textAlign='left';
+  cx.fillText('挑战 → 配对比较：快 = 1 · 慢 = 0（示意 8 对）',36,H-128);
+ }
+ if(k==='bits'||k==='xor'||k==='verdict'){
+  // fingerprint row
+  var bx=36,by=H-118,bw=W-72,bh=26,cw=bw/64;
+  for(var i=0;i<64;i++){
+   var lit=k==='bits'?i<Math.floor(64*prog):true;
+   cx.fillStyle=lit?(bits64[i]?'#22d3ee':'#1e3a5f'):'#141d38';
+   cx.fillRect(bx+i*cw+0.5,by,Math.max(1,cw-1.2),bh);
+  }
+  cx.fillStyle='#8fa3c8';cx.font='12px "Microsoft YaHei"';cx.textAlign='left';
+  cx.fillText('本次响应 R1（64 位）',bx,by-8);
+ }
+ if(k==='xor'){
+  var bx2=36,by2=H-64,bw2=W-72,cw2=bw2/64;
+  for(var j=0;j<64;j++){
+   var lit=j<Math.floor(64*prog);
+   var diff=templ[j]!==bits64[j];
+   cx.fillStyle=lit?(diff?'#f87171':(templ[j]?'#34d399':'#14532d')):'#141d38';
+   cx.fillRect(bx2+j*cw2+0.5,by2,Math.max(1,cw2-1.2),bh);
+  }
+  cx.fillStyle='#8fa3c8';cx.font='12px "Microsoft YaHei"';cx.textAlign='left';
+  cx.fillText('注册模板（红位 = 不一致）',bx2,by2-8);
+  if(prog>0.6){
+   cx.fillStyle='#f87171';cx.font='bold 16px "Microsoft YaHei"';cx.textAlign='left';
+   cx.fillText('汉明距离 HD = '+HD,W-190,by2-6);
+  }
+ }
+ if(k==='verdict'){
+  // threshold bar
+  var tx=90,tw=W-180,ty=H/2-40;
+  cx.fillStyle='#14532d';cx.fillRect(tx,ty,tw*6/64,44);
+  cx.fillStyle='#78350f';cx.fillRect(tx+tw*6/64,ty,tw*10/64,44);
+  cx.fillStyle='#7f1d1d';cx.fillRect(tx+tw*16/64,ty,tw*48/64,44);
+  [[6,'通过 ≤6','34d399'],[16,'拒绝 ≥16','f87171']].forEach(function(m){
+   cx.strokeStyle='#'+m[2];cx.setLineDash([5,4]);cx.lineWidth=2;
+   cx.beginPath();cx.moveTo(tx+tw*m[0]/64,ty-8);cx.lineTo(tx+tw*m[0]/64,ty+52);cx.stroke();cx.setLineDash([]);
+   cx.fillStyle='#'+m[2];cx.font='bold 12px Consolas';cx.textAlign='center';
+   cx.fillText(m[1],tx+tw*m[0]/64,ty-14);
+  });
+  cx.fillStyle='#e6edf7';cx.font='13px "Microsoft YaHei"';cx.textAlign='center';
+  cx.fillText('通过',tx+tw*3/64,ty+70);cx.fillText('待定区 自动加测',tx+tw*10.5/64,ty+70);cx.fillText('拒绝（假冒）',tx+tw*40/64,ty+70);
+  // marker slides 0 -> 2 then flash
+  var mxp=tx+tw*(HD*Math.min(1,prog*2))/64;
+  cx.beginPath();cx.moveTo(mxp,ty-16);cx.lineTo(mxp-10,ty-34);cx.lineTo(mxp+10,ty-34);cx.closePath();
+  cx.fillStyle='#34d399';cx.fill();
+  if(prog>0.5){cx.fillStyle='#34d399';cx.font='bold 20px "Microsoft YaHei"';cx.textAlign='center';
+   cx.fillText('HD = '+HD+' → 通过 ✅',W/2,ty-58);}
+  if(prog>0.78){cx.fillStyle='#fbbf24';cx.font='14px "Microsoft YaHei"';cx.textAlign='center';
+   cx.fillText('若落在 7~15：自动追加 3 组挑战合并重判 —— 不赌运气',W/2,ty+104);}
+ }
+ // header label
+ cx.fillStyle='#67e8f9';cx.font='bold 14px "Microsoft YaHei"';cx.textAlign='left';
+ cx.fillText(ph.cap[0]+' '+ph.cap[1],36,28);
+}
+function setPcap(i){var c=PH[i].cap;document.getElementById('pcap').innerHTML='<span class="step">'+c[0]+'</span><b>'+c[1]+'</b>'+c[2];}
+function setPDots(n){var ds=pdots.children;for(var i=0;i<ds.length;i++){ds[i].className=i<n?'dot done':(i===n?'dot on':'dot');}}
+function loop(ts){
+ if(!playing)return;
+ if(!last)last=ts;
+ t+=Math.min((ts-last)/1000,0.05);last=ts;
+ var idx=0;for(var i=0;i<PH.length;i++)if(t>=PH[i].t0)idx=i;
+ if(idx!==window.__pidx){window.__pidx=idx;setPcap(idx);setPDots(idx);}
+ if(t>=PH[PH.length-1].t1){playing=false;draw();setPDots(PH.length);document.getElementById('pPlay').textContent='▶ 重播';return;}
+ draw();raf=requestAnimationFrame(loop);
+}
+function play(){
+ if(playing){playing=false;cancelAnimationFrame(raf);document.getElementById('pPlay').textContent='▶ 继续';return;}
+ if(t>=PH[PH.length-1].t1||t<0){t=0;window.__pidx=-1;}
+ playing=true;last=0;document.getElementById('pPlay').textContent='⏸ 暂停';raf=requestAnimationFrame(loop);
+}
+function pReset(){playing=false;cancelAnimationFrame(raf);t=-1;window.__pidx=-1;last=0;document.getElementById('pPlay').textContent='▶ 播放';
+ setPDots(0);setPcap(0);cx.clearRect(0,0,W,H);drawRings(0,true);}
+document.getElementById('pPlay').onclick=play;
+document.getElementById('pReset').onclick=pReset;
+setPDots(0);
+// 初始画一帧静态环
+drawRings(0,true);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "schema": "puf-drone-auth/crp-pool/v2",
+  "terminal_id": 55,
+  "pool_size": 500,
+  "available": [
+    "0635b98227697484",
+    "17c400f707a21c68",
+    "1a723e0391a675d3",
+    "297a2ff363c822bf",
+    "2dca0fe8ec9c5518",
+    "2dff69b2cf81f8df",
+    "35f42b13b73645da",
+    "36fbc680e1b4fa3f",
+    "383e43014d6c1e0c",
+    "6a2e0a5fd661520b",
+    "7162676656e9b7f5",
+    "77daf33c3a4e9f00",
+    "9e1ee9c8e756fa07",
+    "a1b6bc71b660fdef",
+    "b9dd04bf1247db1c",
+    "bbd9915a124a1a3f",
+    "bed8df280519f891",
+    "c04be5815b6ca383",
+    "c0a1e7b04a0d3cf5",
+    "c69d1ed7896d3180",
+    "d085c81e0734e207",
+    "db28a892f17a6ae1",
+    "f82347bfe425a62d",
+    "fbc2612056b8cb0e"
+  ],
+  "used": []
+}

@@ -1,0 +1,15 @@
+
+=== REPLAY ===
+[REPLAY PASS] server rejected replayed ACCESS_REQUEST with RESULT_REPLAY
+
+=== BRUTE ===
+[BRUTE INFO] oracle confirmed: Speck(K,C2)=225580058b76bc58 for known pair
+[BRUTE INFO] key space: 2^96 = ~7.92e+28
+[BRUTE INFO] at 10^12 keys/sec (GPU): ~916992621693 days
+[BRUTE INFO] current RTL DEVICE_KEY is the public NSA vector (known limitation, P1-1 T1 pending)
+[BRUTE PASS] oracle quantified with non-public test key; 2^96 key space
+
+=== INJECT ===
+[INJECT PASS] server survived 2 injections + post-injection auth PASS
+
+THREAT_POC PASS: all 3 case(s) passed

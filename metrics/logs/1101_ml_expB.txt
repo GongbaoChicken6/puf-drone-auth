@@ -1,0 +1,7 @@
+=== Experiment B: RO ranking reconstruction ===
+  flip=0.00: done (20 trials)
+  flip=0.02: done (20 trials)
+  flip=0.05: done (20 trials)
+  flip=0.10: done (20 trials)
+  -> data\ml_attack/exp_b_results.json + exp_b_reconstruction.png
+ML_ATTACK_DONE

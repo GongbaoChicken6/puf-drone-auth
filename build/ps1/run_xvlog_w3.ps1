@@ -1,6 +1,6 @@
-# W3 all protocol modules syntax check
+﻿# W3 all protocol modules syntax check
 $ErrorActionPreference = "Continue"
-Set-Location "D:\puf-drone-auth"
+Set-Location (Join-Path $PSScriptRoot "..\..")
 $xvlog = "D:\vivado\2026.1\Vivado\bin\xvlog.bat"
 
 $files = @(
@@ -21,3 +21,4 @@ $files = @(
 & $xvlog @files 2>&1 | Select-String "ERROR|CRITICAL" | ForEach-Object { $_.Line }
 Write-Host "xvlog exit: $LASTEXITCODE"
 exit $LASTEXITCODE
+

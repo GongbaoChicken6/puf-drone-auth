@@ -4,7 +4,7 @@ import json, sys, itertools
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from pathlib import Path
-path = str(Path(__file__).resolve().parents[2] / "data/templates/templates.json")
+path = str(Path(__file__).resolve().parents[3] / "data/templates/templates.json")
 d = json.load(open(path, encoding="utf-8"))
 
 def bits(x, n=64):
@@ -17,6 +17,9 @@ def hd(a, b):
     return sum(1 for x, y in zip(a, b) if x != y)
 
 for tid in ["1", "7", "9", "55", "99"]:
+    if tid not in d:
+        print(f"\n===== tid={tid}: 当前运行库无此终端，跳过")
+        continue
     t = d[tid]
     chs = sorted(t.keys())
     resp_raw = [t[c] for c in chs]

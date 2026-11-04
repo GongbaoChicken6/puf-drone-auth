@@ -1,0 +1,63 @@
+﻿=== CI: Wrapper 3-element lock ===
+  [PASS] wrapper 3-element lock (reset direct / rst_n invert / SEED_GATE_EN=1)
+=== CI: Board-tcl lock + manifest check ===
+  [PASS] board-tcl locks + filelist consistency + manifest/prereg hash pinning
+=== CI: Compile ===
+  OK (2.5s)
+=== CI: Elaborate ===
+  OK
+=== CI: Simulate ===
+  [PASS] tb_speck (4.1s)
+  [PASS] tb_gap_regression (4.7s)
+  [PASS] tb_challenge_decode (4.5s)
+  [PASS] tb_crc16 (4.5s)
+  [PASS] tb_mavlink_frame (4.3s)
+  [PASS] tb_frame_parser (4.3s)
+  [PASS] tb_byte_fifo (4.0s)
+  [PASS] tb_uart_tx (4.0s)
+  [PASS] tb_uart_rx (4.0s)
+  [PASS] tb_terminal_fsm (4.0s)
+  [PASS] tb_tx_chain (3.9s)
+  [PASS] tb_level3_protocol (3.8s)
+  [PASS] tb_w3_top (5.5s)
+  [PASS] tb_puf_path (4.1s)
+  [PASS] tb_key_derive (4.1s)
+  [PASS] tb_w3top_keyloop (5.1s)
+  [PASS] tb_ro_entropy (3.7s)
+  [PASS] tb_w3_top_seedgate (6.0s)
+=== 18/18 PASS, 0 FAIL ===
+=== CI: TB ENROLL_NEG variant (param=0 idle-ignore lock) ===
+  [PASS] tb_terminal_fsm ENROLL_NEG ([TEN PASS] idle-ignore locked)
+=== CI: Python (Speck self-test + A1 phase-4 unit tests) ===
+  ----------------------------------------------------------------------
+  Ran 49 tests in 0.684s
+  
+  OK
+  ----------------------------------------------------------------------
+  Ran 19 tests in 0.536s
+  
+  OK
+  ----------------------------------------------------------------------
+  Ran 19 tests in 0.158s
+  
+  OK
+  ----------------------------------------------------------------------
+  Ran 7 tests in 0.104s
+  
+  OK
+  
+  OK
+  [FLOOD] 40/50 rejected, 10 passed, pool 60/100 remaining
+  Ran 11 tests in 0.064s
+  
+  OK
+  [INJECT PASS] server survived 2 injections + post-injection auth PASS
+  
+  THREAT_POC PASS: all 3 case(s) passed
+    key=W3-demo(NSA public): balance 3.00s (<= 4s) | order1 0.2031 @bit46->25 | order2 0.2734 @(42,53)->2 | exact-linear bits 0/64
+    key=fixed-random: balance 2.25s (<= 4s) | order1 0.2109 @bit24->46 | order2 0.2656 @(29,56)->51 | exact-linear bits 0/64
+  CANARY PASS: no affine/GF(2)-linear structure detected; order-1/2 bit correlations within noise bounds
+  PASS: D:\�ļ�\ssssssss\FPGA\submission\puf-drone-auth\scripts\..\sim\testvectors\speck_random.mem is up to date (1175 vectors)
+  [OK]   R1_SEED_D matches puf_model
+  CONTRACT SYNC OK: protocol.py + puf_model == contract S4 + S8 + S9 (TB golden arrays are manually mirrored -- this tool does not read them)
+  OK

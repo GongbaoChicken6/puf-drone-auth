@@ -1,0 +1,16 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- C:\\Users\\<user>\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: D:\puf-drone-auth
+plugins: anyio-4.11.0
+collecting ... collected 7 items
+
+tests/test_interop_rtl_model.py::TestInteropRTLModel::test_golden_seeds_computable PASSED [ 14%]
+tests/test_interop_rtl_model.py::TestInteropRTLModel::test_puf_derived_key_provisioning_full_chain PASSED [ 28%]
+tests/test_interop_rtl_model.py::TestInteropRTLModel::test_puf_enroll_then_full_auth PASSED [ 42%]
+tests/test_interop_rtl_model.py::TestInteropRTLModel::test_replayed_request_rejected PASSED [ 57%]
+tests/test_interop_rtl_model.py::TestInteropRTLModel::test_ro_confirm_fail_on_wrong_key PASSED [ 71%]
+tests/test_interop_rtl_model.py::TestInteropRTLModel::test_ro_noise_gray_zone_then_pass PASSED [ 85%]
+tests/test_interop_rtl_model.py::TestEvalToolAlignment::test_hamming_distance_of_puf_responses PASSED [100%]
+
+============================== 7 passed in 0.12s ==============================

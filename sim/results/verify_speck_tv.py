@@ -1,5 +1,5 @@
-import sys, struct, random
-sys.path.insert(0, r'D:\puf-drone-auth\src\python\common')
+﻿import sys, struct, random
+import pathlib; sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / 'src' / 'python' / 'common'))
 from speck import Speck6496
 
 def to_w(kb, pb):
@@ -39,3 +39,4 @@ for i in range(5):
     pb = bytes(rng.randrange(256) for _ in range(8))
     ki, pi = to_w(kb, pb)
     print('RND%03d key_in=0x%024x pt_in=0x%016x exp_ct=0x%016x' % (i, ki, pi, ct_w(Speck6496(kb).encrypt(pb))))
+

@@ -1,6 +1,6 @@
-# W3 all protocol modules simulation (6 TB suites)
+﻿# W3 all protocol modules simulation (6 TB suites)
 $ErrorActionPreference = "Continue"
-Set-Location "D:\puf-drone-auth"
+Set-Location (Join-Path $PSScriptRoot "..\..")
 $vivado = "D:\vivado\2026.1\Vivado\bin"
 
 $rtl = @("src\rtl\common\crc16_mcrf4xx.v", "src\rtl\common\mavlink_frame.v",
@@ -25,3 +25,4 @@ if ($LASTEXITCODE -ne 0) { Write-Host "XVLOG FAILED"; exit 1 }
 & "$vivado\xsim.bat" s4 -runall --onerror quit 2>&1 | Select-String "TB_" | ForEach-Object { $_.Line }
 & "$vivado\xsim.bat" s5 -runall --onerror quit 2>&1 | Select-String "TB_" | ForEach-Object { $_.Line }
 & "$vivado\xsim.bat" s6 -runall --onerror quit 2>&1 | Select-String "TB_" | ForEach-Object { $_.Line }
+

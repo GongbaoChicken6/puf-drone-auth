@@ -1,0 +1,61 @@
+=== CI: Wrapper 3-element lock ===
+  [PASS] wrapper 3-element lock (reset direct / rst_n invert / SEED_GATE_EN=1)
+=== CI: Compile ===
+  OK (2.4s)
+=== CI: Elaborate ===
+  OK
+=== CI: Simulate ===
+  [PASS] tb_speck (3.6s)
+  [PASS] tb_gap_regression (3.6s)
+  [PASS] tb_challenge_decode (3.6s)
+  [PASS] tb_crc16 (3.5s)
+  [PASS] tb_mavlink_frame (4.4s)
+  [PASS] tb_frame_parser (3.4s)
+  [PASS] tb_byte_fifo (3.4s)
+  [PASS] tb_uart_tx (3.6s)
+  [PASS] tb_uart_rx (3.5s)
+  [PASS] tb_terminal_fsm (3.6s)
+  [PASS] tb_tx_chain (3.7s)
+  [PASS] tb_level3_protocol (3.5s)
+  [PASS] tb_w3_top (5.5s)
+  [PASS] tb_puf_path (3.5s)
+  [PASS] tb_key_derive (3.5s)
+  [PASS] tb_w3top_keyloop (4.1s)
+  [PASS] tb_ro_entropy (3.6s)
+  [PASS] tb_w3_top_seedgate (5.8s)
+=== 18/18 PASS, 0 FAIL ===
+=== CI: TB ENROLL_NEG variant (param=0 idle-ignore lock) ===
+  [PASS] tb_terminal_fsm ENROLL_NEG ([TEN PASS] idle-ignore locked)
+=== CI: Python (Speck self-test + A1 phase-4 unit tests) ===
+  ----------------------------------------------------------------------
+  Ran 49 tests in 0.423s
+  
+  OK
+  ----------------------------------------------------------------------
+  Ran 19 tests in 0.307s
+  
+  OK
+  ----------------------------------------------------------------------
+  Ran 19 tests in 0.174s
+  
+  OK
+  ----------------------------------------------------------------------
+  Ran 7 tests in 0.070s
+  
+  OK
+  
+  OK
+  [FLOOD] 40/50 rejected, 10 passed, pool 60/100 remaining
+  Ran 11 tests in 0.049s
+  
+  OK
+  [INJECT PASS] server survived 2 injections + post-injection auth PASS
+  
+  THREAT_POC PASS: all 3 case(s) passed
+    key=W3-demo(NSA public): balance 3.00s (<= 4s) | order1 0.2031 @bit46->25 | order2 0.2734 @(42,53)->2 | exact-linear bits 0/64
+    key=fixed-random: balance 2.25s (<= 4s) | order1 0.2109 @bit24->46 | order2 0.2656 @(29,56)->51 | exact-linear bits 0/64
+  CANARY PASS: no affine/GF(2)-linear structure detected; order-1/2 bit correlations within noise bounds
+  PASS: D:\puf-drone-auth\scripts\..\sim\testvectors\speck_random.mem is up to date (1175 vectors)
+  [OK]   R1_SEED_D matches puf_model
+  CONTRACT SYNC OK: protocol.py + puf_model == contract S4 + S8 + S9 (TB golden arrays are manually mirrored -- this tool does not read them)
+  OK

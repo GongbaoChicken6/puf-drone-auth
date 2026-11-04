@@ -64,13 +64,13 @@
 ### 3. T3a gen_driver_stub generates driver+tests  ✅ PASS
 
 - exit=0: ok
-- contains '[GEN ] E:\\mathmodelworkspace\\skilldev\\pynq-skill\\tests\\_tmp\\gen\\driver_speck_cipher_0.py': ok
-- contains '[GEN ] E:\\mathmodelworkspace\\skilldev\\pynq-skill\\tests\\_tmp\\gen\\test_speck_cipher_0.py': ok
+- contains '[GEN ] E:\\<dev-workspace>\\skilldev\\pynq-skill\\tests\\_tmp\\gen\\driver_speck_cipher_0.py': ok
+- contains '[GEN ] E:\\<dev-workspace>\\skilldev\\pynq-skill\\tests\\_tmp\\gen\\test_speck_cipher_0.py': ok
 
 ```
-[GEN ] E:\mathmodelworkspace\skilldev\pynq-skill\tests\_tmp\gen\driver_speck_cipher_0.py
-[GEN ] E:\mathmodelworkspace\skilldev\pynq-skill\tests\_tmp\gen\test_speck_cipher_0.py
-[DONE] next: pytest E:\mathmodelworkspace\skilldev\pynq-skill\tests\_tmp\gen\test_speck_cipher_0.py
+[GEN ] <dev-workspace>\pynq-skill\tests\_tmp\gen\driver_speck_cipher_0.py
+[GEN ] <dev-workspace>\pynq-skill\tests\_tmp\gen\test_speck_cipher_0.py
+[DONE] next: pytest <dev-workspace>\pynq-skill\tests\_tmp\gen\test_speck_cipher_0.py
 ```
 
 ### 4. T3b driver content (base/regs/op/span)  ✅ PASS
@@ -86,7 +86,7 @@
 ```
 ============================= test session starts =============================
 platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0
-rootdir: E:\mathmodelworkspace\skilldev\pynq-skill
+rootdir: <dev-workspace>\pynq-skill
 plugins: asyncio-1.4.0
 asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
 collected 5 items
@@ -95,7 +95,7 @@ tests\_tmp\gen\test_speck_cipher_0.py ....s                              [100%]
 
 ============================== warnings summary ===============================
 tests\_tmp\gen\test_speck_cipher_0.py:64
-  E:\mathmodelworkspace\skilldev\pynq-skill\tests\_tmp\gen\test_speck_cipher_0.py:64: PytestUnknownMarkWarning: Unknown pytest.mark.board - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+  <dev-workspace>\pynq-skill\tests\_tmp\gen\test_speck_cipher_0.py:64: PytestUnknownMarkWarning: Unknown pytest.mark.board - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
     @pytest.mark.board
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html

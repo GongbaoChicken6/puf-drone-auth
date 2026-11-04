@@ -1,0 +1,22 @@
+=== Experiment C: LR on W3 XOR-merged response ===
+  responses generated
+  pair tables decoded
+  ctrl_pair_aware n=1000: acc=1.0000
+  ctrl_pair_aware n=5000: acc=1.0000
+  ctrl_pair_aware n=10000: acc=1.0000
+  ctrl_pair_aware n=50000: acc=1.0000
+  ctrl_seedbit n=1000: acc=0.5122
+  ctrl_seedbit n=5000: acc=0.5202
+  ctrl_seedbit n=10000: acc=0.5210
+  ctrl_seedbit n=50000: acc=0.5214
+  merged_pair_aware n=1000: acc=0.5002
+  merged_pair_aware n=5000: acc=0.4989
+  merged_pair_aware n=10000: acc=0.4981
+  merged_pair_aware n=50000: acc=0.5000
+  merged_seedbit n=1000: acc=0.5010
+  merged_seedbit n=5000: acc=0.5010
+  merged_seedbit n=10000: acc=0.5010
+  merged_seedbit n=50000: acc=0.5021
+  -> data\ml_attack/exp_c_results.json + exp_c_xor_protection.png
+  declaration #1 verdict: SUPPORTED
+ML_ATTACK_DONE

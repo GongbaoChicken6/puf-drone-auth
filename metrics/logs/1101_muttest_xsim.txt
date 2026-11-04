@@ -1,0 +1,21 @@
+
+****** xsim v2026.1 (64-bit)
+  **** SW Build 6511674 on Tue Jun 16 11:02:23 MDT 2026
+  **** IP Build 6504888 on Tue Jun 09 09:05:25 MDT 2026
+  **** SharedData Build 6501428 on Mon Jun 08 17:34:18 MDT 2026
+  **** Start of session at: Sat Oct 31 23:33:35 2026
+    ** Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+    ** Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+
+source xsim.dir/sim_mut/xsim_script.tcl
+# xsim {sim_mut} -autoloadwcfg -runall
+Time resolution is 1 ps
+run -all
+[RX FAIL] no rx_valid within 2000 edges after 55 (hang!)
+[RX FAIL] no rx_valid within 2000 edges after 00 (hang!)
+[RX FAIL] no rx_valid within 2000 edges after ff (hang!)
+[WATCHDOG] TIMEOUT cycles=8000 valid=0
+TB_UART_RX_FAIL errors=3 (watchdog)
+$finish called at time : 80 us : File "D:/puf-drone-auth/build/muttest_rerun/tb_uart_rx.v" Line 139
+exit
+INFO: [Common 17-206] Exiting xsim at Sat Oct 31 23:33:37 2026...

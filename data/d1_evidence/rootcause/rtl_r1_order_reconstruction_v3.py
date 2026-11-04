@@ -6,7 +6,7 @@
 """
 import json, re, sys, random
 from pathlib import Path
-ROOT = Path(__file__).resolve().parents[2]   # 仓库根（auto-review P2: 去绝对路径硬编码）
+ROOT = Path(__file__).resolve().parents[3]   # 仓库根（data/d1_evidence/rootcause -> 仓库根）
 sys.path.insert(0, str(ROOT))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from src.python.server.protocol import HFIDAProtocol
@@ -52,7 +52,7 @@ assert tot == 0, f"全序复算模板 HD={tot} != 0：反推错误！"
 print(f"    自校验通过：全序正向复算 {len(t1)} CRP 总 HD=0，胜场=15..0（无矛盾全序）")
 
 # ---- F. 官方解帧 + 在线验证 ----
-log = open(ROOT / "data/d1_evidence/1101_假冒实验_双板均PASS_唯一性存疑.log", encoding="utf-8").read()
+log = open(ROOT / "metrics/logs/1101_spoof_bothpass_uniqueness_suspect.log", encoding="utf-8").read()
 frames = re.findall(r"\[(?:WIRE [0-9:.]+)\] (?:TX|RX)RAW ([0-9a-f]+)", log)
 chal, r1f, resf = [], [], []
 for hx in frames:

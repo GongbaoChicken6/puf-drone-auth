@@ -1,0 +1,14 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- C:\\Users\\<user>\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: D:\puf-drone-auth
+plugins: anyio-4.11.0
+collecting ... collected 5 items
+
+tests/test_dos_flood.py::TestDoSFlood::test_failed_auth_returns_seeds_to_pool PASSED [ 20%]
+tests/test_dos_flood.py::TestDoSFlood::test_flood_does_not_exhaust_pool PASSED [ 40%]
+tests/test_dos_flood.py::TestDoSFlood::test_gray_zone_failure_returns_extra_seeds PASSED [ 60%]
+tests/test_dos_flood.py::TestDoSFlood::test_rate_limit_recovers PASSED   [ 80%]
+tests/test_dos_flood.py::TestDoSFlood::test_stalled_session_swept_and_seeds_returned PASSED [100%]
+
+============================== 5 passed in 0.35s ==============================

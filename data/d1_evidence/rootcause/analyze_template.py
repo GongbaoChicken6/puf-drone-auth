@@ -9,7 +9,7 @@ import json, sys, itertools
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from pathlib import Path
-path = str(Path(__file__).resolve().parents[2] / "data/templates/templates.json")
+path = str(Path(__file__).resolve().parents[3] / "data/templates/templates.json")
 d = json.load(open(path, encoding="utf-8"))
 print("顶层类型:", type(d).__name__)
 if isinstance(d, dict):

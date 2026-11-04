@@ -1,0 +1,8 @@
+# PC-side (base station) Python dependencies — Python 3.13.5 tested
+# Versions pinned to the team's tested environment (2026-11).
+numpy==2.2.6
+scipy==1.16.3
+scikit-learn==1.8.0
+matplotlib==3.11.1
+pyserial==3.5
+pytest==9.0.2

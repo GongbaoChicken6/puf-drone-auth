@@ -9,8 +9,8 @@
 
 - 许可证：MIT（见 LICENSE）
 - 工具链基线：Vivado 2026.1（脚本对报告文本的解析兼容 2020+ 格式）
-- 目标平台：Zynq-7000（ZC702 / PYNQ-Z2 实测路径）；UltraScale+ 逐项
-  标注差异（如 DMA 缓存一致性）
+- 目标平台：Zynq-7000（ZC702 实测；PYNQ-Z2 仅器件级核对，未上板）；
+  UltraScale+ 逐项标注差异（如 DMA 缓存一致性）
 - 语言：目录/文件名纯英文；脚本人人可读，注释即文档
 
 ## 快速开始（陌生队伍 3 分钟接入）
@@ -48,7 +48,8 @@ pitfalls 对纯 RTL 工程同样适用。
 - **失效条件**：仅 .tcl 元数据的老式 overlay（会被静态检查警告）；
   无 AXI-Lite 接口的纯流式 IP（live 模式跳过并说明）。
 - **已验证效果**：静态解析在 Vivado 2026.1 真实 .hwh 导出上验证
-  （tests/VALIDATION_LOG.md）；live 冒烟流程与本队 ZC702 上板流程一致。
+  （tests/VALIDATION_LOG.md）；live 寄存器冒烟尚未上板，流程按本队
+  ZC702 经验编写，VALIDATION_LOG.md 列为 needs board。
 - **来源**：.bit/.hwh 不同源、IP 改名后主机代码失配等高频事故模式
   的流程化收敛（SKILL.md 内 Common errors 表）。
 
@@ -76,7 +77,8 @@ pitfalls 对纯 RTL 工程同样适用。
 - **失效条件**：IP 名与 .hwh 不一致（生成器警告而非静默用 0）；
   复杂位域打包（子字段结构）暂不生成 accessor（写整字）。
 - **已验证效果**：生成-测试闭环离板验证（tests/ 用合成 HLS 风格契约
-  跑通 pytest 全绿，含"坏寄存器必被检出"的反向测试）。
+  跑通 pytest 全绿，含"坏寄存器必被检出"的反向测试）；`-m board`
+  上板冒烟待板，VALIDATION_LOG.md 列为 needs board。
 - **来源**：本队手写 MMIO 偏移两次与 RTL 漂移的教训——把接口契约
   变成生成物与测试物。
 
@@ -181,10 +183,10 @@ REGISTERS 结构）经 PYNQ 文档与 `pynq/lib/dma.py` 源码核对后写入。
 调试向）。互补点：本包 prompt-workflows 建议 agent 结合官方
 amd-doc-search MCP（https://ross.amd.com/mcp/doc-search）检索 UG 章节
 佐证，减少幻觉；该 MCP 已由本队从本机真实握手验证（v0.11.6，
-工具 vivado_doc_search）。本地 vivado-mcp-server（2026.9.1）亦已
+工具 vivado_doc_search）。（历史上另有本地 vivado-mcp-server 辅助，未随包分发，此处仅作过程记录；该工具已
 从本机完成握手/工具列表/调用/Vivado 拉起全链路校验并写入工作区
 `.mcp.json`（stdio-bridge 模式）。许可证已导入并实测：用户级环境变量
 `XILINXD_LICENSE_FILE` 指向 `%APPDATA%\Xilinx\Xilinx.lic`（setx 永久
 生效），经 vivado_start + 真实综合端到端验证（Z-7020 AND 门，0 错误，
-Synthesis 许可证正常检出/释放）——详见 tools/vivado-mcp-server/README.md
+Synthesis 许可证正常检出/释放）——见 pitfalls B5（原 vivado-mcp-server 工具未随包分发）
 与 pitfalls B5。

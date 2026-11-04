@@ -1,0 +1,12 @@
+=== Experiment A: arbiter PUF + LR ===
+  seed 42: done
+  seed 43: done
+  seed 44: done
+  seed 45: done
+  seed 46: done
+  alpha=0.00: 1k=0.9632, 5k=0.9904, 10k=0.9935, 50k=0.9978, 100k=0.9989
+  alpha=0.05: 1k=0.9608, 5k=0.9814, 10k=0.9833, 50k=0.9844, 100k=0.9844
+  alpha=0.15: 1k=0.9387, 5k=0.9496, 10k=0.9522, 50k=0.9536, 100k=0.9538
+  alpha=0.30: 1k=0.8943, 5k=0.9045, 10k=0.9058, 50k=0.9072, 100k=0.9070
+  -> data\ml_attack/exp_a_results.json + exp_a_accuracy.png
+ML_ATTACK_DONE

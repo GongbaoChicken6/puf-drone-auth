@@ -1,0 +1,10 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- C:\\Users\\<user>\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: D:\puf-drone-auth
+plugins: anyio-4.11.0
+collecting ... collected 1 item
+
+tests/test_serial_server.py::TestServeReadSemantics::test_result_written_promptly_after_r1_arrival PASSED [100%]
+
+============================== 1 passed in 0.06s ==============================

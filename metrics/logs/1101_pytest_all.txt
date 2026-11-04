@@ -1,0 +1,9 @@
+﻿........................................................................ [ 64%]
+.......................................                                  [100%]
+============================== warnings summary ===============================
+C:\\Users\\<user>\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytz\tzinfo.py:27
+  C:\\Users\\<user>\AppData\Local\Programs\Python\Python313\Lib\site-packages\pytz\tzinfo.py:27: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    _epoch = datetime.utcfromtimestamp(0)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+111 passed, 1 warning in 4.16s

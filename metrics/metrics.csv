@@ -1,0 +1,17 @@
+item,value,unit,evidence
+cross-board fingerprint deviation (mean HD),145.8/256 = 57.0,%,metrics/logs/1102_crossboard_hd_stats.log
+same-chip repeat deviation (mean HD),1.38,bit,metrics/logs/1102_boardB_full_dataset.log
+on-board auth rounds zero-error (legit terminal),20+,rounds,metrics/logs/1031_boardA_graduation.log
+spoof attempts rejected (board B impersonating terminal 1),5/5 + serve 4-frame REJECT,rounds,metrics/logs/1102_wireless_attack_boardB.log
+wired end-to-end auth latency,23~32,ms,metrics/logs/1101_timing_decomposition.md
+wireless (433 MHz) full-flow latency,57,ms,metrics/logs/1031_boardA_wireless_confirm.log
+spoof detection latency,36,ms,metrics/logs/1102_wireless_attack_boardB.log
+Speck64/96 throughput,53 cycles per 64-bit block (~0.53 us @100 MHz),-,sim/tb/tb_speck.v; sim/results/ci_summary_20261103.txt
+Speck test vectors passed,1175 (incl. NSA official),vectors,metrics/logs/1101_ci_regression_full.txt
+CI regression,18/18 PASS,gate,metrics/logs/1101_ci_regression_full.txt
+PC-side pytest,111 passed,tests,metrics/logs/1101_pytest_all.txt
+"FPGA resource (ZC706 routed, prod layout)",LUT 4375 / 2.00% FF 6546,-,build/board_zc706/utilization.rpt
+"timing (ZC706 routed, prod layout)",WNS +1.873 ns (100 MHz met),ns,build/board_zc706/timing.rpt
+"timing (ZC706 routed, seed2 variant)",WNS +1.213 ns DRC 0,ns,build/board_zc706_seed2/MANIFEST.txt
+mutation testing errors reproduced,3 (pre-fix RTL mutants),mutants,metrics/logs/1101_muttest_xsim.txt
+ML modeling attack (counterfeit-clone probe),byte-identical rerun vs archived logs,-,metrics/logs/1101_ml_expA.txt

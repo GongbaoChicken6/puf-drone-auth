@@ -12,7 +12,7 @@
 ### 挑战-响应完整数据流
 
 ```
-PC 服务器                        ZC702 终端 (PL)
+PC 服务器                        ZC706 终端 (PL)
 ─────────                       ───────────────
                                 ┌─────────────────────────────┐
 8 字节挑战种子                   │ challenge_decode            │
@@ -96,7 +96,7 @@ W3: R1 = (group1_resp ⊕ group2_resp ⊕ group3_resp ⊕ group4_resp)  (64 bit,
 
 竞赛演示（代码实现的是这个）:
 ┌──────────────────────────────────────────────┐
-│ ZC702 单板                                    │
+│ ZC706 单板（早期在 ZC702 验证，后迁移到 ZC706）                                    │
 │  ┌─────────────────┐  ┌────────────────────┐ │
 │  │ 终端 PUF 实例 1-3 │  │ HSM PUF 实例 0     │ │
 │  │ (逻辑隔离)       │  │ (UART 通道,非无线) │ │
@@ -128,7 +128,7 @@ class SpeckHSM(HSM):
     持久化；黄金向量 7b45b0545e59aa94 双侧一致。"""
 
 class SerialHSM(HSM):
-    """UART 到 ZC702 实例 0 的传输后端（W3+ 硬件联调用）"""
+    """UART 到 ZC706 终端实例 0 的传输后端（W3+ 硬件联调用）"""
 ```
 
 ### 终端验证 R2 的凭据来源（A1 更新）
@@ -197,7 +197,7 @@ W1 用固定不对称分频防混叠，W2 动态配对后不能预分配。**推
 #### W2 时钟方案（P1-3 修复）
 
 W2 需要外部时钟驱动 UART 和轮控 FSM：
-- **时钟源**：ZC702 板载 200MHz 差分时钟（引脚见 UG850）→ IBUFDS → BUFG → 100MHz（MMCM 二分频）
+- **时钟源**：ZC706 板载 200MHz 差分时钟（引脚见 UG954）→ IBUFDS → BUFG → 100MHz（MMCM 二分频）
 - **测量窗**：每环对比较用 1ms 窗（同 W1 的 ro_div 架构），8 对并行 → 单轮 1ms
 - **8 轮总时长**：8 × 1ms = 8ms + 轮间切换开销 ≈ 10ms
 - **认证延迟**：10ms（PUF 测量）+ 20ms（MAVLink 帧传输）≪ 1s 目标 ✓
@@ -470,4 +470,3 @@ Differences between v3.0 design and actual implementation (code is source of tru
 ### Synthesis data
 - terminal_fsm OOC: 253 LUT / 592 FF (0.48% of Z7020)
 - Full stack estimate: ~780 LUT
-

@@ -8,6 +8,6 @@ placement evidence: ring_sites_seed2.rpt (160 leaf LUTs X125..141 x Y34..51; 150
 timing: WNS=+1.213ns WHS=+0.055ns DRC=0 errors
 baseline: production bit SHA256 24ED4EED6A175C980FF718529647EC2F3AF7ABA3650E8F6B58461EF18F468173 (data/bitstreams/w3_top_zc706_prod_20261027.bit)
 RTL delta vs baseline: uart_rx fix 6b942af (NOT in PUF response path; +4 LUT) -- disclosed
-layout-difference proof: defect-review rerun -- production natural placement X1Y4/X1Y5 (evidence: data/d1_evidence/rootcause/review/ar-defect-r1/rerun_prod/ring_sites_prod_review.rpt), zero site overlap with seed2 (NOT whole-file SHA256, which embeds timestamps)
+layout-difference proof: defect-review rerun -- production natural placement X1Y4/X1Y5 (evidence: data/d1_evidence/rootcause/1101_ROOTCAUSE_consensus.md errata section; the original rerun rpt was not distributed), zero site overlap with seed2 (NOT whole-file SHA256, which embeds timestamps)
 baseline RTL note: production bit predates uart_rx fix 6b942af (disclosed, not in PUF path)
 hardened-script note: in-repo script now carries ring-exact assertion/pinned X1Y0/WHS gate/leaf tally/USERID (this bit was built by the pre-hardening version, SHA256 B550A01F…, independently verified)

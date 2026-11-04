@@ -1,7 +1,0 @@
-# python bytecode caches - never ship
-__pycache__/
-*.pyc
-
-# per-run scratch output of tests/run_tests.py
-# (real evidence lives in tests/fixtures/ and tests/VALIDATION_LOG.md)
-tests/_tmp/
