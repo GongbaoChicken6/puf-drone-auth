@@ -2,7 +2,7 @@
 
 # puf-drone-auth — PUF-Based Hardware Fingerprint Mutual Authentication for UAV Fleets
 
-> **Repository**: https://github.com/GongbaoChicken6/puf-drone-auth (private during scoring; to be made public after the competition)
+> **Repository**: https://github.com/GongbaoChicken6/puf-drone-auth (public; tagged v1.0-submission)
 
 AMD FPGA Innovation Design Track · Verified on 2× AMD ZC706 (xc7z045ffg900-2) · MIT License
 
@@ -34,10 +34,10 @@ The recommended structure is non-mandatory; teams using a different organization
 | tools/ | §3.3.5.1 · run scripts | Metric analysis (puf_metrics/puf_sac), contract sync check, HC-12 configuration |
 | web/ | §3.3.5.1 · host application (PS-side software) | PC base-station bridge + demo console frontend (offline self-contained dist) |
 | data/ | §3.3.5.1 · measured output & reference comparison data | Registration templates / challenge pools / device keys (public demo keys) / ML experiment data / bitstream hash anchor / clone-attack root-cause archive |
-| metrics/ | §3.2.5-style metrics directory (voluntary) | metrics.csv (sole authoritative summary) + logs/ (22 raw logs) |
+| metrics/ | §3.2.5-style metrics directory (voluntary) | metrics.csv (sole authoritative summary) + logs/ (23 raw logs) |
 | docs/ | §3.3.5.1 · design documents | System design (project_design.md), protocol contract (protocol_contract.md), principle visualization (visualization.html) |
 | skill/ | §3.3.5.2 · skill package | 5 reusable PYNQ skills + pitfall list + workflows (scope/usage/failure conditions in its README) |
-| report/ | §3.3.5.3 · design report | design_report.pdf / .docx / figures (23 PNGs named by figure number) / llm_log (AI collaboration record) |
+| report/ | §3.3.5.3 · design report | design_report.pdf / .docx / figures (23 PNGs named by figure number) / llm_log (curated AI-collaboration record, collaboration_record.md) |
 | LICENSE | §3.3.3.3 · open-source license | MIT |
 | requirements.txt | §3.3.5.1 · dependency manifest | PC-side Python dependencies |
 
@@ -62,5 +62,5 @@ The recommended structure is non-mandatory; teams using a different organization
 - **External reference code**: external/ (c_library_v2, fpga_puf, puf-esp32-auth, PUF-lab, pinned commits) is not bundled; run scripts/setup_external.ps1 to reconstruct — sources credited in file headers.
 - **data/device_keys**: tid 1/2 use the public demo test key (0001020308090a0b10111213); others are derived keys for our demo terminals — evaluators registering their own boards will generate their own keys.
 - **metrics/logs**: filenames anglicized; content preserved in original Chinese.
-- **Open source**: this work is open-sourced under MIT (LICENSE); repository URL to be announced upon submission.
+- **Open source**: MIT (LICENSE); the public repository URL is in the header (tag v1.0-submission).
 - **Final-round poster**: one-page English PPT poster per AMD template, submitted separately (not in this package).

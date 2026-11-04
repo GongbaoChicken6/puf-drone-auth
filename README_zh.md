@@ -2,6 +2,8 @@
 
 # puf-drone-auth — PUF-Based Hardware Fingerprint Mutual Authentication for UAV Fleets
 
+> **仓库**：https://github.com/GongbaoChicken6/puf-drone-auth（已公开，tag v1.0-submission）
+
  AMD 自主选题赛道参赛作品 · 两块 AMD ZC706 (xc7z045ffg900-2) 实测闭环 · MIT License
 
 基于 16 环环形振荡器 PUF（RO-PUF）的无人机身份认证系统：芯片制造微差即硬件指纹，**密钥不预存、不落地**——上电由指纹现场派生；HF-IDA 六类消息双向鉴别；双阈值（6/16）判决 + 待定区自动加测；Speck64/96 全硬件应答；433 MHz 无线链路实测。
@@ -31,10 +33,10 @@
 | tools/ | 3.3.5.1 · 运行脚本 | 指标分析（puf_metrics/puf_sac）、契约同步检查、HC-12 配置工具 |
 | web/ | 3.3.5.1 · 上位机应用（PS 侧软件） | PC 基站桥（bridge）+ 演示监控台前端（dist 自足离线） |
 | data/ | 3.3.5.1 · 实测输出与参考结果的比对数据 | 注册模板/挑战池/设备密钥（公开演示钥）/ML 实验数据/bit 哈希锚/克隆攻击根因档案 |
-| metrics/ | 3.2.5 式指标目录（自愿采用） | metrics.csv（唯一权威指标汇总）+ logs/（22 份原始日志） |
+| metrics/ | 3.2.5 式指标目录（自愿采用） | metrics.csv（唯一权威指标汇总）+ logs/（23 份原始日志） |
 | docs/ | 3.3.5.1 · 设计文档 | 系统设计（project_design.md）、接口协议契约（protocol_contract.md）、原理可视化页（visualization.html） |
 | skill/ | 3.3.5.2 · 技能包 | PYNQ 可复用技能×5 + 踩坑清单 + 工作流（适用范围/用法/失效条件见其 README） |
-| report/ | 3.3.5.3 · 设计报告 | design_report.docx / design_report.pdf / figures（23 张 PNG，按图号命名）/ llm_log（协作记录） |
+| report/ | 3.3.5.3 · 设计报告 | design_report.docx / design_report.pdf / figures（23 张 PNG，按图号命名）/ llm_log（整理版协作记录 collaboration_record.md） |
 | LICENSE | 3.3.3.3 · 开源协议 | MIT |
 | requirements.txt | 3.3.5.1 · 依赖清单 | PC 侧 Python 依赖 |
 
@@ -59,5 +61,5 @@
 - **外部参考代码**：external/（c_library_v2、fpga_puf、puf-esp32-auth、PUF-lab，pinned commits）不随包分发；如需参考对比，运行 scripts/setup_external.ps1 重建，出处见各文件头署名。
 - **data/device_keys**：tid1/2 为公开演示测试密钥（0001020308090a0b10111213），其余为本队演示终端派生密钥——评估者用自己的板重新注册会生成自己的密钥。
 - **metrics/logs 中文日志**：文件名已英文化，内容保留原始中文。
-- **开源**：本作品以 MIT 协议开源（LICENSE）；仓库地址提交时公布。
+- **开源**：本作品以 MIT 协议开源（LICENSE）；公开仓库地址见页首（tag v1.0-submission）。
 - **决赛海报**：按 AMD 模板的一页英文 PPT 海报另行提交，不入本包。
