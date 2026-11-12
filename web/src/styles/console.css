@@ -698,3 +698,18 @@
 }
 .ids-banner .ids-head { font-weight: 700; color: #ff8ea1; margin-bottom: 4px; }
 .ids-banner .ids-row { opacity: 0.92; line-height: 1.5; }
+
+/* ---------- N6(finals-demo) 帧飞行动画 + 字段注记中文化/密文样式 ---------- */
+.frame-flight { position: fixed; inset: 0; pointer-events: none; z-index: 80; }
+.ff-chip {
+  position: absolute; left: 0; white-space: nowrap;
+  padding: 3px 10px; border-radius: 12px;
+  font: 12px/1.4 ui-monospace, Consolas, monospace;
+  background: rgba(16, 34, 48, 0.92);
+  border: 1px solid #2d6a8f;
+  color: #9fd6ff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.ff-chip.down { border-color: #8f5a2d; color: #ffd9a8; }
+.hv-field .cn { margin-left: 6px; font-style: normal; font-size: 11px; opacity: 0.72; }
+.hv-field .v.crypto { color: #ffcf7d; }

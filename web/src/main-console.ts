@@ -22,6 +22,7 @@ import { store } from './core/store';
 import type { AuthMode, Envelope } from './core/types';
 
 import { AuditLog } from './components/audit-log';
+import { FrameFlight } from './components/frame-flight';
 import { IdsBanner } from './components/ids-banner';
 import { LeftPanel } from './components/left-panel';
 import { RightPanel } from './components/right-panel';
@@ -72,6 +73,9 @@ const audit = new AuditLog({
 
 /* N2(finals-demo): 信道 IDS 红警横幅(自订阅 puf:intrusion,悬浮 body) */
 document.body.appendChild(new IdsBanner().el);
+
+/* N6(finals-demo): 帧飞行动画(自订阅 puf:frame,数据流具象化,悬浮 body) */
+document.body.appendChild(new FrameFlight().el);
 
 /* 组件元素**顶替**占位容器(而非塞进去):console.html 的五个容器就是
  * #app / #console-layout 的网格项,把组件套在容器里会让网格行高与实际

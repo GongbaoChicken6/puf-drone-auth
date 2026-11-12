@@ -173,36 +173,45 @@ export class HexViewer {
     return wrap;
   }
 
-  /* 逐帧的"人话"字段注记 */
+  /* 逐帧的"人话"字段注记 —— N6(finals-demo):中文注记 + 密文字段标记。
+   * crypto 字段(种子/响应/R2/nonce)是演示叙事的重点:评委看到 hex 没感觉,
+   * 看到"挑战种子 🔒 / 基站证明密文 🔒"才知道哪些字节是密码学材料。 */
   private fieldNotes(hex: string): HTMLElement | null {
     const p = frameParts(hex);
     if (!p) return null;
-    const rows: [string, string][] = [];
+    const rows: { k: string; cn: string; v: string; crypto?: boolean }[] = [];
     if (p.msgId === 0x0090) {
       const c2 = c2OfAccessRequest(hex);
-      rows.push(['terminal_id', String(leU32(p.payload, 0))],
-        ['nonce', `0x${leU32(p.payload, 4).toString(16).padStart(8, '0')}`],
-        ['C2(8B 计数器)', c2 ?? '—']);
+      rows.push({ k: 'terminal_id', cn: '终端号', v: String(leU32(p.payload, 0)) },
+        { k: 'nonce', cn: '随机反挑战', v: `0x${leU32(p.payload, 4).toString(16).padStart(8, '0')}`, crypto: true },
+        { k: 'C2(8B)', cn: '计数器(防重放)', v: c2 ?? '—', crypto: true });
     } else if (p.msgId === 0x0091 || p.msgId === 0x0095) {
-      groupsOf8(p.payload).forEach((g, i) => rows.push([`seed${i + 1}`, g]));
+      groupsOf8(p.payload).forEach((g, i) =>
+        rows.push({ k: `seed${i + 1}`, cn: `挑战种子${i + 1}`, v: g, crypto: true }));
     } else if (p.msgId === 0x0092) {
-      groupsOf8(p.payload).forEach((g, i) => rows.push([`r1_${i + 1}`, g]));
+      groupsOf8(p.payload).forEach((g, i) =>
+        rows.push({ k: `r1_${i + 1}`, cn: `指纹响应${i + 1}`, v: g, crypto: true }));
     } else if (p.msgId === 0x0093) {
       const res = parseInt(p.payload[0] ?? '0', 16);
-      rows.push(['result', `${res}(${['PASS', 'REJECT', 'ERROR', 'POOL_EMPTY', 'REPLAY'][res] ?? '?'})`],
-        ['hd', String(parseInt(p.payload[1] ?? '0', 16))]);
-      if (p.payload.length >= 10) rows.push(['R2(8B)', p.payload.slice(2, 10).join('').toLowerCase()]);
+      rows.push({ k: 'result', cn: '判决',
+          v: `${res}(${['通过', '拒绝', '错误', '池耗尽', '重放嫌疑'][res] ?? '?'})` },
+        { k: 'hd', cn: '海明距离', v: String(parseInt(p.payload[1] ?? '0', 16)) });
+      if (p.payload.length >= 10)
+        rows.push({ k: 'R2(8B)', cn: '基站证明密文', v: p.payload.slice(2, 10).join('').toLowerCase(), crypto: true });
     } else if (p.msgId === 0x0094) {
-      rows.push(['terminal_id', String(leU32(p.payload, 0))],
-        ['status', `${parseInt(p.payload[4] ?? '0', 16)}(0=CONFIRM_OK)`]);
+      rows.push({ k: 'terminal_id', cn: '终端号', v: String(leU32(p.payload, 0)) },
+        { k: 'status', cn: '确认状态',
+          v: `${parseInt(p.payload[4] ?? '0', 16)}(0=通过 1=拒认基站)` });
     }
     if (rows.length === 0) return null;
     const box = document.createElement('div');
     box.className = 'hv-fields';
-    for (const [k, v] of rows) {
+    for (const r of rows) {
       const row = document.createElement('div');
       row.className = 'hv-field';
-      row.innerHTML = `<span class="k">${k}</span><span class="v mono">${v}</span>`;
+      row.innerHTML =
+        `<span class="k">${r.k}<em class="cn">${r.cn}</em></span>`
+        + `<span class="v mono${r.crypto ? ' crypto' : ''}">${r.crypto ? '🔒 ' : ''}${r.v}</span>`;
       box.append(row);
     }
     return box;
