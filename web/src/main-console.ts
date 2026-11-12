@@ -22,6 +22,7 @@ import { store } from './core/store';
 import type { AuthMode, Envelope } from './core/types';
 
 import { AuditLog } from './components/audit-log';
+import { IdsBanner } from './components/ids-banner';
 import { LeftPanel } from './components/left-panel';
 import { RightPanel } from './components/right-panel';
 import { Topbar } from './components/topbar';
@@ -68,6 +69,9 @@ const envLedger: Envelope<unknown>[] = [];
 const audit = new AuditLog({
   exportRun: runId => exportEvents(runId),
 });
+
+/* N2(finals-demo): 信道 IDS 红警横幅(自订阅 puf:intrusion,悬浮 body) */
+document.body.appendChild(new IdsBanner().el);
 
 /* 组件元素**顶替**占位容器(而非塞进去):console.html 的五个容器就是
  * #app / #console-layout 的网格项,把组件套在容器里会让网格行高与实际

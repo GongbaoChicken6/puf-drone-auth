@@ -678,3 +678,23 @@
   #app{ zoom:.9; height:calc(100vh / .9); }
   #console-layout{ grid-template-columns:220px 1fr; }
 }
+
+/* ---------- N2(finals-demo) 信道 IDS 红警横幅 ---------- */
+.ids-banner {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  min-width: 320px;
+  max-width: 720px;
+  padding: 10px 16px;
+  border: 1px solid #b00020;
+  border-radius: 6px;
+  background: rgba(48, 8, 16, 0.96);
+  color: #ffd7dd;
+  box-shadow: 0 6px 24px rgba(176, 0, 32, 0.35);
+  font-size: 13px;
+}
+.ids-banner .ids-head { font-weight: 700; color: #ff8ea1; margin-bottom: 4px; }
+.ids-banner .ids-row { opacity: 0.92; line-height: 1.5; }

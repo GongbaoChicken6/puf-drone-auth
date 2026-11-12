@@ -1961,6 +1961,24 @@ class RealSerialListener:
                         self._auth(int(fl.get("terminal_id",0)), fl, frame)
                     except Exception as e:  # noqa: BLE001 —— 监听线程必须永死不了
                         self._log(f"REAL auth handler error (thread kept alive): {type(e).__name__}: {e}", "error")
+                elif (mid in (0x0091, 0x0093, 0x0095)
+                      and not getattr(self.app, "enroll_session_active", False)):
+                    # N2(finals-demo) 信道 IDS:0x0091/0x0093/0x0095 是站端→终端方向的
+                    # 帧,正常链路上永远不会出现在本站 RX 口——共享信道上有第二个
+                    # 发射者(伪基站注入/恶意回环)时才会被听到。HC-12 同信道是共享
+                    # 广播介质,本站物理上能听见攻击帧,这是 Tier0 检测的物理基础。
+                    # 注册窗口(enroll_session_active,N5)内站端自己连发 0x0091,
+                    # 静默防自触发。
+                    self.hub.publish("channel.intrusion", {
+                        "msg_id": mid,
+                        "name": self.P.msg_name(mid),
+                        "hex": frame.hex(),
+                        "len": len(frame),
+                        "note": "station-only frame heard on RX path"})
+                    self._log(
+                        f"CHANNEL IDS: station-only frame 0x{mid:04x} "
+                        f"{self.P.msg_name(mid)} ({len(frame)}B) on RX -- suspected injection",
+                        "error")
     def _auth(self, tid, ar_f, ar_raw):
         rid = f"real-{int(time.time()*1000)}"
         c2 = ar_f.get("c2", b"\0"*8)

@@ -14,7 +14,8 @@ export interface Envelope<T = unknown> {
 export type EventType =
   | 'link.status' | 'session.update' | 'frame.tx' | 'frame.rx'
   | 'gray.extra' | 'verdict' | 'confirm.done' | 'enroll.done'
-  | 'pool.warning' | 'replay.reject' | 'server.log' | 'run.error';
+  | 'pool.warning' | 'replay.reject' | 'server.log' | 'run.error'
+  | 'channel.intrusion';
 
 /* 运行期事件名清单(§8.3 表 11 行 / 12 个 type —— frame.tx 与 frame.rx 同行但为两类)。
  * 桥接层把 SSE 帧写成**具名事件**(web_bridge.py:1233 `event: <type>`),
@@ -24,6 +25,7 @@ export const EVENT_TYPES = [
   'link.status', 'session.update', 'frame.tx', 'frame.rx',
   'gray.extra', 'verdict', 'confirm.done', 'enroll.done',
   'pool.warning', 'replay.reject', 'server.log', 'run.error',
+  'channel.intrusion',
 ] as const satisfies readonly EventType[];
 
 /* ---------- 协议帧常量(protocol.py 口径) ---------- */
@@ -114,6 +116,16 @@ export interface EnrollDone {
 }
 export interface PoolWarning { terminal_id: number; remaining: number; pct: number; }
 export interface ReplayReject { run_id: string; terminal_id: number; result: 4; }
+
+/* N2(finals-demo): 站端专用方向帧(0x0091/0x0093/0x0095)出现在 RX 路径
+ * —— 共享信道上疑似伪基站注入。来源 RealSerialListener._loop IDS 分支。 */
+export interface ChannelIntrusion {
+  msg_id: number;
+  name: string;
+  hex: string;
+  len: number;
+  note: string;
+}
 export interface ServerLog { level: 'info' | 'warn' | 'error'; msg: string; }
 export interface RunError { run_id: string; stage: string; error: string; terminal_id?: number | null; }
 
@@ -131,6 +143,7 @@ export interface PayloadMap {
   'replay.reject': ReplayReject;
   'server.log': ServerLog;
   'run.error': RunError;
+  'channel.intrusion': ChannelIntrusion;
 }
 
 /* ---------- REST(§8.2) ---------- */
