@@ -172,8 +172,8 @@ export interface ConfirmRejected {
 export interface BaseSpoofSuspected {
   run_id: string;
   terminal_id: number;
-  own_verdict: string;
-  terminal_says: string;
+  own_verdict: 'PASS' | 'FAIL';   // 桥端发字面量(Python 侧该分支仅 PASS 判决可达)
+  terminal_says: 'FAIL';
   evidence: string;
 }
 export interface ServerLog { level: 'info' | 'warn' | 'error'; msg: string; }

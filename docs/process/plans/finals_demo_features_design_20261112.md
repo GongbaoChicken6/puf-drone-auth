@@ -179,7 +179,7 @@ wire poll_start = rx_ok_latch && fp_msg_id == ID_POLL;
 - do_POST 加 `/api/poll`：`{"run_id": app.submit_poll(tid)}` → Job(kind=poll) → `ser.write(protocol.pack(MSG_AUTH_POLL, tid=tid, nonce=os.urandom(4)))` + `frame.tx` 事件 + **`poll.sent` 事件 {tid, nonce}**（N6 的 EVENT_TYPES 订阅此名，巡检钮/向导靠它显示在途状态——事件名以 poll.sent 为准）；
 - 结果等待复用现有机制：板子回 ACCESS_REQUEST → RealSerialListener._auth 照常全链（判决/verdict/confirm 全自动）；
 - 3s 内无 0x0090 入站 → Job 失败 → publish `run.error` {"hint":"无响应：终端阻断态请按 SW13，或检查信道/供电"}。
-**前端**：terminal-card 对 `source=real-terminal` 的 tid 新增 `巡检` 按钮（绿 ghost；现有六按钮之外的第七个）→ `api.poll(tid)`；types.ts/api.ts 加对应类型与 EVENT_TYPES。
+**前端**：terminal-card 新增 `巡检` 按钮（绿 ghost；现有六按钮之外的第七个）〔R2 备案:对所有终端卡渲染而非仅 real-terminal——loopback/demo 点击由桥端诚实回 run.error,不假成功;TerminalState 无 source 字段,加门控需扩 store 契约,收益不抵〕→ `api.poll(tid)`；types.ts/api.ts 加对应类型与 EVENT_TYPES。
 
 **TB（tb_terminal_fsm 增用例）**：
 - T-AP1：S_IDLE 收合法 0x0097 帧 → 断言 TX_ACCESS 发出（C2 递增）；
@@ -200,7 +200,7 @@ wire poll_start = rx_ok_latch && fp_msg_id == ID_POLL;
 **桥侧新端点与执行器**：
 ```
 POST /api/enroll_real {terminal_id, n=100, measurements=3} → run_id
-  前置: tid ∈ real_serial_tids；串口空闲（互斥锁**新建** app.serial_bus_lock = threading.Lock()——桥内现无此属性（grep 证实，现仅 hub._lock/_run_lock）；_loop 的 _auth 入口与 enroll runner 同锁互斥）
+  前置: tid ∈ real_serial_tids；串口空闲（互斥锁 serial_bus_lock 已于 R2 轮新建并锚定 RealApp.__init__——_auth 全程持锁、_do_poll 写口持锁、N5 enroll runner 届时同锁；另 auth_in_progress 忙标志供 poll 快速忙拒）
   实现形态(auto-review R1 P3 修复)：薄 SerialTransport 适配器 ——
     transport.respond(tid, seeds, frame=chal) = ser.write(chal) + 从 enroll_rx_queue 等 0x0092(超时3s)
     然后**直接调用 enroll_device(protocol, transport, tid, n, measurements, on_progress)**
@@ -215,7 +215,7 @@ POST /api/enroll_real/export {terminal_id}  ← 显式二次确认(前端弹窗)
 
 ### N6 · 前端数据流展示升级（站端批）
 
-- `core/frame-decode.ts`（新）：hex → 结构化字段（按契约 §3 载荷布局逐 MSGID 解码表：ACCESS{tid,nonce,C2×8}/CHALLENGE{seeds×4}/RESPONSE{r1×4}/RESULT{result,hd,r2×8}/CONFIRM{tid,status}/EXTRA{seeds×3}/POLL{tid,nonce}），输出 `{fields:[{name,cn,bytes,range,color}]}`；
+- ~~`core/frame-decode.ts`（新）~~〔R2 备案:实现时发现等价能力已由 format.ts payloadFields(字段字节分段)+hex-viewer fieldNotes(中文名+🔒+密文着色)联合承担,不再新建模块;FEATURES 的"挑战/响应配对连线"子项裁剪(字段注记已并排呈现,连线增益低);飞行动画实测 900ms/→←基站 文字/独立 body 悬浮组件(非 timeline 内嵌),信息等价备案〕
 - hex-viewer.ts：渲染 frame-decode 结果（分段着色 + 中文字段名 + R2/密文字段锁形样式）；
 - frame-timeline.ts：新增 `flight` 动画层——帧事件到达时从终端卡片→基站卡片（或反向）飞行 800ms，携带 `len B ↑/↓` 徽标；
 - types.ts：EVENT_TYPES 增 `channel.intrusion / channel.noise / confirm.rejected / base.spoof.suspected / enroll.progress / enroll.done / poll.sent`。

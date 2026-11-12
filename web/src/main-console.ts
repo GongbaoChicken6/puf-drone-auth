@@ -129,6 +129,17 @@ function wireStore(): void {
   onPuf('puf:pool', p => store.onPool(p));
   onPuf('puf:replay', p => store.onReplay(p));
   onPuf('puf:log', p => store.onServerLog(p));
+  // N3/N4(finals-demo):巡检下发与终端拒认判决落审计行——N8 三重证据的
+  // 第三重(confirm.rejected 此前零消费,R2 ar-spec/silent-c1)
+  onPuf('puf:poll', p => store.log({
+    tone: 'info', sev: 'info', terminalId: p.terminal_id, runId: p.run_id,
+    type: 'poll.sent', text: `巡检已下发(AUTH_POLL nonce=0x${p.nonce.toString(16)})`,
+  }));
+  onPuf('puf:confirmrejected', p => store.log({
+    tone: 'error', sev: 'error', terminalId: p.terminal_id, runId: p.run_id,
+    type: 'confirm.rejected',
+    text: `终端拒认本站判决(status=${p.status})——R2 失配,疑似收到伪基站 RESULT`,
+  }));
   onPuf('puf:runerror', p => store.onRunError(p));
   onPuf('puf:session', p => store.onSession(p));
   onPuf('puf:link', p => {

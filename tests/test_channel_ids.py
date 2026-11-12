@@ -79,6 +79,10 @@ def make_listener(frames, enroll_active=False, on_drain=None):
     # __new__ 捏造的属性集必须跟随 RealSerialListener.__init__/start 同步维护
     # (漏捏 _loop 触碰的属性会 AttributeError 响亮失败,不会静默)。 ar-silent-c1。
     listener = web_bridge.RealSerialListener.__new__(web_bridge.RealSerialListener)
+    # R2 ar-test-c1:默认接线协作退出——未来 _loop 若加自动重连,用例靠
+    # running=False 结束而不是只靠 OSError(失败退化为挂死的路径被堵死)
+    if on_drain is None:
+        on_drain = lambda: setattr(listener, "running", False)
     listener.ser = FakeSerial(frames, on_drain=on_drain)
     listener.proto = HFIDAProtocol()
     listener.P = HFIDAProtocol

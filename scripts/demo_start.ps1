@@ -1,4 +1,4 @@
-﻿# demo_start.ps1 -- N9(finals-demo) 一键启动:杀残留桥 -> fresh 沙箱 -> 起桥 -> 自检
+# demo_start.ps1 -- N9(finals-demo) 一键启动:杀残留桥 -> fresh 沙箱 -> 起桥 -> 自检
 # 用法:
 #   .\scripts\demo_start.ps1                     # 自动探测串口;多候选时中止并要求显式指定
 #   .\scripts\demo_start.ps1 -SerialPort COM9    # 指定串口
@@ -69,7 +69,11 @@ if ($SerialPort -eq 'auto') {
     $cand = @($wmi)
     "WMI 候选: $($wmi -join ', ')" | Set-Content -Encoding utf8 $probeLog
     ".NET SerialPort 枚举: $($dotnet -join ', ')" | Add-Content -Encoding utf8 $probeLog
-    if (-not $cand -and $dotnet) { $cand = @($dotnet); "WMI 无命中,回退 .NET 枚举" | Add-Content -Encoding utf8 $probeLog }
+    if (-not $cand) {
+        "WMI 无 USB 串口命中;.NET 枚举: $($dotnet -join ', ')(不自动绑定,防误绑主板原生 COM)" | Add-Content -Encoding utf8 $probeLog
+        if ($dotnet) {
+            Fail "未探测到 USB 特征串口(CH340/CP210/FTDI)。.NET 枚举到: $($dotnet -join ', ') —— 为防误绑主板原生 COM 口不自动绑定,请用 -SerialPort <COMx> 显式指定,或 -SerialPort none 进 loopback。候选已记录: $probeLog"
+        }
     "候选日志: $probeLog" | Write-Host
     if ($cand.Count -gt 1) {
         Fail "探测到多个串口候选: $($cand -join ', ')。请用 -SerialPort <COMx> 显式指定(决赛双串口日必须显式)。候选已记录: $probeLog"

@@ -40,6 +40,8 @@ export class FrameFlight {
       { transform: `translate(${(x0 + x1) / 2}px,-10px)`, opacity: 1, offset: 0.2 },
       { transform: `translate(${x1}px,0)`, opacity: 0 },
     ], { duration: FLIGHT_MS, easing: 'cubic-bezier(.4,0,.6,1)' });
-    anim.addEventListener('finish', () => { chip.remove(); this.chips--; });
+    // finished 在 finish 与 cancel 两种收尾都走 finally——cancel 路径不再
+    // 永久泄漏一次 chips 计数(R2 ar-defect-c1:泄漏满 6 次动画静默停摆)
+    void anim.finished.finally(() => { chip.remove(); this.chips--; });
   }
 }

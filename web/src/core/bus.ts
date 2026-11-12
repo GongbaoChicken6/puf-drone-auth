@@ -26,7 +26,7 @@ export const PUF_EVENT = {
   'poll.sent': 'puf:poll',
   'confirm.rejected': 'puf:confirmrejected',
   'base.spoof.suspected': 'puf:basespoof',
-} as const;
+} as const satisfies Record<import('./types').EventType, string>;
 
 /* 舞台握手与舞台侧指令(§8.5:页面与 3D 模块的挂载契约)。
  * camera/shot 不属 SSE 契约,只在页面与 3D chunk 之间走 —— 后端永远看不到。 */

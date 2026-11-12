@@ -785,6 +785,46 @@ class Orchestrator:
         return self._cached_c2[tid]
 
     # ---------- S6 注册(公共函数 enroll_device,进度经 server.log) ----------
+    def _do_poll(self, job: Job) -> dict:
+        """N4(finals-demo): AUTH_POLL 下发(遥控 SW7)。auto-review R2 P1 修复:
+        handler 必须住在本 Orchestrator 上——分发是 getattr(self, "_do_poll")。
+        R2 P2 修复:与 _auth 的串口写互斥(serial_bus_lock)+认证忙拒 +
+        先写后发(时间线不出现未发出的帧,同早 RESULT 纪律)。"""
+        tid = int(job.tid)
+        app = self.app
+        if getattr(app, "auth_in_progress", False):
+            raise RuntimeError("auth in progress -- poll rejected; "
+                               "retry after the current round completes")
+        ln = getattr(app, "serial_listener", None)
+        if ln is None or not getattr(ln, "running", False):
+            raise RuntimeError(
+                "poll requires real-serial mode (--serial-port): "
+                "loopback/mock has no board to wake")
+        nonce = time.time_ns() & 0xFFFFFFFF
+        frame = self.protocol.pack(
+            self.P.MSG_AUTH_POLL, terminal_id=tid, nonce=nonce)
+        base = getattr(app, "last_access_request_ts", 0.0)
+        with app.serial_bus_lock:
+            ln.ser.write(frame); ln.ser.flush()
+        # 写成功才发事件(证据纪律:见 _auth 早 RESULT 路径注释)
+        self.hub.publish("poll.sent",
+                         {"run_id": job.run_id, "terminal_id": tid, "nonce": nonce})
+        self.hub.publish("frame.tx", {
+            "run_id": job.run_id, "terminal_id": tid,
+            "msg_id": self.P.MSG_AUTH_POLL, "name": "AUTH_POLL",
+            "hex": frame.hex(), "len": len(frame),
+            "dir": "server->term", "source": "real-terminal"})
+        # 3s 内板子应回 ACCESS_REQUEST(经 RealSerialListener._auth 全链);
+        # 无响应多为阻断态(按 SW13)或链路断
+        t0 = time.time()
+        while time.time() - t0 < 3.0:
+            if getattr(app, "last_access_request_ts", 0.0) > base:
+                return {"polled": True, "tid": tid}
+            time.sleep(0.02)
+        raise RuntimeError(
+            "no ACCESS_REQUEST within 3s after AUTH_POLL -- terminal may be "
+            "BLOCKED (press SW13 then retry) or the link is down")
+
     def _do_enroll(self, job: Job) -> str:
         tid = int(job.tid or 0)
         run_id = job.run_id or self.next_run_id()
@@ -985,6 +1025,11 @@ class RealApp:
         # 在窗口内静默(注册期站端自己连发 0x0091,防自触发)。在此显式初始化,
         # 使 N5 接线若命名/宿主漂移在导入/首跑即显形,而不是注册演示日弹假红警。
         self.enroll_session_active = False
+        # auto-review R2 P2:串口写互斥锁——_auth(监听线程)与 _do_poll(编排
+        # 线程)/N5 enroll runner 并发写同一 ser 会在线上交错损帧;锁住全部写口。
+        self.serial_bus_lock = threading.Lock()
+        # 认证进行中标志:_loop 进出 _auth 时维护;_do_poll 忙拒用(串行化演示)
+        self.auth_in_progress = False
         # Phase A A2:v1(secret_hex)状态与 ROPairingPUF 不兼容 —— 在 TemplateDB /
         # CRPPoolRegistry 构造之前做一次性迁移:凡没有 v2 freqs 记录的模板终端,
         # 连同池文件与状态记录一并作废(残留模板会让首次认证静默 REJECT;且旧
@@ -1145,35 +1190,6 @@ class RealApp:
         run_id = self.orch.next_run_id()
         self.orch.submit(Job(kind="poll", tid=tid, run_id=run_id))
         return run_id
-
-    def _do_poll(self, job: Job) -> dict:
-        tid = int(job.tid)
-        ln = getattr(self, "serial_listener", None)
-        if ln is None or not getattr(ln, "running", False):
-            raise RuntimeError(
-                "poll requires real-serial mode (--serial-port): "
-                "loopback/mock has no board to wake")
-        nonce = time.time_ns() & 0xFFFFFFFF
-        frame = self.protocol.pack(
-            type(self.protocol).MSG_AUTH_POLL, terminal_id=tid, nonce=nonce)
-        self.hub.publish("poll.sent",
-                         {"run_id": job.run_id, "terminal_id": tid, "nonce": nonce})
-        self.hub.publish("frame.tx", {
-            "run_id": job.run_id, "terminal_id": tid,
-            "msg_id": type(self.protocol).MSG_AUTH_POLL, "name": "AUTH_POLL",
-            "hex": frame.hex(), "len": len(frame),
-            "dir": "server->term", "source": "real-terminal"})
-        base = getattr(self, "last_access_request_ts", 0.0)
-        ln.ser.write(frame); ln.ser.flush()
-        # 3s 内板子应回 ACCESS_REQUEST(走 _auth 全链);无响应多为阻断态(按 SW13)
-        t0 = time.time()
-        while time.time() - t0 < 3.0:
-            if getattr(self, "last_access_request_ts", 0.0) > base:
-                return {"polled": True, "tid": tid}
-            time.sleep(0.02)
-        raise RuntimeError(
-            "no ACCESS_REQUEST within 3s after AUTH_POLL -- terminal may be "
-            "BLOCKED (press SW13 then retry) or the link is down")
 
     def c2reset(self, tid: int) -> bool:
         return bool(self.orch.submit_sync(Job(kind="c2reset", tid=tid)).result)
@@ -1470,12 +1486,14 @@ class MockApp:
         return run_id
 
     def submit_poll(self, tid: int) -> str:
-        # N4(finals-demo): mock 模式无真板可唤醒,同步回错误(不挂起不假成功)
+        # N4(finals-demo): mock 模式无真板可唤醒,同步回错误(不挂起不假成功);
+        # run_id 事件与返回值同源(store.onRunError 按 run_id 关联,R2 P3)
+        run_id = f"mock-p{int(time.time() * 1000) % 100000}"
         self.hub.publish("run.error", {
-            "run_id": f"mock-p{int(time.time() * 1000) % 100000}",
+            "run_id": run_id,
             "stage": "poll", "terminal_id": tid,
             "error": "poll requires real-serial mode: mock has no board to wake"})
-        return "mock"
+        return run_id
 
     def submit_enroll(self, tid: int, n: int) -> str:
         run_id = f"mock-e{int(time.time() * 1000) % 100000}"
@@ -2027,9 +2045,15 @@ class RealSerialListener:
                     continue
                 if mid == 0x0090:  # ACCESS_REQUEST
                     try:
-                        self._auth(int(fl.get("terminal_id",0)), fl, frame)
+                        # R2 P2:全程持串口锁(含读写)——与 _do_poll/N5 enroll 的
+                        # 写口互斥;忙标志给 poll 快速忙拒,不必等锁
+                        self.app.auth_in_progress = True
+                        with self.app.serial_bus_lock:
+                            self._auth(int(fl.get("terminal_id",0)), fl, frame)
                     except Exception as e:  # noqa: BLE001 —— 监听线程必须永死不了
                         self._log(f"REAL auth handler error (thread kept alive): {type(e).__name__}: {e}", "error")
+                    finally:
+                        self.app.auth_in_progress = False
                 elif (mid in (0x0091, 0x0093, 0x0095)
                       and not getattr(self.app, "enroll_session_active", False)):
                     # N2(finals-demo) 信道 IDS:0x0091/0x0093/0x0095 是站端→终端方向的
@@ -2130,7 +2154,11 @@ class RealSerialListener:
             if len(cf)>=17 and cf[0]==0xFD:
                 try:
                     cm,cfl=self.proto.parse(cf)
-                    if cm==0x0094:
+                    if cm!=0x0094:
+                        # R2 P3:收到意外帧不再无声——N8 攻击期完全可能
+                        self._log(f"REAL unexpected frame 0x{cm:04x} while "
+                                  f"waiting CONFIRM (run={rid}), ignored", "error")
+                    else:
                         # N3(finals-demo): status 在 payload[4](<IB=tid4B+status1B),
                         # 必须用 parse 返回的字段——按载荷[0]读会把 tid LSB 当 status,
                         # tid=1 时每次真 PASS 都误判 FAIL。
@@ -2155,7 +2183,9 @@ class RealSerialListener:
                                 f"BASE SPOOF SUSPECTED: tid={tid} rejected our PASS verdict "
                                 f"(CONFIRM status={st}) -- R2 mismatch at terminal, suspected injection",
                                 "error")
-                except Exception: pass
+                except Exception as _e:  # R2 P3:坏 CRC 的 CONFIRM 等不再零痕迹
+                    self._log(f"REAL confirm-wait error (run={rid}): "
+                              f"{type(_e).__name__}: {_e} frame={cf.hex()}", "error")
         self.hub.publish("session.update", {"terminal_id":tid,
             "state":"SESSION" if rv==0 else "BLOCKED"})
     def _ef(self,rid,tid,mid,frm,out):
