@@ -1,55 +1,93 @@
-# demo_start.ps1 -- N9(finals-demo) 一键启动:杀残留桥 -> fresh 沙箱 -> 起桥 -> 自检
+﻿# demo_start.ps1 -- N9(finals-demo) 一键启动:杀残留桥 -> fresh 沙箱 -> 起桥 -> 自检
 # 用法:
-#   .\scripts\demo_start.ps1                # 自动探测串口(CH340/LinkE);找不到则回退 loopback
-#   .\scripts\demo_start.ps1 -SerialPort COM9   # 指定串口
-#   .\scripts\demo_start.ps1 -SerialPort none   # 强制 loopback 演示模式
-#   .\scripts\demo_start.ps1 -NoBrowser         # 不自动开浏览器
+#   .\scripts\demo_start.ps1                     # 自动探测串口;多候选时中止并要求显式指定
+#   .\scripts\demo_start.ps1 -SerialPort COM9    # 指定串口
+#   .\scripts\demo_start.ps1 -SerialPort none    # 强制 loopback 演示模式
+#   .\scripts\demo_start.ps1 -NoBrowser          # 不自动开浏览器
 # 铁律5:--data-dir 永远指向新建空沙箱,绝不碰仓库 data/
+# 注意:本脚本按命令行特征杀 web_bridge python 进程,仅供演示机单人使用,
+#      不要在共享机器/队友桥运行时执行。
 param(
+    [ValidatePattern('^(auto|none|COM\d+)$')]
     [string]$SerialPort = 'auto',
+    [ValidateRange(1, 65535)]
     [int]$Port = 8642,
     [switch]$NoBrowser,
     [switch]$StrictPort
 )
 $ErrorActionPreference = 'Stop'
-# 控制台中文输出:统一 UTF-8(否则 GBK 终端下日志乱码)
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
 
-# 1) 杀残留桥:按命令行特征匹配 web_bridge.py 的 python 进程
+# 3) fresh 沙箱(铁律5) —— 提前建,后续探测/自检日志都落这里
+$sandbox = Join-Path $env:TEMP ("puf_demo_start_" + (Get-Date -Format 'yyyyMMdd_HHmmss'))
+New-Item -ItemType Directory -Path $sandbox | Out-Null
+$probeLog = Join-Path $sandbox 'com_probe.log'
+Write-Host "[demo_start] 沙箱: $sandbox"
+
+function Fail([string]$msg) {
+    # 设计 N9:失败弹窗 + 完整日志路径(弹窗失败回退控制台)
+    Write-Host "[demo_start] 失败: $msg" -ForegroundColor Red
+    try {
+        Add-Type -AssemblyName System.Windows.Forms | Out-Null
+        [System.Windows.Forms.MessageBox]::Show($msg, '演示启动失败', 'OK', 'Error') | Out-Null
+    } catch { }
+    exit 1
+}
+
+# 1) 杀残留桥:逐个报告成败,失败不静默(ar-silent-c1)
+$killed = 0; $failed = 0
 Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction SilentlyContinue |
     Where-Object { $_.CommandLine -match 'web_bridge\.py' } |
     ForEach-Object {
-        Write-Host "[demo_start] 终止残留桥 pid=$($_.ProcessId)"
-        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        try {
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop
+            $killed++
+        } catch {
+            $failed++
+            Write-Warning "[demo_start] 杀不掉 pid=$($_.ProcessId): $($_.Exception.Message)"
+        }
     }
+if ($killed -gt 0) { Write-Host "[demo_start] 已终止残留桥 x$killed" }
+if ($failed -gt 0) { Fail "有 $failed 个残留桥进程杀不掉(可能需管理员)。请手动结束 python 进程后重试。沙箱日志: $sandbox" }
 Start-Sleep -Milliseconds 600
+# 端口占用后验:仍被监听则明确报因(ar-silent-c1/defect-c1)
+$occ = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($occ) {
+    $opid = $occ.OwningProcess
+    Fail "端口 $Port 仍被 pid=$opid 占用(非 web_bridge 残留,杀桥步骤管不到它)。请释放端口或用 -Port 换口。"
+}
 
-# 2) 串口探测(不硬编码:COM 号有漂移前科) —— CH340/LinkE/FTDI 特征
+# 2) 串口探测:双源互核 + 候选落盘 + 多候选中止(ar-defect/spec/silent/test-c1)
 $portArg = ''
 if ($SerialPort -eq 'auto') {
-    $cand = Get-CimInstance Win32_PnPEntity |
+    $wmi = Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match 'COM\d' -and $_.Name -match 'CH340|CP210|FTDI|USB.*(Serial|UART)' } |
         ForEach-Object { if ($_.Name -match '(COM\d+)') { $Matches[1] } } | Select-Object -Unique
+    $dotnet = [System.IO.Ports.SerialPort]::GetPortNames() | Select-Object -Unique
+    $cand = @($wmi)
+    "WMI 候选: $($wmi -join ', ')" | Set-Content -Encoding utf8 $probeLog
+    ".NET SerialPort 枚举: $($dotnet -join ', ')" | Add-Content -Encoding utf8 $probeLog
+    if (-not $cand -and $dotnet) { $cand = @($dotnet); "WMI 无命中,回退 .NET 枚举" | Add-Content -Encoding utf8 $probeLog }
+    "候选日志: $probeLog" | Write-Host
+    if ($cand.Count -gt 1) {
+        Fail "探测到多个串口候选: $($cand -join ', ')。请用 -SerialPort <COMx> 显式指定(决赛双串口日必须显式)。候选已记录: $probeLog"
+    }
     if ($cand) {
-        $p = @($cand)[0]
-        Write-Host "[demo_start] 探测到串口候选: $($cand -join ', ') -> 使用 $p"
+        $p = $cand[0]
+        Write-Host "[demo_start] 唯一候选 -> 使用 $p"
+        "选定: $p" | Add-Content -Encoding utf8 $probeLog
         $portArg = "--serial-port $p"
     } else {
         Write-Warning '[demo_start] 未探测到 USB 串口 -> 回退 loopback 演示模式'
+        '未探测到串口,回退 loopback' | Add-Content -Encoding utf8 $probeLog
     }
 } elseif ($SerialPort -ne 'none') {
     $portArg = "--serial-port $SerialPort"
 }
 
-# 3) fresh 沙箱(铁律5)
-$sandbox = Join-Path $env:TEMP ("puf_demo_start_" + (Get-Date -Format 'yyyyMMdd_HHmmss'))
-New-Item -ItemType Directory -Path $sandbox | Out-Null
-Write-Host "[demo_start] 沙箱: $sandbox"
-
-# 4) 起桥(默认 --open 自动开浏览器; --strict-port 需显式要求)
-# 注意:不能用 $args —— 它是 PowerShell 自动变量,赋值会被吞
+# 4) 起桥
 $bridgeArgs = @('web/bridge/web_bridge.py','--repo-root','.','--data-dir',$sandbox,
           '--port',"$Port")
 if ($portArg) { $bridgeArgs += $portArg.Split(' ') | Where-Object { $_ } }
@@ -57,24 +95,41 @@ if (-not $NoBrowser) { $bridgeArgs += '--open' }
 if ($StrictPort) { $bridgeArgs += '--strict-port' }
 Write-Host "[demo_start] python $($bridgeArgs -join ' ')"
 $log = Join-Path $sandbox 'bridge_stdout.log'
+$errLog = Join-Path $sandbox 'bridge_stderr.log'
 $proc = Start-Process -FilePath 'python' -ArgumentList $bridgeArgs -WorkingDirectory $repo `
-    -RedirectStandardOutput $log -RedirectStandardError (Join-Path $sandbox 'bridge_stderr.log') `
+    -RedirectStandardOutput $log -RedirectStandardError $errLog `
     -PassThru -WindowStyle Hidden
 
-# 5) 自检:15s 内 /api/status 必须 200(端口可能自愈顺延,按返回 URL 提示)
-$ok = $false
+# 5) 自检:探测 $Port..$Port+5(桥默认自愈顺延),校验应答身份(ar-defect-c1)
+$ok = $false; $actualPort = $null
 foreach ($try in 1..15) {
     Start-Sleep -Seconds 1
-    if ($proc.HasExited) { Write-Error "[demo_start] 桥进程提前退出(exit=$($proc.ExitCode)),日志: $log"; exit 1 }
-    try {
-        $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$Port/api/status" -TimeoutSec 2
-        if ($r.StatusCode -eq 200) { $ok = $true; break }
-    } catch { }
+    if ($proc.HasExited) {
+        $tail = ''
+        if (Test-Path $errLog) { $tail = (Get-Content $errLog -Tail 12 | Out-String) }
+        Fail (@("桥进程提前退出(exit=$($proc.ExitCode))。stderr 尾部:`n$tail",
+               "stdout: $log", "stderr: $errLog") -join "`n")
+    }
+    foreach ($p in ($Port)..($Port + 5)) {
+        try {
+            $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$p/api/status" -TimeoutSec 2
+            if ($r.StatusCode -eq 200 -and $r.Headers['Content-Type'] -match 'json') {
+                $ok = $true; $actualPort = $p; break
+            }
+        } catch { }
+    }
+    if ($ok) { break }
 }
-if (-not $ok) { Write-Error '[demo_start] 15s 内 /api/status 未就绪,查看沙箱日志'; exit 1 }
+if (-not $ok) {
+    $hint = if (-not $StrictPort) { '(桥默认自愈顺延最多 +5 已探测;若仍失败多为串口/防火墙)' } else { '' }
+    Fail (@("15s 内 /api/status 未就绪 $hint", "stdout: $log", "stderr: $errLog") -join "`n")
+}
+if ($actualPort -ne $Port) {
+    Write-Warning "[demo_start] 桥自愈顺延到端口 $actualPort(原 $Port 被占)"
+}
 Write-Host ''
 Write-Host '===============================================' -ForegroundColor Green
-Write-Host " 桥已就绪: http://127.0.0.1:$Port/console.html" -ForegroundColor Green
+Write-Host " 桥已就绪: http://127.0.0.1:$actualPort/console.html" -ForegroundColor Green
 Write-Host " 沙箱: $sandbox | pid: $($proc.Id)" -ForegroundColor Green
 Write-Host '===============================================' -ForegroundColor Green
 exit 0

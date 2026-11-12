@@ -15,18 +15,29 @@ export type EventType =
   | 'link.status' | 'session.update' | 'frame.tx' | 'frame.rx'
   | 'gray.extra' | 'verdict' | 'confirm.done' | 'enroll.done'
   | 'pool.warning' | 'replay.reject' | 'server.log' | 'run.error'
-  | 'channel.intrusion';
+  | 'channel.intrusion' | 'channel.noise';
 
-/* 运行期事件名清单(§8.3 表 11 行 / 12 个 type —— frame.tx 与 frame.rx 同行但为两类)。
+/* 运行期事件名清单(§8.3 表 11 行的 12 个原生死类 + finals-demo 扩展 2 类:
+ * channel.intrusion / channel.noise,共 14 个 type —— frame.tx 与 frame.rx 同行但为两类)。
  * 桥接层把 SSE 帧写成**具名事件**(web_bridge.py:1233 `event: <type>`),
  * 因此 EventSource 的 onmessage 不会触发,订阅方必须按名 addEventListener;
- * 这里同时是审计日志过滤器的选项来源。新增事件类型须双侧同步(§8.3 冻结)。 */
+ * 这里同时是审计日志过滤器的选项来源。新增事件类型须双侧同步(扩展时同步更新计数)。
+ * satisfies 交叉约束 + 下方两条穷尽断言把四处一致性(EventType/EVENT_TYPES/
+ * PUF_EVENT/PayloadMap)全部锁进编译期 —— 漏配任何一处 tsc 直接报错。 */
 export const EVENT_TYPES = [
   'link.status', 'session.update', 'frame.tx', 'frame.rx',
   'gray.extra', 'verdict', 'confirm.done', 'enroll.done',
   'pool.warning', 'replay.reject', 'server.log', 'run.error',
-  'channel.intrusion',
-] as const satisfies readonly EventType[];
+  'channel.intrusion', 'channel.noise',
+] as const satisfies readonly (EventType & keyof PayloadMap)[];
+
+type _EventTypesExhaustive =
+  Exclude<EventType, (typeof EVENT_TYPES)[number]> extends never ? true : never;
+type _PayloadMapExhaustive =
+  Exclude<EventType, keyof PayloadMap> extends never ? true : never;
+/** 编译期穷尽检查锚点:改事件清单漏配任一处,这里的类型不再是 [true, true] */
+const _eventTypeExhaustiveCheck: [_EventTypesExhaustive, _PayloadMapExhaustive] = [true, true];
+void _eventTypeExhaustiveCheck;
 
 /* ---------- 协议帧常量(protocol.py 口径) ---------- */
 export const MSG = {
@@ -126,6 +137,15 @@ export interface ChannelIntrusion {
   len: number;
   note: string;
 }
+
+/* N2(finals-demo): 1s 滑窗内 >=3 次 resync —— 信道噪声洪泛疑似 DoS。
+ * 限速发布(同窗只发一次);审计/记录用,横幅不消费。 */
+export interface ChannelNoise {
+  events: number;
+  window_s: number;
+  dropped_bytes: number;
+  note: string;
+}
 export interface ServerLog { level: 'info' | 'warn' | 'error'; msg: string; }
 export interface RunError { run_id: string; stage: string; error: string; terminal_id?: number | null; }
 
@@ -144,6 +164,7 @@ export interface PayloadMap {
   'server.log': ServerLog;
   'run.error': RunError;
   'channel.intrusion': ChannelIntrusion;
+  'channel.noise': ChannelNoise;
 }
 
 /* ---------- REST(§8.2) ---------- */

@@ -105,7 +105,7 @@ export class SseClient {
     };
 
     // 桥接层把每帧写成具名事件(web_bridge.py:1233),故 onmessage 收不到;
-    // 必须按 12 个 type 逐个监听。onmessage 仅作无名帧的兜底(与具名互斥,不会重复派发)。
+    // 必须按 EVENT_TYPES 全部 type 逐个监听(finals-demo 后共 14 个)。onmessage 仅作无名帧的兜底(与具名互斥,不会重复派发)。
     const handle = (ev: Event) => this.handleFrame((ev as MessageEvent).data);
     es.onmessage = handle;
     for (const t of EVENT_TYPES) es.addEventListener(t, handle);

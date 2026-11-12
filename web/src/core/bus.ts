@@ -22,6 +22,7 @@ export const PUF_EVENT = {
   'server.log': 'puf:log',
   'run.error': 'puf:runerror',
   'channel.intrusion': 'puf:intrusion',
+  'channel.noise': 'puf:noise',
 } as const;
 
 /* 舞台握手与舞台侧指令(§8.5:页面与 3D 模块的挂载契约)。

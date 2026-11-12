@@ -8,7 +8,7 @@
 import { onPuf } from '../core/bus';
 import type { ChannelIntrusion } from '../core/types';
 
-const SHOW_MS = 6000;
+const SHOW_MS = 5000; // 设计文档 N2 口径:5s 自动衰减
 const MAX_ROWS = 4;
 
 export class IdsBanner {

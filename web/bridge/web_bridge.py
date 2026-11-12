@@ -980,6 +980,11 @@ class RealApp:
         self.hub = SSEHub()
         self.data = DataDir(Path(args.data_dir))
         self.data.mkdir_all()
+        # N2/N5(finals-demo) 跨批次契约锚点:注册会话窗口标志。N5 的串口注册
+        # runner 进入/退出时置 True/False;RealSerialListener._loop 的信道 IDS
+        # 在窗口内静默(注册期站端自己连发 0x0091,防自触发)。在此显式初始化,
+        # 使 N5 接线若命名/宿主漂移在导入/首跑即显形,而不是注册演示日弹假红警。
+        self.enroll_session_active = False
         # Phase A A2:v1(secret_hex)状态与 ROPairingPUF 不兼容 —— 在 TemplateDB /
         # CRPPoolRegistry 构造之前做一次性迁移:凡没有 v2 freqs 记录的模板终端,
         # 连同池文件与状态记录一并作废(残留模板会让首次认证静默 REJECT;且旧
@@ -1946,7 +1951,26 @@ class RealSerialListener:
             # 重同步:流中混入噪声时丢到下一个 0xFD 为止,否则缓冲永久卡死
             if len(buf) >= 12 and buf[0] != 0xFD:
                 _nx = buf.find(b'\xfd', 1)
-                self._log(f"REAL resync: dropped {len(buf) if _nx < 0 else _nx} non-frame bytes", "error")
+                _dropped = len(buf) if _nx < 0 else _nx
+                self._log(f"REAL resync: dropped {_dropped} non-frame bytes", "error")
+                # N2(finals-demo) 信道 IDS·噪声半边:1s 滑窗内 >=3 次 resync →
+                # 限速发布 channel.noise(纯噪声 DoS 时前端/审计有可订阅信号)。
+                # 发布后清空窗口计数,同窗不重复发。
+                _now = time.time()
+                _nev = getattr(self, "_noise_events", None)
+                if _nev is None:
+                    _nev = []
+                    self._noise_events = _nev
+                _nev.append(_now)
+                _nev[:] = [t for t in _nev if _now - t <= 1.0]
+                if len(_nev) >= 3:
+                    _nev.clear()  # 同窗只发一次,窗口重新累计
+                    self.hub.publish("channel.noise", {
+                        "events": 3, "window_s": 1.0,
+                        "dropped_bytes": _dropped,
+                        "note": ">=3 resync events within 1s on RX"})
+                    self._log("CHANNEL NOISE: 3+ resync/s on RX -- "
+                              "suspected noise flood", "error")
                 buf = b"" if _nx < 0 else buf[_nx:]
             while len(buf) >= 12 and buf[0] == 0xFD:
                 total = 10 + buf[1] + 2
@@ -1969,16 +1993,21 @@ class RealSerialListener:
                     # 广播介质,本站物理上能听见攻击帧,这是 Tier0 检测的物理基础。
                     # 注册窗口(enroll_session_active,N5)内站端自己连发 0x0091,
                     # 静默防自触发。
-                    self.hub.publish("channel.intrusion", {
-                        "msg_id": mid,
-                        "name": self.P.msg_name(mid),
-                        "hex": frame.hex(),
-                        "len": len(frame),
-                        "note": "station-only frame heard on RX path"})
-                    self._log(
-                        f"CHANNEL IDS: station-only frame 0x{mid:04x} "
-                        f"{self.P.msg_name(mid)} ({len(frame)}B) on RX -- suspected injection",
-                        "error")
+                    try:
+                        self.hub.publish("channel.intrusion", {
+                            "msg_id": mid,
+                            "name": self.P.msg_name(mid),
+                            "hex": frame.hex(),
+                            "len": len(frame),
+                            "note": "station-only frame heard on RX path"})
+                        self._log(
+                            f"CHANNEL IDS: station-only frame 0x{mid:04x} "
+                            f"{self.P.msg_name(mid)} ({len(frame)}B) on RX -- "
+                            f"suspected injection",
+                            "error")
+                    except Exception as e:  # noqa: BLE001 —— 监听线程必须永死不了(与 _auth 分支同款保护)
+                        self._log(f"REAL ids handler error (thread kept alive): "
+                                  f"{type(e).__name__}: {e}", "error")
     def _auth(self, tid, ar_f, ar_raw):
         rid = f"real-{int(time.time()*1000)}"
         c2 = ar_f.get("c2", b"\0"*8)
