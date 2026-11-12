@@ -57,6 +57,7 @@ const left = new LeftPanel({
   enroll: id => { void doEnroll(id); },
   c2reset: id => { void doC2Reset(id); },
   setkey: id => { void doSetKey(id); },
+  poll: id => { void doPoll(id); },
   runScenario: id => {
     player.stop();
     player.play([id]);
@@ -167,6 +168,18 @@ async function doAuth(tid: number, mode: AuthMode): Promise<string | null> {
   } catch (e) {
     fail(`POST /api/auth(mode=${mode}, tid=${tid})`, e);
     return null;
+  }
+}
+
+/* N4(finals-demo): 基站主动巡检——真串口模式下板端等效 SW7;loopback/mock
+ * 由桥端同步回 run.error(按钮在任何模式下都可点,失败有审计行,不假成功)。 */
+async function doPoll(tid: number): Promise<void> {
+  store.select(tid);
+  try {
+    const r = await api.poll(tid);
+    store.beginRun(r.run_id, tid);
+  } catch (e) {
+    fail(`POST /api/poll(tid=${tid})`, e);
   }
 }
 

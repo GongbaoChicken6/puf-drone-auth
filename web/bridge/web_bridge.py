@@ -1140,6 +1140,41 @@ class RealApp:
         self.orch.submit(Job(kind="enroll", tid=tid, n=n, run_id=run_id))
         return run_id
 
+    def submit_poll(self, tid: int) -> str:
+        """N4(finals-demo): station-initiated AUTH_POLL (remote SW7)."""
+        run_id = self.orch.next_run_id()
+        self.orch.submit(Job(kind="poll", tid=tid, run_id=run_id))
+        return run_id
+
+    def _do_poll(self, job: Job) -> dict:
+        tid = int(job.tid)
+        ln = getattr(self, "serial_listener", None)
+        if ln is None or not getattr(ln, "running", False):
+            raise RuntimeError(
+                "poll requires real-serial mode (--serial-port): "
+                "loopback/mock has no board to wake")
+        nonce = time.time_ns() & 0xFFFFFFFF
+        frame = self.protocol.pack(
+            type(self.protocol).MSG_AUTH_POLL, terminal_id=tid, nonce=nonce)
+        self.hub.publish("poll.sent",
+                         {"run_id": job.run_id, "terminal_id": tid, "nonce": nonce})
+        self.hub.publish("frame.tx", {
+            "run_id": job.run_id, "terminal_id": tid,
+            "msg_id": type(self.protocol).MSG_AUTH_POLL, "name": "AUTH_POLL",
+            "hex": frame.hex(), "len": len(frame),
+            "dir": "server->term", "source": "real-terminal"})
+        base = getattr(self, "last_access_request_ts", 0.0)
+        ln.ser.write(frame); ln.ser.flush()
+        # 3s 内板子应回 ACCESS_REQUEST(走 _auth 全链);无响应多为阻断态(按 SW13)
+        t0 = time.time()
+        while time.time() - t0 < 3.0:
+            if getattr(self, "last_access_request_ts", 0.0) > base:
+                return {"polled": True, "tid": tid}
+            time.sleep(0.02)
+        raise RuntimeError(
+            "no ACCESS_REQUEST within 3s after AUTH_POLL -- terminal may be "
+            "BLOCKED (press SW13 then retry) or the link is down")
+
     def c2reset(self, tid: int) -> bool:
         return bool(self.orch.submit_sync(Job(kind="c2reset", tid=tid)).result)
 
@@ -1434,6 +1469,14 @@ class MockApp:
         self._q.put((run_id, int(tid), str(mode)))
         return run_id
 
+    def submit_poll(self, tid: int) -> str:
+        # N4(finals-demo): mock 模式无真板可唤醒,同步回错误(不挂起不假成功)
+        self.hub.publish("run.error", {
+            "run_id": f"mock-p{int(time.time() * 1000) % 100000}",
+            "stage": "poll", "terminal_id": tid,
+            "error": "poll requires real-serial mode: mock has no board to wake"})
+        return "mock"
+
     def submit_enroll(self, tid: int, n: int) -> str:
         run_id = f"mock-e{int(time.time() * 1000) % 100000}"
 
@@ -1587,6 +1630,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
             if path == "/api/enroll":
                 return self._json({"run_id": app.submit_enroll(
                     int(body["terminal_id"]), int(body.get("n", 100)))})
+            if path == "/api/poll":
+                return self._json({"run_id": app.submit_poll(int(body["terminal_id"]))})
             if path == "/api/c2reset":
                 return self._json({"ok": app.c2reset(int(body["terminal_id"]))})
             if path == "/api/setkey":
@@ -2010,6 +2055,8 @@ class RealSerialListener:
                                   f"{type(e).__name__}: {e}", "error")
     def _auth(self, tid, ar_f, ar_raw):
         rid = f"real-{int(time.time()*1000)}"
+        # N4(finals-demo): poll 超时判定的观测点——每次收到 ACCESS_REQUEST 都刷新
+        self.app.last_access_request_ts = time.time()
         c2 = ar_f.get("c2", b"\0"*8)
         self._ef(rid,tid,0x0090,ar_raw,False)
         self._log(f"REAL auth tid={tid} run={rid}")
@@ -2082,11 +2129,32 @@ class RealSerialListener:
                 else: time.sleep(0.005)
             if len(cf)>=17 and cf[0]==0xFD:
                 try:
-                    cm,_=self.proto.parse(cf)
+                    cm,cfl=self.proto.parse(cf)
                     if cm==0x0094:
+                        # N3(finals-demo): status 在 payload[4](<IB=tid4B+status1B),
+                        # 必须用 parse 返回的字段——按载荷[0]读会把 tid LSB 当 status,
+                        # tid=1 时每次真 PASS 都误判 FAIL。
+                        st=int(cfl.get("status",0))
                         self._ef(rid,tid,0x0094,cf,False)
-                        self.hub.publish("confirm.done",
-                            {"run_id":rid,"terminal_id":tid,"status":0,"verified_r2":True})
+                        if st == 0:
+                            self.hub.publish("confirm.done",
+                                {"run_id":rid,"terminal_id":tid,"status":0,"verified_r2":True})
+                        else:
+                            # Tier1 闭环告警:本站判决 PASS 而终端回 CONFIRM_FAIL——
+                            # 唯一自洽解释=终端收到的 RESULT 不是本站发的(伪基站
+                            # 抢先注入,R2 失配被终端识破)。
+                            self.hub.publish("confirm.rejected",
+                                {"run_id":rid,"terminal_id":tid,"status":st,
+                                 "own_verdict":rv,
+                                 "evidence":"terminal rejected our verdict: R2 mismatch"})
+                            self.hub.publish("base.spoof.suspected",
+                                {"run_id":rid,"terminal_id":tid,
+                                 "own_verdict":"PASS","terminal_says":"FAIL",
+                                 "evidence":"R2 mismatch at terminal -- suspected fake-base-station injection"})
+                            self._log(
+                                f"BASE SPOOF SUSPECTED: tid={tid} rejected our PASS verdict "
+                                f"(CONFIRM status={st}) -- R2 mismatch at terminal, suspected injection",
+                                "error")
                 except Exception: pass
         self.hub.publish("session.update", {"terminal_id":tid,
             "state":"SESSION" if rv==0 else "BLOCKED"})
@@ -2124,6 +2192,7 @@ def main(argv: list[str] | None = None) -> int:
         _serial_listener = None
         if getattr(args, 'serial_port', None):
             _serial_listener = RealSerialListener(app, args.serial_port, args.serial_baud)
+            app.serial_listener = _serial_listener  # N4: _do_poll 经此发 AUTH_POLL
             _serial_listener.start()
         url = f"http://{args.bind}:{port}/console.html"
         print(f"[INFO] serving {server.web_dist} -> {url}")

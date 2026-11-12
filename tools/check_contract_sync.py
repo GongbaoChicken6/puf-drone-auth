@@ -41,6 +41,10 @@ def build_frames():
     frames["CONFIRM"] = p.pack(H.MSG_CONFIRM, terminal_id=42, status=1)
     es = [bytes([0xD0 + i] + [i] * 7) for i in range(3)]
     frames["EXTRA_CHALLENGE"] = p.pack(H.MSG_EXTRA_CHALLENGE, seeds=es)
+    # finals-demo N4: station-initiated poll golden (seq 0x48, after EXTRA 0x47)
+    p._seq = 0x48
+    frames["AUTH_POLL"] = p.pack(H.MSG_AUTH_POLL, terminal_id=42,
+                                  nonce=0xDEADBEEF)
     # A1 golden RESULT frame (section 4.1 / tb_level3 result_gold): first-auth
     # R2 = Speck(W3 demo key, C2=a1..a8) = 7b45b0545e59aa94 at seq 0x50.
     p._seq = 0x50

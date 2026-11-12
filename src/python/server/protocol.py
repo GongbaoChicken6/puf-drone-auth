@@ -135,6 +135,9 @@ class HFIDAProtocol:
     MSG_RESULT = 0x0093
     MSG_CONFIRM = 0x0094
     MSG_EXTRA_CHALLENGE = 0x0095
+    #: finals-demo N4: station-initiated poll.  The board ignores the payload
+    #: and treats a valid frame as a remote SW7 press (full five-frame auth).
+    MSG_AUTH_POLL = 0x0097
 
     #: Challenges per authentication round.  4 (not 5): 4x8B = 32B fits the
     #: 44-byte MAVLink frame constraint; 5x8B = 40B would not (P1-R5).
@@ -172,6 +175,7 @@ class HFIDAProtocol:
         MSG_RESULT: 0x5D,
         MSG_CONFIRM: 0x5E,
         MSG_EXTRA_CHALLENGE: 0x5F,
+        MSG_AUTH_POLL: 0x60,
     }
 
     _MSG_NAMES: dict[int, str] = {
@@ -181,6 +185,7 @@ class HFIDAProtocol:
         MSG_RESULT: "RESULT",
         MSG_CONFIRM: "CONFIRM",
         MSG_EXTRA_CHALLENGE: "EXTRA_CHALLENGE",
+        MSG_AUTH_POLL: "AUTH_POLL",
     }
 
     def __init__(
@@ -336,6 +341,12 @@ class HFIDAProtocol:
                 int(kw.get("terminal_id", 0)) & 0xFFFFFFFF,
                 int(kw.get("status", 0)) & 0xFF,
             )
+        if msg_id == cls.MSG_AUTH_POLL:
+            return struct.pack(
+                "<II",
+                int(kw.get("terminal_id", 0)) & 0xFFFFFFFF,
+                int(kw.get("nonce", 0)) & 0xFFFFFFFF,
+            )
         raise ValueError(f"unknown message id {hex(msg_id)}")
 
     @staticmethod
@@ -432,6 +443,13 @@ class HFIDAProtocol:
                 )
             terminal_id, status = struct.unpack("<IB", payload)
             return {"terminal_id": terminal_id, "status": status}
+        if msg_id == cls.MSG_AUTH_POLL:
+            if len(payload) != 8:
+                raise ValueError(
+                    f"AUTH_POLL payload must be 8 bytes, got {len(payload)}"
+                )
+            terminal_id, nonce = struct.unpack("<II", payload)
+            return {"terminal_id": terminal_id, "nonce": nonce}
         raise ValueError(f"unknown message id {hex(msg_id)}")
 
     # ------------------------------------------------------------------

@@ -18,6 +18,7 @@ export interface TerminalCardActions {
   enroll(id: number): void;
   c2reset(id: number): void;
   setkey(id: number): void;
+  poll(id: number): void;   // N4(finals-demo): 基站主动巡检(AUTH_POLL)
 }
 
 export class TerminalCard {
@@ -98,6 +99,9 @@ export class TerminalCard {
         <button class="btn ghost" data-act="setkey"
           title="装入 W3 演示密钥 0001020308090a0b10111213(与 docs/protocol_contract.md §4 黄金帧同一把);装入后全新终端首次认证的 R2 应与黄金 R2 一致">
           ${t.keyInstalled ? '演示密钥 ✓' : '演示密钥'}</button>
+        <button class="btn ghost" data-act="poll"
+          title="基站主动巡检:下发 AUTH_POLL(0x0097),板端等效按下 SW7,发起完整五帧双向认证;3s 无响应提示按 SW13">
+          巡检</button>
       </div>`;
   }
 
@@ -124,6 +128,8 @@ export class TerminalCard {
       ?.addEventListener('click', () => this.act.c2reset(this.t.id));
     this.el.querySelector<HTMLButtonElement>('[data-act="setkey"]')
       ?.addEventListener('click', () => this.act.setkey(this.t.id));
+    this.el.querySelector<HTMLButtonElement>('[data-act="poll"]')
+      ?.addEventListener('click', () => this.act.poll(this.t.id));
   }
 
   update(t: TerminalState, selected: boolean): void {

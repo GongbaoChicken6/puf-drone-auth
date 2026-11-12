@@ -32,6 +32,7 @@ export const api = {
 
   auth: (body: AuthRequest) => post<RunResponse>('/auth', body),
   enroll: (body: EnrollRequest) => post<RunResponse>('/enroll', body),
+  poll: (terminalId: number) => post<RunResponse>('/poll', { terminal_id: terminalId }),
   c2reset: (terminalId: number) => post<OkResponse>('/c2reset', { terminal_id: terminalId }),
   setkey: (body: SetKeyRequest) => post<OkResponse>('/setkey', body),
 };

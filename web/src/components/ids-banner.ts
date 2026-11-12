@@ -6,7 +6,7 @@
  * server.log(CHANNEL IDS...)走既有 puf:log 通道,此处不重复记。
  * ============================================================ */
 import { onPuf } from '../core/bus';
-import type { ChannelIntrusion } from '../core/types';
+import type { BaseSpoofSuspected, ChannelIntrusion } from '../core/types';
 
 const SHOW_MS = 5000; // 设计文档 N2 口径:5s 自动衰减
 const MAX_ROWS = 4;
@@ -22,6 +22,17 @@ export class IdsBanner {
     this.el.setAttribute('role', 'alert');
     this.el.hidden = true;
     onPuf('puf:intrusion', p => this.push(p));
+    // N3(finals-demo): 矛盾关联告警(终端拒认本站判决 = 疑似伪基站注入)
+    onPuf('puf:basespoof', p => this.pushSpoof(p));
+  }
+
+  private pushSpoof(p: BaseSpoofSuspected): void {
+    this.rows.push({
+      msg_id: 0x0093, name: 'RESULT', hex: '', len: 0,
+      note: `tid=${p.terminal_id} 拒认本站判决(${p.own_verdict}→${p.terminal_says})——疑似伪基站注入`,
+    });
+    if (this.rows.length > MAX_ROWS) this.rows.shift();
+    this.render();
   }
 
   private push(p: ChannelIntrusion): void {

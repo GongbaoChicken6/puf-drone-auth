@@ -47,7 +47,7 @@ crc = (crc >> 8) ^ (tmp << 8) ^ (tmp << 3) ^ (tmp >> 4)   // 16-bit 截断
 | 0xFD | 0x23ED |
 | 0xAA | 0x05D7 |
 
-## 3. 消息目录（6 条，ID/CRC_EXTRA/载荷布局）
+## 3. 消息目录（7 条，ID/CRC_EXTRA/载荷布局）
 
 | MSGID | 名称 | 方向 | CRC_EXTRA | 载荷布局 |
 |---|---|---|---|---|
@@ -57,6 +57,7 @@ crc = (crc >> 8) ^ (tmp << 8) ^ (tmp << 3) ^ (tmp >> 4)   // 16-bit 截断
 | 0x0093 | RESULT | 基站→终端 | 0x5D | 10B：result(u8) + hd(u8) + r2(8B) |
 | 0x0094 | CONFIRM | 终端→基站 | 0x5E | 5B：terminal_id(u32LE) + status(u8) |
 | 0x0095 | EXTRA_CHALLENGE | 基站→终端 | 0x5F | 24B：3×8B 种子 |
+| 0x0097 | AUTH_POLL | 基站→终端 | 0x60 | 8B：terminal_id(u32LE) + nonce(u32LE)（finals-demo N4；板端忽略载荷内容，仅识别 MSGID 即等效 SW7 发起完整五帧认证） |
 
 **多字节字段一律小端**（u32、msgid、CRC）。8B 种子/响应为不透明字节串，原样传输不做字节交换。
 
@@ -85,6 +86,9 @@ FD 05 00 00 46 01 02 94 00 00 2A 00 00 00 01 78 F4
 # EXTRA_CHALLENGE seq=0x47 (36B)
 FD 18 00 00 47 01 02 95 00 00 D0 00 00 00 00 00 00 00 D1 01 01 01 01 01 01 01
    D2 02 02 02 02 02 02 02 7A 9F
+
+# AUTH_POLL tid=42 nonce=0xDEADBEEF seq=0x48 (20B, finals-demo N4)
+FD 08 00 00 48 01 02 97 00 00 2A 00 00 00 EF BE AD DE 55 67
 
 # RESULT_A1_GOLDEN seq=0x50 result=PASS hd=5 r2=Speck(W3 key,C2=a1..a8) (22B)
 FD 0A 00 00 50 01 02 93 00 00 00 05 7B 45 B0 54 5E 59 AA 94 FF 1D

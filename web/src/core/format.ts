@@ -32,6 +32,7 @@ function payloadFields(msgId: number, n: number): { label: string; size: number 
     case MSG.RESPONSE_R1: return Array.from({ length: n / 8 }, (_, i) => ({ label: `r1_${i + 1}`, size: 8 }));
     case MSG.RESULT: return [{ label: 'result u8', size: 1 }, { label: 'hd u8', size: 1 }, { label: 'R2 8B', size: 8 }];
     case MSG.CONFIRM: return [{ label: 'tid u32', size: 4 }, { label: 'status u8', size: 1 }];
+    case MSG.AUTH_POLL: return [{ label: 'tid u32', size: 4 }, { label: 'nonce u32', size: 4 }];
     default: return n > 0 ? [{ label: 'payload', size: n }] : [];
   }
 }

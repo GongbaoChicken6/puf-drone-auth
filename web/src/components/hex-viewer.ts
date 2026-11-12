@@ -202,6 +202,9 @@ export class HexViewer {
       rows.push({ k: 'terminal_id', cn: '终端号', v: String(leU32(p.payload, 0)) },
         { k: 'status', cn: '确认状态',
           v: `${parseInt(p.payload[4] ?? '0', 16)}(0=通过 1=拒认基站)` });
+    } else if (p.msgId === 0x0097) {
+      rows.push({ k: 'terminal_id', cn: '终端号', v: String(leU32(p.payload, 0)) },
+        { k: 'nonce', cn: '巡检随机数', v: `0x${leU32(p.payload, 4).toString(16).padStart(8, '0')}` });
     }
     if (rows.length === 0) return null;
     const box = document.createElement('div');

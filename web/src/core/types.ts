@@ -15,10 +15,12 @@ export type EventType =
   | 'link.status' | 'session.update' | 'frame.tx' | 'frame.rx'
   | 'gray.extra' | 'verdict' | 'confirm.done' | 'enroll.done'
   | 'pool.warning' | 'replay.reject' | 'server.log' | 'run.error'
-  | 'channel.intrusion' | 'channel.noise';
+  | 'channel.intrusion' | 'channel.noise'
+  | 'poll.sent' | 'confirm.rejected' | 'base.spoof.suspected';
 
-/* 运行期事件名清单(§8.3 表 11 行的 12 个原生死类 + finals-demo 扩展 2 类:
- * channel.intrusion / channel.noise,共 14 个 type —— frame.tx 与 frame.rx 同行但为两类)。
+/* 运行期事件名清单(§8.3 表 11 行的 12 个原生死类 + finals-demo 扩展 5 类:
+ * channel.intrusion / channel.noise / poll.sent / confirm.rejected /
+ * base.spoof.suspected,共 17 个 type —— frame.tx 与 frame.rx 同行但为两类)。
  * 桥接层把 SSE 帧写成**具名事件**(web_bridge.py:1233 `event: <type>`),
  * 因此 EventSource 的 onmessage 不会触发,订阅方必须按名 addEventListener;
  * 这里同时是审计日志过滤器的选项来源。新增事件类型须双侧同步(扩展时同步更新计数)。
@@ -29,6 +31,7 @@ export const EVENT_TYPES = [
   'gray.extra', 'verdict', 'confirm.done', 'enroll.done',
   'pool.warning', 'replay.reject', 'server.log', 'run.error',
   'channel.intrusion', 'channel.noise',
+  'poll.sent', 'confirm.rejected', 'base.spoof.suspected',
 ] as const satisfies readonly (EventType & keyof PayloadMap)[];
 
 type _EventTypesExhaustive =
@@ -47,6 +50,7 @@ export const MSG = {
   RESULT: 0x0093,
   CONFIRM: 0x0094,
   EXTRA_CHALLENGE: 0x0095,
+  AUTH_POLL: 0x0097,       // finals-demo N4: 基站主动巡检(板端等效 SW7)
 } as const;
 
 export const MSG_NAMES: Record<number, string> = {
@@ -56,6 +60,7 @@ export const MSG_NAMES: Record<number, string> = {
   [MSG.RESULT]: 'RESULT',
   [MSG.CONFIRM]: 'CONFIRM',
   [MSG.EXTRA_CHALLENGE]: 'EXTRA_CHALLENGE',
+  [MSG.AUTH_POLL]: 'AUTH_POLL',
 };
 
 /* 判定码(RESULT 帧 result 字段;main.py _RESULT_NAMES 同源) */
@@ -146,6 +151,31 @@ export interface ChannelNoise {
   dropped_bytes: number;
   note: string;
 }
+
+/* N4(finals-demo): 巡检帧已发出(等效遥控 SW7)。 */
+export interface PollSent {
+  run_id: string;
+  terminal_id: number;
+  nonce: number;
+}
+
+/* N3(finals-demo): 终端回 CONFIRM_FAIL 拒认本站判决。 */
+export interface ConfirmRejected {
+  run_id: string;
+  terminal_id: number;
+  status: number;
+  own_verdict: number;
+  evidence: string;
+}
+
+/* N3(finals-demo): 矛盾关联告警——本站判 PASS 而终端拒认 = 疑似伪基站注入。 */
+export interface BaseSpoofSuspected {
+  run_id: string;
+  terminal_id: number;
+  own_verdict: string;
+  terminal_says: string;
+  evidence: string;
+}
 export interface ServerLog { level: 'info' | 'warn' | 'error'; msg: string; }
 export interface RunError { run_id: string; stage: string; error: string; terminal_id?: number | null; }
 
@@ -165,6 +195,9 @@ export interface PayloadMap {
   'run.error': RunError;
   'channel.intrusion': ChannelIntrusion;
   'channel.noise': ChannelNoise;
+  'poll.sent': PollSent;
+  'confirm.rejected': ConfirmRejected;
+  'base.spoof.suspected': BaseSpoofSuspected;
 }
 
 /* ---------- REST(§8.2) ---------- */
