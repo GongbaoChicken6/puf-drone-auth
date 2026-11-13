@@ -237,6 +237,10 @@ module tb_gap_regression;
         repeat (10) @(negedge clk);
         if (auth_result !== 2'd3) begin errors = errors + 1; $display("[GD1 FAIL] result=%0d exp 3 (stale R2 must block)", auth_result); end
         else $display("[GD1 PASS] stale R2_1 rejected -> BLOCKED(3) : r2_expected refreshed");
+        // finals-demo N3: 失配路径现在先发 CONFIRM(status=1) 上报帧再 BLOCKED——
+        // 必须等该帧 done，否则下一轮 pulse_auth 撞 S_TX_CONFIRM 发帧窗被吞
+        wait (mf_frame_done === 1'b1); @(negedge clk);  // N3 上报帧
+        repeat (3) @(negedge clk);                       // BLOCKED 一拍自清回 IDLE
 
         //================ GD2: 3rd auth from IDLE, FRESH R2_3 -> PASS ========
         $display("[GD2] 3rd auth (from IDLE) with FRESH R2_3");
@@ -291,6 +295,8 @@ module tb_gap_regression;
         repeat (10) @(negedge clk);
         if (auth_result !== 2'd3) begin errors = errors + 1; $display("[GE2 FAIL] result=%0d exp 3", auth_result); end
         else $display("[GE2 PASS] C2 NOT re-incremented during gray zone (R2_6 rejected)");
+        wait (mf_frame_done === 1'b1); @(negedge clk);  // finals-demo N3 上报帧
+        repeat (3) @(negedge clk);
 
         //================ GF: forged R2 (1 byte flip) -> BLOCKED =============
         $display("[GF] 6th auth with forged R2 (last byte flipped)");
@@ -303,6 +309,8 @@ module tb_gap_regression;
         repeat (10) @(negedge clk);
         if (auth_result !== 2'd3) begin errors = errors + 1; $display("[GF FAIL] result=%0d exp 3 (forged R2 must block)", auth_result); end
         else $display("[GF PASS] forged R2 (1-byte flip) -> BLOCKED(3) : core security property holds");
+        wait (mf_frame_done === 1'b1); @(negedge clk);  // finals-demo N3 上报帧
+        repeat (3) @(negedge clk);
 
         //================ GH: RESULT code 4 (REPLAY) -> REJECT ================
         // A1 阶段 4 语义锁定：终端对任意非零 result 码一律拒绝。即使 R2 完全

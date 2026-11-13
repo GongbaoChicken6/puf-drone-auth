@@ -141,6 +141,12 @@ module tb_terminal_fsm;
         if (mf_frame_done && mf_msg_id == 24'h0094) saw_confirm <= 1'b1;
     end
 
+    // finals-demo N4: 发出的帧计数（T-AP3 "poll 不得打扰在飞轮次" 断言用）
+    integer frame_events = 0;
+    integer ap3_base = 0;
+    always @(posedge clk) if (mf_frame_done) frame_events <= frame_events + 1;
+    // finals-demo N3: 捕获 CONFIRM 载荷的 status 字节（tx_captured[4]，<IB 布局）
+
     //------------------------------------------------------------------------
     // mavlink_frame 模型：收到 start 后模拟 payload_phase + frame_done
     //------------------------------------------------------------------------
@@ -388,6 +394,86 @@ module tb_terminal_fsm;
             errors = errors + 1; $display("[TE2 FAIL] expect BLOCKED(3), got %0d", auth_result);
         end else
             $display("[TE2 PASS] replayed RESULT rejected by P2-1 guard (no CONFIRM)");
+
+        // ===== finals-demo N4: T-AP1 S_IDLE 收 AUTH_POLL -> 发起认证 =====
+        $display("[..T-AP1] poll wakes S_IDLE");
+        rst = 1'b1; repeat (2) @(negedge clk); rst = 1'b0; repeat (2) @(negedge clk);
+        feed_frame(24'h0097, 8'd8);                    // 巡检帧（载荷被忽略）
+        wait (mf_frame_done === 1'b1); @(negedge clk);
+        if (mf_msg_id !== 24'h0090) begin
+            errors = errors + 1; $display("[T-AP1 FAIL] poll->%h expect ACCESS(90)", mf_msg_id);
+        end else
+            $display("  [T-AP1] poll in S_IDLE -> ACCESS_REQUEST (remote SW7)");
+
+        // ===== T-AP2 走完整流到 SESSION，再 poll 唤醒（二次认证入口） =====
+        $display("[..T-AP2] poll wakes S_SESSION");
+        for (i = 0; i < 32; i = i + 1)
+            fp_payload_buf[i] = 8'h50 + i;
+        feed_frame(24'h0091, 8'd32);                   // CHALLENGE
+        wait (mf_frame_done === 1'b1); @(negedge clk); // R1
+        fp_payload_buf[0] = 8'h00; fp_payload_buf[1] = 8'h05;
+        fp_payload_buf[2]=8'h7b; fp_payload_buf[3]=8'h45; fp_payload_buf[4]=8'hb0; fp_payload_buf[5]=8'h54;
+        fp_payload_buf[6]=8'h5e; fp_payload_buf[7]=8'h59; fp_payload_buf[8]=8'haa; fp_payload_buf[9]=8'h94;
+        feed_frame(24'h0093, 8'd10);                   // RESULT PASS+黄金R2
+        wait (mf_frame_done === 1'b1); @(negedge clk); // CONFIRM
+        repeat (10) @(negedge clk);
+        if (auth_result !== 2'd1) begin
+            errors = errors + 1; $display("[T-AP2 FAIL] pre: result=%0d expect 1", auth_result);
+        end
+        feed_frame(24'h0097, 8'd8);                    // SESSION 态巡检
+        wait (mf_frame_done === 1'b1); @(negedge clk);
+        if (mf_msg_id !== 24'h0090) begin
+            errors = errors + 1; $display("[T-AP2 FAIL] session poll->%h expect 90", mf_msg_id);
+        end else
+            $display("  [T-AP2] poll in S_SESSION -> new ACCESS (2nd-auth entry)");
+
+        // ===== T-AP3 S_WAIT_CHALL 中 poll 必须被忽略 =====
+        $display("[..T-AP3] poll ignored mid-round");
+        rst = 1'b1; repeat (2) @(negedge clk); rst = 1'b0; repeat (2) @(negedge clk);
+        @(negedge clk) auth_start <= 1'b1; @(negedge clk) auth_start <= 1'b0;
+        wait (mf_frame_done === 1'b1); @(negedge clk);  // ACCESS
+        @(negedge clk);                                  // 再等一拍:计数器(NBA)提交后才取基线
+        ap3_base = frame_events;                        // 基线（含 ACCESS）
+        feed_frame(24'h0097, 8'd8);                     // 在飞注入 poll
+        repeat (100) @(negedge clk);
+        if (frame_events !== ap3_base) begin
+            errors = errors + 1; $display("[T-AP3 FAIL] poll disturbed in-flight round");
+        end
+        // 在飞轮次仍可正常推进：真 CHALLENGE -> R1
+        for (i = 0; i < 32; i = i + 1)
+            fp_payload_buf[i] = 8'h50 + i;
+        feed_frame(24'h0091, 8'd32);
+        wait (mf_frame_done === 1'b1); @(negedge clk);
+        if (mf_msg_id !== 24'h0092) begin
+            errors = errors + 1; $display("[T-AP3 FAIL] R1 after poll: %h", mf_msg_id);
+        end else
+            $display("  [T-AP3] poll ignored in S_WAIT_CHALL; round continues");
+        repeat (1300) @(negedge clk);                    // 不喂 RESULT -> 超时回 IDLE
+
+        // ===== finals-demo N3: T-CF1 R2 失配 -> CONFIRM(1) 上报 -> BLOCKED =====
+        $display("[..T-CF1] R2 mismatch -> CONFIRM_FAIL -> BLOCKED");
+        rst = 1'b1; repeat (2) @(negedge clk); rst = 1'b0; repeat (2) @(negedge clk);
+        @(negedge clk) auth_start <= 1'b1; @(negedge clk) auth_start <= 1'b0;
+        wait (mf_frame_done === 1'b1); @(negedge clk);  // ACCESS（rst 后 C2=a1..a8）
+        for (i = 0; i < 32; i = i + 1)
+            fp_payload_buf[i] = 8'h50 + i;
+        feed_frame(24'h0091, 8'd32);
+        wait (mf_frame_done === 1'b1); @(negedge clk);  // R1
+        fp_payload_buf[0] = 8'h00; fp_payload_buf[1] = 8'h05;
+        for (i = 2; i < 10; i = i + 1) fp_payload_buf[i] = 8'hFF;   // r2 全 FF 必失配
+        feed_frame(24'h0093, 8'd10);
+        wait (mf_frame_done === 1'b1); @(negedge clk);  // 期望发出 CONFIRM(status=1)
+        if (mf_msg_id !== 24'h0094) begin
+            errors = errors + 1; $display("[T-CF1 FAIL] no CONFIRM on mismatch, got %h", mf_msg_id);
+        end else if (tx_captured[4] !== 8'h01) begin
+            errors = errors + 1; $display("[T-CF1 FAIL] CONFIRM status=%h expect 01", tx_captured[4]);
+        end else
+            $display("  [T-CF1] CONFIRM(status=1) uplink sent (lock-and-report)");
+        repeat (20) @(negedge clk);
+        if (auth_result !== 2'd3) begin
+            errors = errors + 1; $display("[T-CF1 FAIL] result=%0d expect 3 (BLOCKED after report)", auth_result);
+        end else
+            $display("[T-CF1 PASS] mismatch -> report -> BLOCKED (no fake revive)");
 `else
         // ============ TEN: 参数=0 回归锁（ENROLL_NEG 编译） ============
         $display("[..TEN] enroll disabled: S_IDLE must ignore 0x0091");

@@ -40,10 +40,14 @@ module w3_top_zc706 # (
     output wire         radio_txd     ,   // AJ21 = J58.1
     input  wire         radio_rxd     ,   // AB21 = J58.5
 
-    // LED（高电平点亮）
+    // LED（高电平点亮；finals-demo N1: result/busy 经 demo_led 灯语增强）
     output wire         led_busy      ,   // G2  = DS9（偏暗，仅指示）
-    output wire [1:0]   led_result    ,   // Y21/W21 = DS8/DS10（亮，结果码）
-    output wire         led_heartbeat     // A17 = DS35（偏暗，~0.75Hz）
+    output wire [1:0]   led_result    ,   // Y21/W21 = DS8/DS10（闪序增强后的结果码）
+    output wire         led_heartbeat ,   // A17 = DS35（偏暗，~0.75Hz）
+
+    // N7(finals-demo): PMOD J58 外接大灯/蜂鸣器（3.3V 侧经 TXS0108E；断电插拔）
+    output wire [3:0]   ext_led       ,   // 绿1/绿2/红/琥珀（10mm 大灯）
+    output wire         ext_buzzer        // 有源蜂鸣器（高=响）
   );
 
 //---------------- 时钟适配 ---------------//
@@ -62,6 +66,12 @@ clk_wiz_0 u_mmcm (
 // 按键高有效（按下=复位）取反 AND MMCM 已锁定（锁定前持续复位，双保险）
 wire rst_n = ~sys_rst_btn_n & mmcm_locked;
 
+//---------------- 灯语增强内部网（finals-demo N1/N7） ---------------//
+// demo_led 纯消费 result 码生成闪序，不改 terminal_fsm/w3_top 语义——
+// 18 个既有 TB 不受影响（CI wrapper 三元素锁不触碰本区）。
+wire [1:0] led_result_raw;
+wire       led_busy_raw;
+
 //---------------- 协议顶层 ---------------//
 w3_top # ( .FREQ_HZ   ( 100_000_000 ),   // 板上时钟 100MHz
            .BAUD      ( BAUD        ),
@@ -78,9 +88,24 @@ w3_top # ( .FREQ_HZ   ( 100_000_000 ),   // 板上时钟 100MHz
     .radio_rxd     ( radio_rxd             ),
     .auth_btn      ( auth_btn              ),
     .term_id_sw    ( { 4'h0, term_id_dip } ),   // SW12 有 4 位，高 4 位 tie 0
-    .led_busy      ( led_busy              ),
-    .led_result    ( led_result            ),
+    .led_busy      ( led_busy_raw          ),
+    .led_result    ( led_result_raw        ),
     .led_heartbeat ( led_heartbeat         )
+);
+
+//---------------- 灯语增强（finals-demo N1/N7） ---------------//
+demo_led # (
+    .FLASH_HALF_MS ( 125           ),
+    .FREQ_HZ       ( 100_000_000   )
+) u_demo_led (
+    .clk         ( clk_100m        ),
+    .rst_n       ( rst_n           ),
+    .result_in   ( led_result_raw  ),
+    .busy_in     ( led_busy_raw    ),
+    .led_result  ( led_result      ),
+    .led_busy    ( led_busy        ),
+    .ext_led     ( ext_led         ),
+    .ext_buzzer  ( ext_buzzer      )
 );
 
 endmodule

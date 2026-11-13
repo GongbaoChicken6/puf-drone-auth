@@ -112,7 +112,8 @@ $rtl = @(
     "src\rtl\common\frame_parser.v",  "src\rtl\common\byte_fifo.v",
     "src\rtl\common\uart_tx.v",       "src\rtl\common\uart_rx.v",
     "src\rtl\common\speck64_96.v",
-    "src\rtl\w3_protocol\terminal_fsm.v", "src\rtl\w3_protocol\w3_top.v"
+    "src\rtl\w3_protocol\terminal_fsm.v", "src\rtl\w3_protocol\demo_led.v",
+    "src\rtl\w3_protocol\w3_top.v"
 )
 # ALL TB files
 $tbs = @(
@@ -127,13 +128,14 @@ $tbs = @(
     "sim\tb\tb_key_derive.v",
     "sim\tb\tb_w3top_keyloop.v",
     "sim\tb\tb_ro_entropy.v",
-    "sim\tb\tb_w3_top_seedgate.v"   # M1(auto-review): SEED_GATE_EN 旁路/门控双向锁定
+    "sim\tb\tb_w3_top_seedgate.v",  # M1(auto-review): SEED_GATE_EN 旁路/门控双向锁定
+    "sim\tb\tb_demo_led.v"          # finals-demo N1: 灯语模块四态+蜂鸣+ext 映射
 )
 $tbNames = @("tb_speck", "tb_gap_regression",
              "tb_challenge_decode","tb_crc16","tb_mavlink_frame","tb_frame_parser",
              "tb_byte_fifo","tb_uart_tx","tb_uart_rx","tb_terminal_fsm","tb_tx_chain","tb_level3_protocol",
              "tb_w3_top", "tb_puf_path", "tb_key_derive", "tb_w3top_keyloop", "tb_ro_entropy",
-             "tb_w3_top_seedgate")
+             "tb_w3_top_seedgate", "tb_demo_led")
 # Test-only overrides (W4-P0 timeout experiment).  Deliberately plain
 # [string] + internal split: powershell.exe -File does NOT split commas
 # for array parameters (that is -Command behaviour), so accepting one

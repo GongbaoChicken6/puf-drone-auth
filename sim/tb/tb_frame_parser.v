@@ -56,6 +56,7 @@ module tb_frame_parser;
     //------------------------------------------------------------------------
     reg [7:0] golden_ch [0:43];   // CHALLENGE 44B
     reg [7:0] golden_re [0:21];   // RESULT 22B
+    reg [7:0] golden_po [0:19];   // finals-demo N4(T-FP1): AUTH_POLL 20B
 
     initial begin
         golden_ch[0]=8'hFD; golden_ch[1]=8'h20; golden_ch[2]=8'h00; golden_ch[3]=8'h00;
@@ -77,6 +78,14 @@ module tb_frame_parser;
         golden_re[10]=8'h00; golden_re[11]=8'h05;              // result=PASS, hd=5
         for (i=0;i<8;i=i+1) golden_re[12+i]=8'hC0+i;          // r2=C0..C7
         golden_re[20]=8'hA5; golden_re[21]=8'hD2;
+
+        // finals-demo N4(T-FP1): AUTH_POLL tid=42 nonce=DEADBEEF seq=0x48 (20B)
+        golden_po[0]=8'hFD; golden_po[1]=8'h08; golden_po[2]=8'h00; golden_po[3]=8'h00;
+        golden_po[4]=8'h48; golden_po[5]=8'h01; golden_po[6]=8'h02; golden_po[7]=8'h97;
+        golden_po[8]=8'h00; golden_po[9]=8'h00;
+        golden_po[10]=8'h2A; golden_po[11]=8'h00; golden_po[12]=8'h00; golden_po[13]=8'h00;
+        golden_po[14]=8'hEF; golden_po[15]=8'hBE; golden_po[16]=8'hAD; golden_po[17]=8'hDE;
+        golden_po[18]=8'h55; golden_po[19]=8'h67;
     end
 
     //------------------------------------------------------------------------
@@ -247,6 +256,37 @@ module tb_frame_parser;
             errors = errors + 1; $display("[T7 FAIL] back-to-back: second frame lost, msgid=%h", msg_id);
         end else
             $display("[T7 PASS] back-to-back frames both parsed");
+
+        // ---------------- T8(finals-demo N4/T-FP1): AUTH_POLL 真解析器接受 ----------------
+        // 锁 RX 侧两道门：id_legal 扩展 + CRC_EXTRA=0x60（auto-review R1 P1 的 RX 镜像缺口）
+        ok_seen = 1'b0; err_seen = 1'b0;
+        for (i = 0; i < 20; i = i + 1) begin
+            @(negedge clk);
+            rx_byte  <= golden_po[i];
+            rx_valid <= 1'b1;
+            @(negedge clk);
+            rx_valid <= 1'b0;
+        end
+        repeat (3) @(negedge clk);
+        if (!ok_seen) begin
+            errors = errors + 1; $display("[T8 FAIL] AUTH_POLL rejected (RX id_legal/CRC_EXTRA gate?)");
+        end else begin
+            if (msg_id !== 24'h0097) begin
+                errors = errors + 1; $display("[T8 FAIL] msg_id=%h expect 0097", msg_id);
+            end
+            if (pay_len !== 8'd8) begin
+                errors = errors + 1; $display("[T8 FAIL] pay_len=%0d expect 8", pay_len);
+            end
+            payload_rd_addr = 5'd0; @(negedge clk);
+            if (payload_rd_data !== 8'h2A) begin
+                errors = errors + 1; $display("[T8 FAIL] tid LSB=%h expect 2A", payload_rd_data);
+            end
+            payload_rd_addr = 5'd4; @(negedge clk);
+            if (payload_rd_data !== 8'hEF) begin
+                errors = errors + 1; $display("[T8 FAIL] nonce LSB=%h expect EF", payload_rd_data);
+            end
+            if (errors == 0) $display("[T8 PASS] AUTH_POLL 20B accepted by real parser");
+        end
 
         // ---------------- 总结 ----------------
         repeat (5) @(negedge clk);

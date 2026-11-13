@@ -52,6 +52,7 @@ module frame_parser # (
     localparam [23:0] ID_RESPONSE   = 24'h0092;
     localparam [23:0] ID_RESULT     = 24'h0093;
     localparam [23:0] ID_CONFIRM    = 24'h0094;
+    localparam [23:0] ID_POLL       = 24'h0097;     // AUTH_POLL(finals-demo N4)
     localparam [23:0] ID_EXTRA      = 24'h0095;
 
     //------------------------------------------------------------------------
@@ -112,13 +113,17 @@ module frame_parser # (
             ID_RESULT    : crc_extra = 8'h5D;
             ID_CONFIRM   : crc_extra = 8'h5E;
             ID_EXTRA     : crc_extra = 8'h5F;
+            ID_POLL      : crc_extra = 8'h60;   // finals-demo N4（default=0x00 会使 CRC 校验必败）
             default      : crc_extra = 8'h00;
         endcase
     end
 
+    // finals-demo N4: RX 侧 id_legal 必须同步扩——S_CHECK 对未知 msgid 判 frame_err,
+    // rx_ok_latch 永不置位,poll_start 不触发（auto-review R1 P1 的 RX 镜像缺口）
     wire id_legal = (msgid_r == ID_ACCESS_REQ) || (msgid_r == ID_CHALLENGE)
                  || (msgid_r == ID_RESPONSE  ) || (msgid_r == ID_RESULT  )
-                 || (msgid_r == ID_CONFIRM   ) || (msgid_r == ID_EXTRA   );
+                 || (msgid_r == ID_CONFIRM   ) || (msgid_r == ID_EXTRA   )
+                 || (msgid_r == ID_POLL      );
 
     assign busy = (state != S_SEARCH);
 

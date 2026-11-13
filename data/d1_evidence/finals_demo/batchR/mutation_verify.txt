@@ -1,0 +1,8 @@
+﻿MUTATION VERIFICATION (batch-R step 5, rule-3) - 2026-11-13
+Pre-fix RTL = git HEAD (829d77c) versions, fed to NEW TB cases. ALL MUST FAIL:
+M1 tb_mavlink_frame T9 vs pre-fix mavlink_frame.v : TB_MAVLINK_FRAME_FAIL (watchdog; 0x0097 start rejected by id_legal, send_frame hangs)
+M2 tb_frame_parser  T8 vs pre-fix frame_parser.v  : [T8 FAIL] AUTH_POLL rejected (RX id_legal/CRC_EXTRA gate) + TB_FRAME_PARSER_FAIL errors=1
+M3 tb_terminal_fsm  T-AP1/AP2/CF1 vs pre-fix terminal_fsm.v : TB_TERMINAL_FSM_FAIL (watchdog; poll never wakes FSM, wait hangs)
+M4 tb_level3_protocol T-L31 vs pre-fix fsm+mf+fp  : TB_LEVEL3_PROTOCOL_FAIL (watchdog; end-to-end poll dead at parser gate)
+VERDICT: 4/4 FAIL as required - every new case catches its pre-fix defect.
+Fix-side greens (same day): TB_DEMO_LED_PASS / TB_MAVLINK_FRAME_PASS / TB_FRAME_PARSER_PASS / TB_TERMINAL_FSM_PASS / TB_LEVEL3_PROTOCOL_PASS

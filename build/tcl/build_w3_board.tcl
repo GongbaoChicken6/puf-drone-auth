@@ -38,6 +38,7 @@ $SRC/rtl/w2_array/ro_entropy.v \
     $SRC/rtl/w3_protocol/terminal_fsm.v \
     $SRC/rtl/w3_protocol/w3_top.v \
     $SRC/rtl/w3_protocol/w3_top_zc706.v \
+    $SRC/rtl/w3_protocol/demo_led.v \
 ]
 
 # 引脚约束：w3_top_zc706.xdc 已按 UG954 v1.8 + 板卡文件逐引脚冻结，直接加载

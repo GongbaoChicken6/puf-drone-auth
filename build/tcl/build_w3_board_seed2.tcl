@@ -33,6 +33,7 @@ add_files [list \
     $SRC/rtl/w3_protocol/terminal_fsm.v \
     $SRC/rtl/w3_protocol/w3_top.v \
     $SRC/rtl/w3_protocol/w3_top_zc706.v \
+    $SRC/rtl/w3_protocol/demo_led.v \
 ]
 add_files -fileset constrs_1 $SRC/rtl/w3_protocol/w3_top_zc706.xdc
 add_files -fileset constrs_1 $SRC/rtl/w2_array/w2_waiver.xdc

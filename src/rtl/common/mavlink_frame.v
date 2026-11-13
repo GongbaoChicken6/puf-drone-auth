@@ -63,6 +63,7 @@ module mavlink_frame # (
     localparam [23:0] ID_RESULT     = 24'h0093;       // RESULT
     localparam [23:0] ID_CONFIRM    = 24'h0094;       // CONFIRM
     localparam [23:0] ID_EXTRA      = 24'h0095;       // EXTRA_CHALLENGE
+    localparam [23:0] ID_POLL       = 24'h0097;       // AUTH_POLL(finals-demo N4,站端巡检)
 
     //------------------------------------------------------------------------
     // 状态机（3-bit 恰好 8 态）
@@ -95,6 +96,7 @@ module mavlink_frame # (
             ID_RESULT    : crc_extra = 8'h5D;
             ID_CONFIRM   : crc_extra = 8'h5E;
             ID_EXTRA     : crc_extra = 8'h5F;
+            ID_POLL      : crc_extra = 8'h60;   // finals-demo N4（契约 §3 第7条）
             default      : crc_extra = 8'h00;
         endcase
     end
@@ -102,9 +104,12 @@ module mavlink_frame # (
     //------------------------------------------------------------------------
     // msgid 合法性（IDLE 期用 start 当拍值判定）
     //------------------------------------------------------------------------
+    // finals-demo N4: id_legal 必须同步扩——S_IDLE 以 cmd_ok=id_legal&&len_ok 拒 start,
+    // 漏扩则 0x0097 帧构造不出（frame_err），巡检全链失效（auto-review R2 P2 教训）
     wire id_legal = (msg_id == ID_ACCESS_REQ) || (msg_id == ID_CHALLENGE)
                  || (msg_id == ID_RESPONSE ) || (msg_id == ID_RESULT   )
-                 || (msg_id == ID_CONFIRM  ) || (msg_id == ID_EXTRA    );
+                 || (msg_id == ID_CONFIRM  ) || (msg_id == ID_EXTRA    )
+                 || (msg_id == ID_POLL     );
     wire len_ok   = (payload_len <= MAX_PAYLOAD);  // 整数比较（勿对参数位切片：32[4:0]==0 陷阱）
     wire cmd_ok   = id_legal && len_ok;
 

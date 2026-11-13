@@ -195,6 +195,8 @@ module tb_level3_protocol;
     reg [7:0] chall_gold [0:43];
     // RESULT (22B) - R2 = Speck(K,C2) Python precomputed
     reg [7:0] result_gold [0:21];
+    // AUTH_POLL (20B) - finals-demo N4(T-L31) 端到端巡检帧（契约 §4 黄金向量）
+    reg [7:0] poll_gold [0:19];
 
     initial begin
         // CHALLENGE: FD 20 00 00 51 01 02 91 00 00 ...
@@ -221,6 +223,14 @@ module tb_level3_protocol;
         result_gold[12]=8'h7b; result_gold[13]=8'h45; result_gold[14]=8'hb0; result_gold[15]=8'h54;
         result_gold[16]=8'h5e; result_gold[17]=8'h59; result_gold[18]=8'haa; result_gold[19]=8'h94;
         result_gold[20]=8'hff; result_gold[21]=8'h1d; // CRC (9-byte header verified)
+
+        // finals-demo N4: AUTH_POLL tid=42 nonce=0xDEADBEEF seq=0x48 (20B, CRC_EXTRA=0x60)
+        poll_gold[0]=8'hFD;  poll_gold[1]=8'h08;  poll_gold[2]=8'h00;  poll_gold[3]=8'h00;
+        poll_gold[4]=8'h48;  poll_gold[5]=8'h01;  poll_gold[6]=8'h02;  poll_gold[7]=8'h97;
+        poll_gold[8]=8'h00;  poll_gold[9]=8'h00;
+        poll_gold[10]=8'h2A; poll_gold[11]=8'h00; poll_gold[12]=8'h00; poll_gold[13]=8'h00;
+        poll_gold[14]=8'hEF; poll_gold[15]=8'hBE; poll_gold[16]=8'hAD; poll_gold[17]=8'hDE;
+        poll_gold[18]=8'h55; poll_gold[19]=8'h67;
     end
 
     //------------------------------------------------------------------------
@@ -309,6 +319,19 @@ module tb_level3_protocol;
             $display("[T2 FAIL] rx_inhibit stuck high in WAIT_RESULT");
         end
         if (errors == 0) $display("[T2 PASS] rx_inhibit works");
+
+        // ============ T-L31(finals-demo N4): 端到端 poll（真链路三关） ============
+        // 真 parser 的 RX id_legal+CRC(0x60) → 真 FSM 的 S_IDLE poll_start →
+        // 真 mavlink_frame 发 ACCESS。auto-review R1 P1 的 RX 镜像缺口由此锁死。
+        $display("[..T-L31] end-to-end AUTH_POLL via real parser+FSM+TX");
+        rst = 1'b1; repeat (2) @(negedge clk); rst = 1'b0; repeat (2) @(negedge clk);
+        for (i = 0; i < 20; i = i + 1) frame_bytes[i] = poll_gold[i];
+        feed_frame_bytes(20);
+        wait (mf_done === 1'b1); @(negedge clk);
+        if (mf_msg_id !== 24'h0090) begin
+            errors = errors + 1; $display("[T-L31 FAIL] poll->%h expect ACCESS(90)", mf_msg_id);
+        end else
+            $display("[T-L31 PASS] poll -> real parser -> FSM -> real TX ACCESS");
         // ============ Summary ============
         repeat (5) @(negedge clk);
         if (errors == 0) $display("TB_LEVEL3_PROTOCOL_PASS");

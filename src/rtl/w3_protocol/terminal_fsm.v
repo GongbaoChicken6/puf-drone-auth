@@ -106,6 +106,11 @@ module terminal_fsm # (
 
     reg [3:0] state = S_IDLE;
 
+    // finals-demo N4: AUTH_POLL(0x0097) —— 站端主动巡检帧。板端忽略载荷，
+    // 收到合法帧即等效 auth_start（遥控 SW7），从 S_IDLE/S_SESSION 发起完整
+    // 五帧认证。复用 idle-accept 的 1 拍采样窗口惯用法（见 S_IDLE 注释）。
+    localparam [23:0] ID_POLL = 24'h0097;
+
     //========================================================================
     // 内部寄存器
     //========================================================================
@@ -113,6 +118,8 @@ module terminal_fsm # (
     reg [31:0] timeout_cnt  = 32'd0;            // 超时计数（32-bit：板上 200M 需要 28-bit）
     reg        rx_ok_latch  = 1'b0;             // frame_ok 粘滞
     reg [1:0]  result_r     = 2'd0;             // auth_result 寄存
+    // finals-demo N4: 巡检启动条件（rx_ok_latch 声明后此处才可见）
+    wire poll_start = rx_ok_latch && (fp_msg_id == ID_POLL);
 
     // 发送载荷缓冲（最大 32B，发 ACCESS/R1/CONFIRM 前预填）
     reg [7:0]  tx_buf [0:31];
@@ -381,7 +388,8 @@ module terminal_fsm # (
                 S_IDLE: begin
                     // result_r 不在此清零——BLOCKED 的结果需要被外部读到
                     // 只在新一轮认证启动时才清
-                    if (auth_start) begin
+                    // finals-demo N4: AUTH_POLL(0x0097) 等效遥控按下 SW7
+                    if (auth_start || poll_start) begin
                         result_r <= 2'd0;
                         calc_done_flag <= 1'b0;   // B-P2: 每会话重置
                         if (ENABLE_KEY_DERIVE && !key_valid_r) begin
@@ -421,7 +429,12 @@ module terminal_fsm # (
                             S_TX_ACCESS:   state <= S_WAIT_CHALL;
                             S_TX_R1:       state <= S_WAIT_RESULT;
                             S_TX_R1_EXTRA: state <= S_WAIT_RESULT;
-                            S_TX_CONFIRM:  state <= S_SESSION;
+                            // finals-demo N3: CONFIRM 发完后按 result_r 分流——
+                            // PASS(2'd1)进会话；R2 失配上报路径(2'd3)发完进阻断
+                            // （"锁死并上报"；若直接回 S_SESSION 会假复活）。
+                            // 时序安全：result_r 在进入 S_TX_CONFIRM 前一拍已
+                            // NBA 为终值，发帧耗时 >> 1 拍。
+                            S_TX_CONFIRM:  state <= (result_r == 2'd3) ? S_BLOCKED : S_SESSION;
                             default:       state <= S_IDLE;
                         endcase
                     end else if (mf_frame_err) begin
@@ -646,11 +659,21 @@ module terminal_fsm # (
                     end else if (fp_rd_addr >= 5'd2 && fp_rd_addr < 5'd10) begin
                         // 读 r2 字节 [2..9]
                         if (fp_rd_data != r2_expected[fp_rd_addr[3:0] - 5'd2]) begin
-                            state    <= S_BLOCKED;  // R2 不匹配
-                            result_r <= 2'd3;
+                            // finals-demo N3: R2 失配 = 终端识破伪基站——先上报
+                            // CONFIRM(status=1) 再阻断（"锁死并上报"，发完经上方
+                            // S_TX_CONFIRM 分流进 S_BLOCKED）。载荷与 PASS 路径
+                            // 同构（<IB>: tid 4B + status 1B，protocol.py CONFIRM_FAIL=1）。
+                            tx_buf[0]      <= terminal_id;   // tid 低字节（黄金帧同构）
+                            tx_buf[1]      <= 8'h00;
+                            tx_buf[2]      <= 8'h00;
+                            tx_buf[3]      <= 8'h00;
+                            tx_buf[4]      <= 8'h01;         // status = CONFIRM_FAIL
+                            tx_len         <= 6'd5;
+                            state          <= S_TX_CONFIRM;
+                            result_r       <= 2'd3;
                             calc_done_flag <= 1'b0; // P3: 阻断路径也清
                             // C4: 清 key_valid_r 触发下次认证重派生（坏 K 不永久缓存）
-                            key_valid_r <= 1'b0;
+                            key_valid_r    <= 1'b0;
                         end
                         fp_rd_addr <= fp_rd_addr + 5'd1;
                     end else if (fp_rd_addr >= 5'd10) begin
@@ -671,7 +694,8 @@ module terminal_fsm # (
                 S_SESSION: begin
                     // 认证通过。auth_start 直接启动新一轮（不经过 IDLE——
                     // 否则 auth_start 脉冲被本态消费后 IDLE 看不到）
-                    if (auth_start) begin
+                    // finals-demo N4: 巡检可唤醒会话态板子（二次认证入口）
+                    if (auth_start || poll_start) begin
                         result_r <= 2'd0;
                         calc_done_flag <= 1'b0;   // B-P2: 每会话重置
                         if (ENABLE_KEY_DERIVE && !key_valid_r) begin

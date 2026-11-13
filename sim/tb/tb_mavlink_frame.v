@@ -83,6 +83,8 @@ module tb_mavlink_frame;
     reg [7:0] golden_z  [0:11];   // len=0 最小帧
     reg [7:0] payload_r1 [0:31];
     reg [7:0] payload_ar [0:15];
+    reg [7:0] golden_po [0:19];   // finals-demo N4: AUTH_POLL 20B（契约 §4）
+    reg [7:0] payload_poll [0:7];
 
     task load_golden;
         begin
@@ -114,6 +116,16 @@ module tb_mavlink_frame;
             golden_z[4]=8'h44; golden_z[5]=8'h01; golden_z[6]=8'h02; golden_z[7]=8'h92;
             golden_z[8]=8'h00; golden_z[9]=8'h00;
             golden_z[10]=8'h04; golden_z[11]=8'h69;
+
+            // finals-demo N4: AUTH_POLL tid=42 nonce=0xDEADBEEF seq=0x48 (20B)
+            golden_po[0]=8'hFD; golden_po[1]=8'h08; golden_po[2]=8'h00; golden_po[3]=8'h00;
+            golden_po[4]=8'h48; golden_po[5]=8'h01; golden_po[6]=8'h02; golden_po[7]=8'h97;
+            golden_po[8]=8'h00; golden_po[9]=8'h00;
+            golden_po[10]=8'h2A; golden_po[11]=8'h00; golden_po[12]=8'h00; golden_po[13]=8'h00;
+            golden_po[14]=8'hEF; golden_po[15]=8'hBE; golden_po[16]=8'hAD; golden_po[17]=8'hDE;
+            golden_po[18]=8'h55; golden_po[19]=8'h67;
+            payload_poll[0]=8'h2A; payload_poll[1]=8'h00; payload_poll[2]=8'h00; payload_poll[3]=8'h00;
+            payload_poll[4]=8'hEF; payload_poll[5]=8'hBE; payload_poll[6]=8'hAD; payload_poll[7]=8'hDE;
         end
     endtask
 
@@ -131,7 +143,8 @@ module tb_mavlink_frame;
             else repeat (12) @(negedge clk);                // 空载荷：等 10B 头发完
             for (i=0;i<plen;i=i+1) begin
                 @(negedge clk);
-                payload_byte  <= (id == 24'h0092) ? payload_r1[i] : payload_ar[i];
+                payload_byte  <= (id == 24'h0092) ? payload_r1[i] :
+                                 (id == 24'h0097) ? payload_poll[i] : payload_ar[i];
                 payload_valid <= 1'b1;
             end
             @(negedge clk);
@@ -349,6 +362,25 @@ module tb_mavlink_frame;
                     $display("[T8 FAIL] recovery byte[%0d] mismatch", i);
                 end
             if (errors == 0) $display("[T8 PASS] reset mid-frame recovery OK");
+        end
+
+        $display("[..T9]");
+        // ---------------- T9(finals-demo N4): AUTH_POLL 0x0097 黄金帧 ----------------
+        // 锁 TX 侧两道门：id_legal 扩展 + CRC_EXTRA=0x60（漏任一则构不出帧）
+        rx_cnt = 0; err_seen = 1'b0;
+        send_frame(24'h0097, 6'd8, 8'h48);
+        if (rx_cnt !== 20) begin
+            errors = errors + 1; $display("[T9 FAIL] length %0d != 20", rx_cnt);
+        end else begin
+            for (i=0;i<20;i=i+1)
+                if (rx_mem[i] !== golden_po[i]) begin
+                    errors = errors + 1;
+                    $display("[T9 FAIL] byte[%0d]=%02h expect %02h", i, rx_mem[i], golden_po[i]);
+                end
+            if (errors == 0) $display("[T9 PASS] AUTH_POLL 20B byte-exact (id_legal + CRC 0x60)");
+        end
+        if (frame_crc !== 16'h6755) begin
+            errors = errors + 1; $display("[T9 FAIL] crc=%h expect 6755", frame_crc);
         end
 
         // ---------------- 总结 ----------------
