@@ -12,7 +12,7 @@
  * 而非单次调用,桥接侧无对应单端点;循环在 result=3 或达上限时终止。
  * ============================================================ */
 import { store } from './store';
-import type { AuthMode } from './types';
+import type { AuthMode, DroneCmdRequest, DroneFlightState } from './types';
 
 export type ScenarioId = 'S1' | 'S2' | 'S3' | 'S4' | 'S5' | 'S6' | 'S7' | 'S8';
 
@@ -87,8 +87,10 @@ export interface ScenarioDeps {
   /* 返回桥接下发的 run_id(null = 调用失败,已由入口记日志) */
   auth(terminalId: number, mode: AuthMode): Promise<string | null>;
   enroll(terminalId: number): Promise<void>;
-  /* finals-demo-drone:S8 的飞控指令入口(REST /api/drone/cmd) */
-  drone(terminalId: number, cmd: string, extra?: { x?: number; y?: number }): Promise<void>;
+  /* finals-demo-drone:S8 的飞控指令入口(REST /api/drone/cmd)。
+   * 返回指令是否被接受(false=409/网络失败,S8 据此熔断,content-review P2)。 */
+  drone(terminalId: number, cmd: DroneCmdRequest['cmd'],
+        extra?: { x?: number; y?: number }): Promise<boolean>;
 }
 
 export type PlayerState = 'idle' | 'running' | 'paused';
@@ -199,19 +201,22 @@ export class ScenarioPlayer {
   }
 
   /* finals-demo-drone:轮询 store.drones 等飞行终态(150ms 粒度)。
-   * 窗口取 RUN_TIMEOUT_MS×4:飞行链(起飞3s+航点5s+返航10s)长于单次认证。 */
-  private async waitDroneState(tid: number, states: string[], g: number): Promise<void> {
+   * 窗口取 RUN_TIMEOUT_MS×4:飞行链长于单次认证。
+   * 返回是否等到终态(false=超时/被新代际取代,S8 据此熔断,content P2)。 */
+  private async waitDroneState(tid: number, states: readonly DroneFlightState[],
+                               g: number): Promise<boolean> {
     const t0 = performance.now();
     while (performance.now() - t0 < RUN_TIMEOUT_MS * 4) {
       const d = store.snapshot.drones.get(tid);
-      if (d && states.includes(d.state)) return;
-      if (this.stopFlag || g !== this.gen) return;
+      if (d && states.includes(d.state)) return true;
+      if (this.stopFlag || g !== this.gen) return false;
       await delay(150);
     }
     store.log({
       tone: 'replay', sev: 'warn', terminalId: tid, runId: null, type: 'server.log',
-      text: `S8:等待无人机状态 ${states.join('/')} 超时,跳到下一拍。`,
+      text: `S8:等待无人机状态 ${states.join('/')} 超时。`,
     });
+    return false;
   }
 
   /* 执行一幕并等待其终态事件;返回后 index 指向下一幕 */
@@ -263,19 +268,37 @@ export class ScenarioPlayer {
         break;
       }
       case 'drone': {
-        /* finals-demo-drone(S8):认证解锁 → 起飞 → 航点A → 返航。
-         * 每步等**真实** drone.state 终态(与 auth 幕等 verdict 同一纪律,
-         * 不用固定延迟蒙混;超时只记日志继续,剧本不卡死)。 */
+        /* finals-demo-drone(S8):认证解锁 → 起飞 → 航点A → 航点B → 返航
+         * (spec §4.5,content-review P2 补 B 拍)。每步等**真实** drone.state
+         * 终态;任一拍指令被拒或超时即**熔断本幕**(content-review P2:原版
+         * 链断后三拍各空等 32s,合计 64~96s 假死画面),红字提示后收尾。 */
         const runId = await this.deps.auth(tid, s.mode!);
         await this.waitRunEnd(runId, g);
-        const fly = async (cmd: string, extra: { x?: number; y?: number } | undefined,
-                            until: string[]): Promise<void> => {
-          await this.deps.drone(tid, cmd, extra);
-          await this.waitDroneState(tid, until, g);
+        const fly = async (cmd: DroneCmdRequest['cmd'],
+                           extra: { x?: number; y?: number } | undefined,
+                           until: readonly DroneFlightState[]): Promise<boolean> => {
+          if (!(await this.deps.drone(tid, cmd, extra))) return false;
+          return this.waitDroneState(tid, until, g);
         };
-        await fly('launch', undefined, ['HOVER']);
-        await fly('goto', { x: 5, y: -2 }, ['HOVER']);
-        await fly('rtl', undefined, ['LANDED']);
+        /* 可重入预拍:上次飞行残态先收敛回地面,否则 launch 必 409 触发熔断
+         * (content-review e2e 实证:悬停态点 S8 → BAD_STATE:HOVER → 熔断)。 */
+        const d0 = store.snapshot.drones.get(tid);
+        if (d0 && d0.state !== 'LANDED' && d0.state !== 'ARMED') {
+          if (d0.state === 'TAKEOFF') await fly('land', undefined, ['LANDED']);
+          else if (d0.state === 'HOVER' || d0.state === 'MOVE') await fly('rtl', undefined, ['LANDED']);
+          else await this.waitDroneState(tid, ['LANDED'], g);   // RTL/LAND 收尾中
+        }
+        const chainOk = await fly('launch', undefined, ['HOVER'])
+          && await fly('goto', { x: 5, y: -2 }, ['HOVER'])
+          && await fly('goto', { x: -3, y: 4 }, ['HOVER'])
+          && await fly('rtl', undefined, ['LANDED']);
+        if (!chainOk) {
+          store.log({
+            tone: 'error', sev: 'error', terminalId: tid, runId: null,
+            type: 'server.log',
+            text: 'S8 已中止:飞控指令被拒或状态超时(见上方琥珀行)。检查认证是否 PASS、无人机是否处于可起飞状态。',
+          });
+        }
         break;
       }
     }

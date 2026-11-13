@@ -213,8 +213,9 @@ async function doPoll(tid: number): Promise<void> {
   }
 }
 
-/* finals-demo-drone:S8 的飞控指令(与面板按钮同一 REST 面,失败入审计)。 */
-async function doDroneCmd(tid: number, cmd: string, extra?: { x?: number; y?: number }): Promise<void> {
+/* finals-demo-drone:S8 的飞控指令(与面板按钮同一 REST 面)。
+ * 返回是否被接受(false 时 S8 熔断,content-review P2)。 */
+async function doDroneCmd(tid: number, cmd: string, extra?: { x?: number; y?: number }): Promise<boolean> {
   try {
     const r = await api.droneCmd({
       terminal_id: tid, cmd: cmd as Parameters<typeof api.droneCmd>[0]['cmd'], ...extra,
@@ -225,7 +226,8 @@ async function doDroneCmd(tid: number, cmd: string, extra?: { x?: number; y?: nu
         text: `剧本飞控 ${cmd} 被拒:${r.reason ?? '?'}`,
       });
     }
-  } catch (e) { fail(`POST /api/drone/cmd(${cmd})`, e); }
+    return r.ok;
+  } catch (e) { fail(`POST /api/drone/cmd(${cmd})`, e); return false; }
 }
 
 async function doEnroll(tid: number): Promise<void> {

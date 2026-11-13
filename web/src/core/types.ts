@@ -272,7 +272,9 @@ export interface DroneCmdRequest {
   cmd: 'arm' | 'disarm' | 'launch' | 'takeoff' | 'goto' | 'hold' | 'land' | 'rtl' | 'lock';
   x?: number; y?: number; alt?: number;   // goto 航点
 }
-export interface DroneCmdResponse { ok: boolean; state: DroneFlightState; reason?: string; }
+/* state/reason 均可缺席:网络级失败兜底不编造状态(content-review P3);
+ * 后端成功路径 reason=None 序列化为 JSON null,故含 null(type-review P3)。 */
+export interface DroneCmdResponse { ok: boolean; state?: DroneFlightState; reason?: string | null; }
 
 /* viz 数据端点 */
 /** B1:ML 攻击实验数据(/api/viz/ml;W4 真实产物,source=STATIC) */

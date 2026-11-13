@@ -140,7 +140,7 @@ class SSEHub:
         复用 publish 的锁与丢旧保新策略;不入 SSE 客户端计数。tap 消费者
         不得在回调内再 publish(锁递归)——DroneSim 在自己线程出队后发布。
         """
-        q: Queue = Queue(maxsize=QUEUE_CAP)
+        q: Queue = Queue(maxsize=512)   # 设计 §3.1 口径(独立于 SSE 客户端 QUEUE_CAP)
         with self._lock:
             self._taps.append(q)
         return q
@@ -1099,6 +1099,7 @@ class RealApp:
 
     def shutdown(self) -> None:
         self._telemetry_stop.set()
+        self.drone.stop()               # finals-demo-drone:停模拟器线程
         try:
             self.mods.flush_c2_state(self.protocol, self.store)
         except Exception:
@@ -1494,7 +1495,8 @@ class MockApp:
         self.hub.publish("server.log", {
             "level": "warn", "msg": "[MOCK] canned replay data — not measured from hardware"})
 
-    def shutdown(self) -> None: pass
+    def shutdown(self) -> None:
+        self.drone.stop()               # finals-demo-drone
 
     def _telemetry(self) -> None:
         while True:

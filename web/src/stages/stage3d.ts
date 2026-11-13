@@ -274,14 +274,19 @@ class Stage3d {
 
     this.on('puf:pool', (w) => { this.world.setPool(w.pct, true, w.remaining, null); });
 
-    /* finals-demo-drone:选中 tid 的遥测驱动无人机飞行(非选中终端防串台) */
+    /* finals-demo-drone:选中 tid 的遥测驱动无人机飞行(非选中终端防串台)。 */
     this.on('puf:drone-state', (p) => {
       if (!accepts(p.terminal_id)) return;
       this.world.setDroneState(p.state, p.unlocked);
+      this.reconcileDroneAtt();   // LANDED/断档时校准,见下
     });
     this.on('puf:drone-attitude', (p) => {
       if (accepts(p.terminal_id)) this.droneAtt = p;
     });
+    /* content-review P2:droneAtt 此前无任何清空路径 —— 桥重启/断档重同步/
+     * 切换选中终端后,3D 机体钉死在旧遥测位姿(半空定格),与 HUD 错位且无
+     * 自愈。store 每次变化(含 ingestDrones/切换选中)都做一次对账。 */
+    this.offs.push(store.subscribe(() => this.reconcileDroneAtt()));
 
     this.on('puf:enroll', (e) => {
       // 注册完成 → 该终端有了新模板,指纹阵必须重取(否则画面停在上一次)
@@ -446,6 +451,28 @@ class Stage3d {
   private droneAtt: DroneAttitudeEvent | null = null;
   private droneRx = new Vector3(ANCHOR.drone.x, ANCHOR.corridorY, 0);
   private droneHit = new Vector3(ANCHOR.drone.x, ANCHOR.drone.y + 0.35, 0);
+
+  /* 对账规则:选中 tid 无演示态(桥重启/未注册)→ 清空并回待机锚点;
+   * LANDED(引擎不再发遥测)→ 由 store 事件的 pos/yaw 合成一帧静止姿态,
+   * 机体落在真实落点而非旧空中位姿。 */
+  private reconcileDroneAtt(): void {
+    const sel = store.snapshot.selectedTerminal;
+    const d = sel == null ? undefined : store.snapshot.drones.get(sel);
+    if (!d) {
+      if (this.droneAtt != null) {
+        this.droneAtt = null;
+        this.world.resetDronePose();
+      }
+      return;
+    }
+    if (d.state === 'LANDED') {
+      this.droneAtt = {
+        terminal_id: d.terminal_id, state: 'LANDED',
+        x: d.pos[0], y: d.pos[1], alt: d.pos[2],
+        vx: 0, vy: 0, vz: 0, roll: 0, pitch: 0, yaw: d.yaw,
+      };
+    }
+  }
 
   private wake(): void { if (this.running) this.loop(); }
 

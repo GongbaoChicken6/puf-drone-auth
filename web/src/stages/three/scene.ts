@@ -19,6 +19,7 @@ import {
   Texture, TorusGeometry, Vector3,
 } from 'three';
 import { Label, pal } from './palette';
+import type { DroneFlightState } from '../../core/types';
 
 /* ---------- 场景锚点(单位:1 ≈ 1m) ---------- */
 export const ANCHOR = {
@@ -567,8 +568,16 @@ export class World {
       MathUtils.degToRad(rollDeg), 'YXZ');
   }
 
+  /* finals-demo-drone:回到待机(锚点+浮动动画恢复)——桥重启/选中终端
+   * 无演示态时由 reconcileDroneAtt 调用(content-review P2)。 */
+  resetDronePose(): void {
+    this.dronePoseActive = false;
+    this.droneGroup.position.set(ANCHOR.drone.x, ANCHOR.drone.y, ANCHOR.drone.z);
+    this.droneGroup.rotation.set(0, 0, 0);
+  }
+
   /* 徽章状态:未解锁=灰、待命=通信色、飞行中=绿 */
-  setDroneState(state: string, unlocked: boolean): void {
+  setDroneState(state: DroneFlightState, unlocked: boolean): void {
     this.droneStateTxt = unlocked ? ` · ${state}` : ' · 🔒未解锁';
     this.setTerminalLabel(this.droneTid);
     const c = pal();

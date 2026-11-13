@@ -45,9 +45,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    // 200/409 都读响应体;仅响应体读不出(网络级)才走 catch 兜底
-    return res.json().catch(() => ({ ok: false, state: 'LANDED' as const,
-      reason: `HTTP ${res.status}` }));
+    // 200/409 都读响应体;仅响应体读不出(网络级)才走 catch 兜底——
+    // 不编造 state(真实状态未知,content-review P3)
+    return res.json().catch(() => ({ ok: false,
+      reason: `HTTP ${res.status}` } as DroneCmdResponse));
   },
 };
 

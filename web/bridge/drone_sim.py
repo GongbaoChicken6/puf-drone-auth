@@ -48,7 +48,8 @@ class _St:
         self.x = self.y = self.alt = 0.0
         self.vx = self.vy = self.vz = 0.0
         self.yaw = self.roll = self.pitch = 0.0
-        self.wp, self.wp_alt = None, P["takeoff_alt"]
+        self.wp: tuple[float, float] | None = None
+        self.wp_alt = P["takeoff_alt"]
         self.att_acc = 0.0     # per-tid 遥测节流累加器(R1-P1-3)
 
 
@@ -59,45 +60,79 @@ class DroneSim:
         self._hub = hub
         self._lk = threading.Lock()
         self._st: dict[int, _St] = {}
+        self._stop = threading.Event()      # 生命周期:shutdown 可停(clean thread 测试)
         self._tap: Queue = hub.add_tap()
         self._th = threading.Thread(target=self._loop, name="drone-sim",
                                     daemon=True)
         if autostart:
             self._th.start()
 
+    def stop(self) -> None:
+        """停工作线程(web_bridge shutdown 调;测试 join 用)。幂等。"""
+        self._stop.set()
+
     # ------------------------------------------------------------------
     # 工作线程:tap 出队 + 20Hz 步进(单测 autostart=False 时直驱下列方法)
     # ------------------------------------------------------------------
+    @staticmethod
+    def _calc_dt(last: float, now: float) -> float:
+        """墙钟步长(content-review P2):事件唤醒会让固定 TICK 的仿真时间
+        随事件频率加速(28ba76d 修复)。dt=单调差分,钳制 [0, 0.25]。
+        抽成纯函数供回归测试(CI-safe,无线程)。"""
+        return min(0.25, max(0.0, now - last))
+
     def _loop(self) -> None:
-        # 步长取**真实墙钟差分**(S8 e2e 实测 bug,2026-11-13):事件会唤醒
-        # q.get 提前返回,若每次迭代都推进固定 TICK,仿真时间会随事件频率
-        # 加速(10Hz 自发遥测即自我加速,起飞 3.2s 压缩成 ~1.9s)。墙钟差分
-        # + 0.25s 钳制(防卡顿后跳变)让物理与真实时间一致。
         last = time.monotonic()
-        while True:
+        while not self._stop.is_set():
             try:
-                env = self._tap.get(timeout=self.TICK)
-                self._on_event(env.get("type"), env.get("payload") or {})
-            except Empty:
-                pass
-            now = time.monotonic()
-            dt = min(0.25, max(0.0, now - last))
-            last = now
-            if dt <= 0.0:
-                continue
-            with self._lk:
-                # 快照迭代(R1-P1-4:防 command() 新建 tid 时 dict 变更)
-                for tid, st in list(self._st.items()):
-                    self._step(tid, st, dt)
+                try:
+                    env = self._tap.get(timeout=self.TICK)
+                    self._on_event(env.get("type"), env.get("payload") or {})
+                except Empty:
+                    pass
+                now = time.monotonic()
+                dt = self._calc_dt(last, now)
+                last = now
+                if dt <= 0.0:
+                    continue
+                with self._lk:
+                    # 快照迭代(R1-P1-4:防 command() 新建 tid 时 dict 变更)
+                    for tid, st in list(self._st.items()):
+                        self._step(tid, st, dt)
+            except Exception as exc:   # 线程级防线(content-review P3):
+                # _step/_on_event 任何逃逸异常都会杀死 daemon 线程 →
+                # drone.* 永久停摆而 REST 面仍 200。记日志并继续循环。
+                try:
+                    self._hub.publish("server.log", {
+                        "level": "error",
+                        "msg": f"drone-sim loop error (recovered): {exc!r}"})
+                except Exception:
+                    pass
+                time.sleep(0.1)
 
     def _on_event(self, etype: str, pl: dict) -> None:
-        """verdict 门控:PASS 解锁 / 非 PASS 上锁+自动降落(R2-P1)。"""
-        if etype != "verdict":
+        """认证门控:verdict PASS 解锁 / 非 PASS 上锁+自动降落(R2-P1);
+        confirm.rejected(终端拒认本站判决)= 拒绝信号,同样上锁(G2 字面兑现,
+        content-review P3)。"""
+        if etype not in ("verdict", "confirm.rejected"):
             return
+        if etype == "confirm.rejected":
+            res = 1          # 拒认 ≙ 非 PASS:上锁(飞行中自动降落)
+        else:
+            res = None
         try:
-            tid = int(pl.get("terminal_id", -1))
-            res = int(pl.get("result", -1))
+            raw_tid = pl.get("terminal_id")
+            if raw_tid is None:
+                return       # 缺 tid 不造幻影 tid=-1(content-review P2h)
+            tid = int(raw_tid)
+            if res is None:
+                res = int(pl.get("result", -1))
         except (TypeError, ValueError):
+            # 契约字段漂移:门控失效是"认证通过了却飞不了"级故障,必须留痕
+            # (content-review P3:静默 return 零线索)
+            self._hub.publish("server.log", {
+                "level": "warn",
+                "msg": f"drone-sim: unparsable {etype} payload dropped: {pl!r}"})
             return
         with self._lk:
             st = self._st.setdefault(tid, _St())
@@ -105,6 +140,8 @@ class DroneSim:
             st.unlocked = (res == 0)
             if not st.unlocked and st.state in FLYING:
                 st.state = "LAND"   # 认证失效自动降落,不悬空拒管
+                st.wp = (st.x, st.y)   # 就地降落语义与 lock 对齐(test-review P2i)
+                st.wp_alt = st.alt
             if was != st.unlocked:
                 self._hub.publish("drone.state",
                                   self._state_ev(tid, st, reason=f"verdict:{res}"))
@@ -118,11 +155,27 @@ class DroneSim:
             st = self._st.setdefault(tid, _St())
             if cmd not in ("arm", "disarm", "launch", "takeoff", "goto",
                            "hold", "land", "rtl", "lock"):
-                return {"ok": False, "reason": f"UNKNOWN_CMD:{cmd}",
-                        "state": st.state}          # 失败分支也带 state(R1-P2-4)
+                reason = f"UNKNOWN_CMD:{cmd}"
+                self._hub.publish("drone.cmd_ack",
+                                  {"terminal_id": tid, "cmd": cmd, "ok": False,
+                                   "reason": reason})   # SSE 旁听齐平(content-review P3)
+                return {"ok": False, "reason": reason, "state": st.state}
             if cmd == "goto" and (x is None or y is None):
-                return {"ok": False, "reason": "BAD_PARAM:x,y required",
-                        "state": st.state}          # goto 缺参显式拒绝(R1-P1-1)
+                reason = "BAD_PARAM:x,y required"
+                self._hub.publish("drone.cmd_ack",
+                                  {"terminal_id": tid, "cmd": cmd, "ok": False,
+                                   "reason": reason})
+                return {"ok": False, "reason": reason, "state": st.state}
+            if (cmd == "goto" and not all(
+                    isinstance(v, (int, float)) and math.isfinite(v)
+                    for v in (x, y) + (() if alt is None else (alt,)))):
+                # NaN/Infinity 经 json.loads 合法入境,进入 wp 后永不收敛且
+                # SSE 会序列化出非法 JSON(content-review P3)
+                reason = "BAD_PARAM:non-finite x/y/alt"
+                self._hub.publish("drone.cmd_ack",
+                                  {"terminal_id": tid, "cmd": cmd, "ok": False,
+                                   "reason": reason})
+                return {"ok": False, "reason": reason, "state": st.state}
             if not st.unlocked and cmd != "lock":
                 ev = {"terminal_id": tid, "cmd": cmd, "reason": "AUTH_REQUIRED"}
                 self._hub.publish("drone.reject", ev)
@@ -200,7 +253,10 @@ class DroneSim:
         elif st.state in ("MOVE", "RTL"):
             dx, dy = st.wp[0] - st.x, st.wp[1] - st.y
             d = math.hypot(dx, dy)
-            if d <= P["wp_eps"]:
+            # 到达判定 = 水平 eps 圈 ∧ 高度到位(content-review P2g:水平先到
+            # 即转 HOVER 会丢弃 alt 目标,goto(x,y,alt) 永远到不了指定高度)
+            at_alt = abs(st.wp_alt - st.alt) <= max(P["wp_eps"], 0.1)
+            if d <= P["wp_eps"] and at_alt:
                 st.state = "HOVER" if st.state == "MOVE" else "LAND"
                 st.vz = 0.0
                 self._publish_state(tid, st)
@@ -210,7 +266,9 @@ class DroneSim:
                 v_t = min(P["vmax"], math.sqrt(2.0 * P["acc"] * d))
                 tgt = (v_t * dx / d, v_t * dy / d)
                 st.yaw = math.degrees(math.atan2(dx, dy))  # 航向朝目标(北为 0°)
-            st.vz = max(-P["climb"], min(P["climb"], st.wp_alt - st.alt))
+                # 垂直通道仅未到达时趋近(到达拍 vz 已清零,不再复写——
+                # content-review P3 一帧不一致)
+                st.vz = max(-P["climb"], min(P["climb"], st.wp_alt - st.alt))
         else:  # HOVER
             st.vz = 0.0
         # 水平速度一阶趋近(限加速度)
@@ -247,7 +305,7 @@ class DroneSim:
             st.att_acc = 0.0
             return
         st.att_acc += dt
-        if st.att_acc < 0.1:
+        if st.att_acc + 1e-9 < 0.1:      # epsilon:0.05+0.05 二进制和可能 <0.1
             return
         st.att_acc = 0.0
         self._hub.publish("drone.attitude", {

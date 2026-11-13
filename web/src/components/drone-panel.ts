@@ -30,8 +30,10 @@ const ENABLE: Record<DroneFlightState, Record<Btn, boolean>> = {
 
 const REASON_CN: Record<string, string> = {
   AUTH_REQUIRED: '未认证,飞行已锁定',
+  'BAD_PARAM:x,y required': '缺航点参数',
+  'BAD_PARAM:non-finite x/y/alt': '航点参数非有限数',
 };
-const reasonCn = (r?: string): string =>
+const reasonCn = (r?: string | null): string =>
   r == null ? '' : (REASON_CN[r] ?? (r.startsWith('BAD_STATE:') ? `当前状态不可用: ${r.slice(10)}` : r));
 
 /* 航点(与演示剧本 §11 一致:A=北5m东-2m,B=北-3m东4m) */
@@ -50,6 +52,7 @@ export class DronePanel {
   private flash!: HTMLElement;
   private btns = new Map<string, HTMLButtonElement>();
   private raf = 0;
+  private bridgeDownUntil = 0;   // content-review P3:桥不可达时按钮置灰 2s
 
   constructor() {
     this.el = document.createElement('div');
@@ -127,16 +130,27 @@ export class DronePanel {
     if (tid == null) return;
     try {
       const r = await api.droneCmd(this.body(tid, cmd));
-      if (!r.ok) this.showFlash(`✗ ${reasonCn(r.reason)}`);
+      if (!r.ok) this.showFlash(`✗ ${reasonCn(r.reason) || '指令被拒'}`);
     } catch {
-      /* 网络(fetch reject):置灰 2s + 桥不可达提示(设计 R2-P3-5) */
+      /* 网络(fetch reject):置灰 2s + 桥不可达提示(设计 R2-P3-5,content
+       * review 指出原版只闪红未置灰、注释与行为不符) */
+      this.bridgeDownUntil = performance.now() + 2000;
       this.showFlash('✗ 桥不可达');
+      this.render();
     }
   }
 
   private body(tid: number, cmd: string): DroneCmdRequest {
     if (cmd === 'wpA') return { terminal_id: tid, cmd: 'goto', ...WP_A };
     if (cmd === 'wpB') return { terminal_id: tid, cmd: 'goto', ...WP_B };
+    /* content-review P1:[起飞]键按态映射 —— LANDED 发 launch(arm+takeoff
+     * 合并命令),ARMED 发 takeoff。此前恒发 takeoff,而 _T.takeoff 源态仅
+     * ARMED:面板解锁后第一击必 409 BAD_STATE:LANDED,手动起飞流断裂
+     * (S8 走 fly('launch') 故 e2e 未暴露)。 */
+    if (cmd === 'takeoff') {
+      const st = this.cur()?.state ?? 'LANDED';
+      return { terminal_id: tid, cmd: st === 'ARMED' ? 'takeoff' : 'launch' };
+    }
     return { terminal_id: tid, cmd: cmd as DroneCmdRequest['cmd'] };
   }
 
@@ -173,8 +187,9 @@ export class DronePanel {
 
     /* 按态禁用矩阵(镜像 §3.2 转移表)+ 认证门控 */
     const en = ENABLE[st];
+    const bridgeDown = performance.now() < this.bridgeDownUntil;
     for (const [k, b] of this.btns) {
-      b.disabled = tid == null || !unlocked || !en[k as Btn];
+      b.disabled = tid == null || !unlocked || !en[k as Btn] || bridgeDown;
       if (k === 'takeoff') b.textContent = st === 'ARMED' ? '起飞' : '解锁起飞';
     }
     this.hint.hidden = unlocked;

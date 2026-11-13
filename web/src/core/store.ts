@@ -245,11 +245,15 @@ class Store {
     this.emit();
   }
 
-  /* /api/status.drone 全量灌入(SSE 断档重同步):重建 map,att 清空由下一帧补。 */
+  /* /api/status.drone 全量灌入(SSE 断档重同步):重建 map,att 清空由下一帧补。
+   * 键过 tidNum() 归一并与 terminals 同域;非有限键静默丢弃(type-review P3)。
+   * 已知接受的毫秒级竞态(content-review P3):快照晚于新 drone.state 到达时
+   * 状态回滚一拍,下一次状态转移自愈——不引入 seq 对账,记录在案。 */
   ingestDrones(drone: { tids: Record<string, DroneStateEvent> }): void {
     this.state.drones = new Map();
     for (const [k, ev] of Object.entries(drone.tids ?? {})) {
-      this.state.drones.set(Number(k), { ...ev });
+      const id = tidNum(k);
+      if (Number.isFinite(id)) this.state.drones.set(id, { ...ev });
     }
     this.emit();
   }
