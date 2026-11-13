@@ -288,7 +288,10 @@ export class ScenarioPlayer {
           else if (d0.state === 'HOVER' || d0.state === 'MOVE') await fly('rtl', undefined, ['LANDED']);
           else await this.waitDroneState(tid, ['LANDED'], g);   // RTL/LAND 收尾中
         }
-        const chainOk = await fly('launch', undefined, ['HOVER'])
+        // ARMED 残态(仅 curl 手工 arm 可达)首拍须 takeoff——launch 源态仅
+        // LANDED,恒发会 409 触发熔断(R2 复审 P3)
+        const chainOk = await fly(d0?.state === 'ARMED' ? 'takeoff' : 'launch',
+                                  undefined, ['HOVER'])
           && await fly('goto', { x: 5, y: -2 }, ['HOVER'])
           && await fly('goto', { x: -3, y: 4 }, ['HOVER'])
           && await fly('rtl', undefined, ['LANDED']);
