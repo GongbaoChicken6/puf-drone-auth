@@ -1,4 +1,4 @@
-import{a as d}from"./api-CoLQhOWY.js";const o=document.querySelector("#app");function h(e,t){return e?`<span class="chip cyan"><span class="dot"></span>桥接在线 · ${t.toUpperCase()}</span>`:'<span class="chip red"><span class="dot"></span>桥接离线</span>'}function m(e,t="—"){o.innerHTML=`
+import{a as d}from"./api-n139aXoI.js";const o=document.querySelector("#app");function h(e,t){return e?`<span class="chip cyan"><span class="dot"></span>桥接在线 · ${t.toUpperCase()}</span>`:'<span class="chip red"><span class="dot"></span>桥接离线</span>'}function m(e,t="—"){o.innerHTML=`
   <div style="max-width:960px;margin:0 auto;padding:48px 24px;">
     <header style="margin-bottom:40px;">
       <div class="chip purple" style="margin-bottom:14px;">FPGA 赛道 · 竞赛演示</div>
