@@ -2180,9 +2180,11 @@ class RealSerialListener:
         self._ef(rid,tid,0x0091,chal,True)
         self.ser.write(chal); self.ser.flush()
         # ← RESPONSE_R1
+        # R4 fix: 限读 rl 字节——竞速攻击下缓冲含 RESPONSE+攻击帧+CONFIRM,
+        # 旧代码读全部→parse(83B)失败;限读后多余字节留给 CONFIRM 帧同步处理
         rl = 12 + 8*len(chf["seeds"]); rep=b""; t0=time.time()
         while len(rep)<rl and time.time()-t0<3.0:
-            n=self.ser.in_waiting
+            n=min(self.ser.in_waiting, rl-len(rep))
             if n: rep+=self.ser.read(n)
             else: time.sleep(0.005)
         if len(rep)<rl:
@@ -2216,50 +2218,78 @@ class RealSerialListener:
                 "scaled_pass":TAU_PASS*max(nr,1),"scaled_reject":TAU_REJECT*max(nr,1)}}
         if rv==0 and "r2" in rf2: vp["r2"]=rf2["r2"].hex()
         self.hub.publish("verdict", vp)
-        # ← CONFIRM (if PASS)
+        # ← CONFIRM (if PASS) — R4 frame-sync fix (defect-c1 P1)
+        # 竞速攻击下串口缓冲含 [攻击RESULT 22B][CONFIRM_FAIL 17B]=39B,
+        # 旧裸读17B一把吞→parse失败→三重证据丢失+屏幕假PASS。
+        # 改帧同步流:扫0xFD按LEN切帧,站端方向帧路由IDS,找CONFIRM或超时。
+        confirm_frame = None; confirm_fields = {}
         if rv == 0:
-            cf=b""; t0=time.time()
-            while len(cf)<17 and time.time()-t0<2.0:  # CONFIRM 帧 17B(10 头+5 载荷+2 校验)
+            buf=b""; t0=time.time()
+            while confirm_frame is None and time.time()-t0<2.0:
                 n=self.ser.in_waiting
-                if n: cf+=self.ser.read(n)
-                else: time.sleep(0.005)
-            if len(cf)>=17 and cf[0]==0xFD:
-                try:
-                    cm,cfl=self.proto.parse(cf)
-                    if cm!=0x0094:
-                        # R2 P3:收到意外帧不再无声——N8 攻击期完全可能
-                        self._log(f"REAL unexpected frame 0x{cm:04x} while "
-                                  f"waiting CONFIRM (run={rid}), ignored", "error")
+                if n: buf+=self.ser.read(n)
+                else: time.sleep(0.005); continue
+                # R4 fix: 先 resync(剥垃圾到下一个0xFD)再提帧——顺序颠倒会把
+                # 垃圾后的帧卡到超时(外循环无新数据不再进帧提取)
+                if len(buf)>=12 and buf[0]!=0xFD:
+                    _nx=buf.find(b'\xfd',1)
+                    _dropped=len(buf) if _nx<0 else _nx
+                    self._log(f"REAL confirm-wait resync: dropped {_dropped}B","error")
+                    buf=b"" if _nx<0 else buf[_nx:]
+                # 帧同步:与 _loop 主循环同构(扫0xFD+LEN切帧)
+                while len(buf)>=12 and buf[0]==0xFD:
+                    total=10+buf[1]+2
+                    if len(buf)<total: break  # 帧不完整,等更多字节
+                    frame,buf=buf[:total],buf[total:]
+                    try: fm,ffl=self.proto.parse(frame)
+                    except Exception:
+                        self._log(f"REAL confirm-wait: bad frame {len(frame)}B skipped","error")
+                        continue  # 坏帧跳过继续扫
+                    if fm==0x0094:
+                        confirm_frame=frame; confirm_fields=ffl
+                        break  # 找到CONFIRM,跳出
+                    elif fm in (0x0091,0x0093,0x0095):
+                        # 站端方向帧出现在RX = 伪基站注入→路由IDS
+                        # (与_loop L2129-2151同款;_auth期间_loop被锁阻塞看不到)
+                        try:
+                            self.hub.publish("channel.intrusion",{
+                                "msg_id":fm,"name":self.P.msg_name(fm),
+                                "hex":frame.hex(),"len":len(frame),
+                                "note":"station-only frame heard on RX path (during auth)"})
+                            self._log(f"CHANNEL IDS: station-only frame 0x{fm:04x} "
+                                      f"{self.P.msg_name(fm)} ({len(frame)}B) during auth -- "
+                                      f"suspected injection","error")
+                            self._ef(rid,tid,fm,frame,False)
+                        except Exception as _e:
+                            self._log(f"REAL ids-in-auth error: {type(_e).__name__}: {_e}","error")
                     else:
-                        # N3(finals-demo): status 在 payload[4](<IB=tid4B+status1B),
-                        # 必须用 parse 返回的字段——按载荷[0]读会把 tid LSB 当 status,
-                        # tid=1 时每次真 PASS 都误判 FAIL。
-                        st=int(cfl.get("status",0))
-                        self._ef(rid,tid,0x0094,cf,False)
-                        if st == 0:
-                            self.hub.publish("confirm.done",
-                                {"run_id":rid,"terminal_id":tid,"status":0,"verified_r2":True})
-                        else:
-                            # Tier1 闭环告警:本站判决 PASS 而终端回 CONFIRM_FAIL——
-                            # 唯一自洽解释=终端收到的 RESULT 不是本站发的(伪基站
-                            # 抢先注入,R2 失配被终端识破)。
-                            self.hub.publish("confirm.rejected",
-                                {"run_id":rid,"terminal_id":tid,"status":st,
-                                 "own_verdict":rv,
-                                 "evidence":"terminal rejected our verdict: R2 mismatch"})
-                            self.hub.publish("base.spoof.suspected",
-                                {"run_id":rid,"terminal_id":tid,
-                                 "own_verdict":"PASS","terminal_says":"FAIL",
-                                 "evidence":"R2 mismatch at terminal -- suspected fake-base-station injection"})
-                            self._log(
-                                f"BASE SPOOF SUSPECTED: tid={tid} rejected our PASS verdict "
-                                f"(CONFIRM status={st}) -- R2 mismatch at terminal, suspected injection",
-                                "error")
-                except Exception as _e:  # R2 P3:坏 CRC 的 CONFIRM 等不再零痕迹
-                    self._log(f"REAL confirm-wait error (run={rid}): "
-                              f"{type(_e).__name__}: {_e} frame={cf.hex()}", "error")
-        self.hub.publish("session.update", {"terminal_id":tid,
-            "state":"SESSION" if rv==0 else "BLOCKED"})
+                        self._log(f"REAL confirm-wait: unexpected 0x{fm:04x} ignored","error")
+            # 处理CONFIRM结果
+            if confirm_frame is not None:
+                st=int(confirm_fields.get("status",0))
+                self._ef(rid,tid,0x0094,confirm_frame,False)
+                if st==0:
+                    self.hub.publish("confirm.done",
+                        {"run_id":rid,"terminal_id":tid,"status":0,"verified_r2":True})
+                else:
+                    self.hub.publish("confirm.rejected",
+                        {"run_id":rid,"terminal_id":tid,"status":st,
+                         "own_verdict":rv,
+                         "evidence":"terminal rejected our verdict: R2 mismatch"})
+                    self.hub.publish("base.spoof.suspected",
+                        {"run_id":rid,"terminal_id":tid,
+                         "own_verdict":"PASS","terminal_says":"FAIL",
+                         "evidence":"R2 mismatch at terminal -- suspected fake-base-station injection"})
+                    self._log(f"BASE SPOOF SUSPECTED: tid={tid} rejected our PASS verdict "
+                              f"(CONFIRM status={st}) -- R2 mismatch at terminal, suspected injection","error")
+            else:
+                self._log(f"REAL confirm-wait timeout (run={rid}, rv={rv})","error")
+        # R4 fix: session.update 按 CONFIRM 实际 status 发,不再无条件 rv==0→SESSION
+        if rv==0 and confirm_frame is not None and int(confirm_fields.get("status",0))==0:
+            _final_state="SESSION"
+        else:
+            _final_state="BLOCKED"
+        self.hub.publish("session.update", {"terminal_id":tid,"state":_final_state})
     def _ef(self,rid,tid,mid,frm,out):
         self.hub.publish("frame.tx" if out else "frame.rx", {
             "run_id":rid,"terminal_id":tid,"msg_id":mid,
