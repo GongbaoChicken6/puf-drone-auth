@@ -117,6 +117,10 @@ module tb_demo_led;
         wait_ms(200);  chk(2'd00, 1'b1, "T3-off");     // 300ms: 后半灭, 仍<600 响
         if (ext_led !== 4'b1000) begin errors=errors+1; $display("[T3 FAIL] ext-off=%b exp 1000(amber)", ext_led); end
         wait_ms(350);  chk(2'd10, 1'b0, "T3-on2");     // 650ms: 次周期亮, 鸣已停
+        // R3 P2 回归锁: REJECT 稳态 >2.2s 仍持续翻转(饱和冻结变异必须 FAIL)
+        wait_ms(1700); chk(2'd00, 1'b0, "T3-long-f1");   // ~2350ms: 翻转继续
+        wait_ms(250);  chk(2'd10, 1'b0, "T3-long-f2");   // ~2600ms: 再翻转回亮
+        wait_ms(250);  chk(2'd00, 1'b0, "T3-long-f3");   // ~2850ms: 又翻转回灭
 
         // ---- T7: 沿复位（PASS 中途切 REJECT,节拍归零） ----
         $display("[..T7] edge reset");
@@ -127,8 +131,8 @@ module tb_demo_led;
         // ---- T4: BLOCKED 双亮 + ext 全亮 + 双长哔 ----
         $display("[..T4] BLOCKED");
         @(negedge clk) result = 2'd3;
-        wait_ms(50);   chk(2'd11, 1'b1, "T4-dual");    // 第1长哔中
-        wait_ms(1450); chk(2'd11, 1'b0, "T4-hold");    // 1500ms: 双亮保持,哔已停
+        wait_ms(50);   chk(2'd3, 1'b1, "T4-dual");    // 第1长哔中
+        wait_ms(1450); chk(2'd3, 1'b0, "T4-hold");    // 1500ms: 双亮保持,哔已停
         if (ext_led !== 4'b1111) begin errors=errors+1; $display("[T4 FAIL] ext=%b exp 1111", ext_led); end
 
         // ---- 总结 ----

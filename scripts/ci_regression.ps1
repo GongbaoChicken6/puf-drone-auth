@@ -229,7 +229,15 @@ if (-not $prereg) { Write-Host "  [FAIL] BOARD_LOCK: prereg unreadable"; $bfail+
     if ($actual -and -not $prereg.Contains($actual)) { Write-Host "  [FAIL] BOARD_LOCK: seed2 bit hash not pinned in prereg"; $bfail++ }
 }
 if ($bfail -gt 0) { Write-Host "BOARD_LOCK_FAIL ($bfail issue(s))"; exit 1 }
-Write-Host "  [PASS] board-tcl locks + filelist consistency + manifest/prereg hash pinning"
+# R3 P2 修复: 板A bit 同样钉死——重算哈希比对 MANIFEST + prereg
+$maniA = if (Test-Path 'build/board_zc706/MANIFEST.txt') { Get-Content -Raw -Encoding utf8 'build/board_zc706/MANIFEST.txt' } else { '' }
+if (-not $maniA) { Write-Host "  [FAIL] BOARD_LOCK: board-A MANIFEST.txt unreadable"; $bfail++ } else {
+    if ($maniA -match 'SHA256:[ ]*([0-9A-F]{64})') { $shaA = $Matches[1] } else { $shaA = '' }
+    $bitAActual = if (Test-Path 'build/board_zc706/w3_top_zc706.bit') { (Get-FileHash 'build/board_zc706/w3_top_zc706.bit' -Algorithm SHA256).Hash } else { '' }
+    if ($shaA -ne $bitAActual) { Write-Host "  [FAIL] BOARD_LOCK: board-A bit hash drift vs MANIFEST"; $bfail++ }
+    elseif ($bitAActual -and -not $prereg.Contains($bitAActual)) { Write-Host "  [FAIL] BOARD_LOCK: board-A bit hash not pinned in prereg"; $bfail++ }
+}
+Write-Host "  [PASS] board-tcl locks + filelist consistency + manifest/prereg hash pinning (dual-board)"
 
 Write-Host "=== CI: Compile ==="
 Remove-Item xsim.dir -Recurse -Force -ErrorAction SilentlyContinue

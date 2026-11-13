@@ -1,12 +1,11 @@
-# seed2?????B????? -- finals-demo ??R ?? 2026-11-13
+# seed2?????B????? -- finals-demo ??R R3???? 2026-11-13 12:00
 bitstream: w3_top_zc706_seed2.bit
-SHA256: 980A7A3776A07F00E75DF43B08A201D656BAEB73A7BE1C94E6395EDBAC81C596
+SHA256: F8A916EA03CE19352BF7ED6A6CED8E842625CB0E44A9764C9A4C6DE09449901B
 size: 13321605 bytes
-built: 2026-11-13 11:12 (Vivado 2026.1, script build/tcl/build_w3_board_seed2.tcl, SHA256 78782514A5FFFA0711A52D94D983AFA1B2EBDACEAB4BD69B47489BB9CFF16E87)
-differentiation: 32 ring cells pblock-forced into CLOCKREGION_X1Y0 (unchanged)
-placement evidence: ring_sites_seed2.rpt (inregion+seam=160 leaf LUTs)
-timing: WNS=+2.107ns WHS=+0.052ns DRC=0 errors
-baseline: finals-demo ??R production bit SHA256 2068E66556F78378D19DCD72A0A9B384FEA4DCEE873DD0168E1DD411E22376EA
-RTL delta vs 1101 baseline: finals-demo batch-R (N1 demo_led + N3 CONFIRM_FAIL + N4 AUTH_POLL + N7 ext pins)
-hardened-script note: in-repo script carries ring-exact assertion/pinned X1Y0/WHS gate/leaf tally/USERID
-variant id: BITSTREAM.CONFIG.USERID 0x5EED0002 (inherited)
+built: 2026-11-13 12:00 (Vivado 2026.1, script build/tcl/build_w3_board_seed2.tcl, SHA256 103675DBD65567201B0CA176E863A3F899B625546459BD29BAFCC3CD1CADA641)
+differentiation: 32 ring cells pblock-forced into CLOCKREGION_X1Y0
+placement evidence: ring_sites_seed2.rpt
+timing: WNS=+0.915ns WHS=+0.070ns DRC=0 errors
+baseline: finals-demo R3 production bit SHA256 260A3E1B90521FF815E08403CBD67816F99FE3EA020C8854D65FE2BBF4EB3796
+RTL: finals-demo batch-R R3 fix (N1 demo_led REJECT toggle + N3 CONFIRM_FAIL + N4 AUTH_POLL + N7 ext)
+variant id: BITSTREAM.CONFIG.USERID 0x5EED0002

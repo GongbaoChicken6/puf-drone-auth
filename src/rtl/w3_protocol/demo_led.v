@@ -119,8 +119,28 @@ module demo_led # (
     wire [10:0]  pass_phase   = flash_ms / FLASH_HALF_MS;
     wire         pass_lit     = (pass_phase >= PASS_FLASHES) || (~pass_phase[0] && (pass_phase < PASS_FLASHES));
 
-    // REJECT 2Hz：250ms 切换（亮灭各半）
-    wire         rej_blink    = ((flash_ms / REJECT_HALF) & 11'd1) == 11'd0;   // 前半亮后半灭
+    // REJECT 2Hz：独立翻转节拍（R3 P2 修复：不依赖 flash_ms——11 位饱和后
+    // 2047/250=8 偶数会冻结 rej_blink 为常亮。改用专用 1 位翻转 + 独立
+    // 半周期计数器，永不冻结。）
+    reg  [7:0]   rej_half_cnt = 8'd0;    // 0..REJECT_HALF-1（250ms 需 8 位）
+    reg          rej_blink_r  = 1'b1;    // 当前半周期亮/灭
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            rej_half_cnt <= 8'd0;
+            rej_blink_r  <= 1'b1;
+        end else if (result_rise) begin
+            rej_half_cnt <= 8'd0;
+            rej_blink_r  <= 1'b1;          // 新判决从头亮
+        end else if (ms_tick) begin
+            if (rej_half_cnt >= REJECT_HALF - 1) begin
+                rej_half_cnt <= 8'd0;
+                rej_blink_r  <= ~rej_blink_r;  // 翻转
+            end else begin
+                rej_half_cnt <= rej_half_cnt + 8'd1;
+            end
+        end
+    end
+    wire         rej_blink    = rej_blink_r;
 
     reg  [1:0]   led_result_r;
     always @* begin
