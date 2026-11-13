@@ -315,6 +315,12 @@ class DroneSim:
             "roll": round(st.roll, 1), "pitch": round(st.pitch, 1),
             "yaw": round(st.yaw, 1)})
 
+    def state_of(self, tid: int) -> str | None:
+        """指定终端当前飞行状态(加锁读,mavlink_fwd TAKEOFF 状态感知用)。"""
+        with self._lk:
+            st = self._st.get(tid)
+            return st.state if st else None
+
     def unlocked_tids(self) -> list[int]:
         """当前解锁中的终端 ID 列表(mavlink_fwd 入站绑定用)。"""
         with self._lk:

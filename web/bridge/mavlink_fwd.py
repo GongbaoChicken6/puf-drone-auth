@@ -210,14 +210,14 @@ class MavlinkForwarder:
             text = ("PUF auth PASS: flight unlocked"
                     if unlocked else "flight locked (auth lost or manual lock)")
             sev = SEV_NOTICE if unlocked else SEV_ALERT
-            raw = text[:_STATUSTEXT_LEN - 1].encode("utf-8")   # 按字符截断(防劈 UTF-8)
+            raw = text[:_STATUSTEXT_LEN - 1].encode("utf-8")[:_STATUSTEXT_LEN - 1]
             self._emit("STATUSTEXT", bytes([sev]) + raw.ljust(_STATUSTEXT_LEN, b"\0"))
 
     def _on_drone_reject(self, p: dict) -> None:
         if not self._accept_out(p):
             return
         raw = (f"cmd {p.get('cmd')} rejected: {p.get('reason')}"
-               )[:_STATUSTEXT_LEN - 1].encode("utf-8")
+               )[:_STATUSTEXT_LEN - 1].encode("utf-8")[:_STATUSTEXT_LEN - 1]
         self._emit("STATUSTEXT", bytes([SEV_ALERT]) + raw.ljust(_STATUSTEXT_LEN, b"\0"))
 
     # ---- 入站(COMMAND_LONG → DroneSim) ----
@@ -277,8 +277,7 @@ class MavlinkForwarder:
         # TAKEOFF 状态感知(R2 实测):ARMED 后须发 takeoff(launch 源态仅 LANDED),
         # QGC 标准 ARM→TAKEOFF 序列在 ARMED 态点 launch 必 409
         if cmd == MAV_CMD["TAKEOFF"]:
-            st = self._drone._st.get(self._tid)
-            op = "takeoff" if (st and st.state == "ARMED") else "launch"
+            op = "takeoff" if self._drone.state_of(self._tid) == "ARMED" else "launch"
         r = self._drone.command(self._tid, op, extra.get("x"),
                                 extra.get("y"), extra.get("alt"))
         self._ack(cmd, ACCEPTED if r.get("ok") else TEMP_REJ)
