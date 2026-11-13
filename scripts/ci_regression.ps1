@@ -299,7 +299,7 @@ Write-Host "  [PASS] tb_terminal_fsm ENROLL_NEG ([TEN PASS] idle-ignore locked)"
 Remove-Item xsim.dir -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item *.pb -Force -ErrorAction SilentlyContinue
 
-Write-Host "=== CI: Python (Speck self-test + A1 phase-4 unit tests) ==="
+Write-Host "=== CI: Python (Speck self-test + full pytest suite) ==="
 # Silent-failure review P2: a missing python must fail the gate, not
 # inherit $LASTEXITCODE=0 from the last xsim run (PS 5.1 never sets it
 # on CommandNotFoundException).
@@ -331,55 +331,16 @@ if ($LASTEXITCODE -ne 0) { Write-Host "PYTHON SPECK SELF-TEST FAILED"; exit 1 }
 # "System.Management.Automation.RemoteException" wrapper lines (the old
 # ForEach-object stringification only fixed the inner layer).  cmd /c
 # propagates python's exit code to $LASTEXITCODE.
-$out = & cmd.exe /c "python tests\test_a1_phase4.py 2>&1" | ForEach-Object { "$_" }
+# R3(silent) P3 fix: enumerate→pytest tests/ collects ALL test files (incl.
+# finals-demo channel_ids/poll_message/poll_bridge + drone_sim), ~9s.
+# Old code enumerated 6 files manually; 5 new ones silently outside the gate.
+$out = & cmd.exe /c "python -m pytest tests\ -q --tb=short 2>&1" | ForEach-Object { "$_" }
 $pyCode = $LASTEXITCODE
 if ($pyCode -ne 0) {
     $out | Select-Object -Last 40 | ForEach-Object { Write-Host "  $_" }
-    Write-Host "PYTHON UNIT TESTS FAILED"; exit 1
+    Write-Host "PYTEST SUITE FAILED"; exit 1
 }
-$out | Select-Object -Last 4 | ForEach-Object { Write-Host "  $_" }
-# W3 serial-loop tests (receive loop + on_confirm wiring + enroll pairing).
-$outS = & cmd.exe /c "python tests\test_serial_server.py 2>&1" | ForEach-Object { "$_" }
-$serialCode = $LASTEXITCODE
-if ($serialCode -ne 0) {
-    $outS | Select-Object -Last 40 | ForEach-Object { Write-Host "  $_" }
-    Write-Host "SERIAL SERVER TESTS FAILED"; exit 1
-}
-$outS | Select-Object -Last 4 | ForEach-Object { Write-Host "  $_" }
-# W4-P1 PUF golden-model tests (RTL<->Python cross-check anchor).
-$outP = & cmd.exe /c "python tests\test_puf_model.py 2>&1" | ForEach-Object { "$_" }
-$pufCode = $LASTEXITCODE
-if ($pufCode -ne 0) {
-    $outP | Select-Object -Last 40 | ForEach-Object { Write-Host "  $_" }
-    Write-Host "PUF MODEL TESTS FAILED"; exit 1
-}
-$outP | Select-Object -Last 4 | ForEach-Object { Write-Host "  $_" }
-# W4-P3 interop: ROPairingPUF (RTL golden model) <-> real SerialServer.
-$outI = & cmd.exe /c "python tests\test_interop_rtl_model.py 2>&1" | ForEach-Object { "$_" }
-$interopCode = $LASTEXITCODE
-if ($interopCode -ne 0) {
-    $outI | Select-Object -Last 40 | ForEach-Object { Write-Host "  $_" }
-    Write-Host "INTEROP TESTS FAILED"; exit 1
-}
-$outI | Select-Object -Last 4 | ForEach-Object { Write-Host "  $_" }
-# W4-P4 T4: DoS rate-limiting flood test.
-# P1-1 fix: capture flood exit code IMMEDIATELY (ML block previously
-# swallowed it -- C-agent finding)
-$outF = & cmd.exe /c "python tests\test_dos_flood.py 2>&1" | ForEach-Object { "$_" }
-$floodCode = $LASTEXITCODE
-if ($floodCode -ne 0) {
-    $outF | Select-Object -Last 20 | ForEach-Object { Write-Host "  $_" }
-    Write-Host "DOS FLOOD TESTS FAILED"; exit 1
-}
-$outF | Select-Object -Last 3 | ForEach-Object { Write-Host "  $_" }
-# W4-P5: ML attack unit tests.
-$outM = & cmd.exe /c "python tests\test_ml_attack.py 2>&1" | ForEach-Object { "$_" }
-$mlCode = $LASTEXITCODE
-if ($mlCode -ne 0) {
-    $outM | Select-Object -Last 20 | ForEach-Object { Write-Host "  $_" }
-    Write-Host "ML ATTACK TESTS FAILED"; exit 1
-}
-$outM | Select-Object -Last 3 | ForEach-Object { Write-Host "  $_" }
+$out | Select-Object -Last 2 | ForEach-Object { Write-Host "  $_" }
 # W4-P4 T6: threat PoC harness (replay/brute/inject).
 $outT = & cmd.exe /c "python scripts\threat_poc.py --case all 2>&1" | ForEach-Object { "$_" }
 $threatCode = $LASTEXITCODE

@@ -6,3 +6,6 @@ M3 tb_terminal_fsm  T-AP1/AP2/CF1 vs pre-fix terminal_fsm.v : TB_TERMINAL_FSM_FA
 M4 tb_level3_protocol T-L31 vs pre-fix fsm+mf+fp  : TB_LEVEL3_PROTOCOL_FAIL (watchdog; end-to-end poll dead at parser gate)
 VERDICT: 4/4 FAIL as required - every new case catches its pre-fix defect.
 Fix-side greens (same day): TB_DEMO_LED_PASS / TB_MAVLINK_FRAME_PASS / TB_FRAME_PARSER_PASS / TB_TERMINAL_FSM_PASS / TB_LEVEL3_PROTOCOL_PASS
+
+M5 tb_demo_led T3/T3-long vs mutated demo_led (REJECT initial polarity inverted) - R3 spec P3 fix
+M5 output: [T3-on2 FAIL] led=00(exp 10) buz=0(exp 0) t=241055000 | [T3-long-f1 FAIL] led=10(exp 00) buz=0(exp 0) t=411055000 | [T3-long-f2 FAIL] led=00(exp 10) buz=0(exp 0) t=436055000 | [T3-long-f3 FAIL] led=10(exp 00) buz=0(exp 0) t=461055000 | TB_DEMO_LED_FAIL errors=9 | $finish called at time : 631105 ns : File "D:/puf-drone-auth/sim/tb/tb_demo_led.v" Line 142

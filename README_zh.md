@@ -63,3 +63,28 @@
 - **metrics/logs 中文日志**：文件名已英文化，内容保留原始中文。
 - **开源**：本作品以 MIT 协议开源（LICENSE）；公开仓库地址见页首（tag v1.0-submission）。
 - **决赛海报**：按 AMD 模板的一页英文 PPT 海报另行提交，不入本包。
+---
+
+## Finals Demo Features (2026-11 决赛演示增强)
+
+本分支 (`finals-demo`) 在初赛提交基础上增加了以下演示增强功能:
+
+### 终端侧 (RTL)
+- **N1 LED 灯语增强**: PASS 绿闪 3 次后常亮 / REJECT 红 2Hz 交替闪 / BLOCKED 双亮, 蜂鸣器短/双/长鸣, PMOD J58 外接 10mm 大灯
+- **N3 CONFIRM_FAIL 上行告警**: R2 失配(伪基站注入)时终端先发 CONFIRM(status=1) 再 BLOCKED——"锁死并上报"
+- **N4 AUTH_POLL (0x0097)**: 基站主动巡检——网页按钮遥控板端发起完整五帧双向认证, TX/RX 双侧 id_legal + CRC_EXTRA 0x60
+- CI 回归 19/19 (新增 tb_demo_led), 变异验证 5/5, 双板综合时序全正
+
+### 基站侧 (Python/TS)
+- **N2 信道 IDS**: 站端专用方向帧出现在 RX → 红色横幅 + 审计日志 + 噪声洪泛检测
+- **N6 前端数据流**: 帧结构中文字段注记 + 密文锁标 + 帧飞行动画 (数据流具象化)
+- **N8 伪基站攻击工具**: fake_result_attack.py 零延迟伪 RESULT 注入 (Day4 演示)
+- **N9 一键启动**: demo_start.ps1 (杀残留桥/COM 自动探测/沙箱/自检)
+- **N10 集成指南**: docs/integration_guide.md
+- 无人机演示层 (drone_sim): PASS 解锁起飞/REJECT 自动返航, 3D 舞台实时跟踪, QGC 直连 (MAVLink UDP)
+- Python 测试 179 passed (新增 channel_ids/poll_message/poll_bridge/drone_sim)
+
+### 演示材料
+- 答辩 Q&A 手卡: docs/qa_card_finals.md
+- 演示解说词: docs/demo_script_v2.md
+- 装箱清单: docs/packing_list_finals.md

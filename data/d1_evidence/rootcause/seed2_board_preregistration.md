@@ -60,7 +60,7 @@
 - 立靶：带宽数值固化于本文「带宽推导」段（原脚本未随包分发）
 - 复审：五路复审结论已并入 1101_ROOTCAUSE_consensus.md（原复审目录未随包分发）
 
-## finals-demo 批次R 重建（2026-11-13 11:12）
+## ~~finals-demo 批次R 重建（2026-11-13 11:12）~~ ⚠️ 已过时——勿烧此版本（REJECT 冻结缺陷）
 - production (板A) SHA256: 2068E66556F78378D19DCD72A0A9B384FEA4DCEE873DD0168E1DD411E22376EA
 - seed2 (板B) SHA256: 980A7A3776A07F00E75DF43B08A201D656BAEB73A7BE1C94E6395EDBAC81C596
 - RTL: b1500d8 (N1 demo_led + N3 CONFIRM_FAIL uplink + N4 AUTH_POLL 0x0097 + N7 ext LED/buzzer pins)
