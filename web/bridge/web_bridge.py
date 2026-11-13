@@ -54,6 +54,7 @@ _BRIDGE_DIR = Path(__file__).resolve().parent
 if str(_BRIDGE_DIR) not in sys.path:
     sys.path.insert(0, str(_BRIDGE_DIR))
 from drone_sim import DroneSim
+from mavlink_fwd import start_udp as _mavlink_start_udp
 
 VERSION = "0.1.0"
 
@@ -1090,6 +1091,11 @@ class RealApp:
         self._telemetry_stop = threading.Event()
         # finals-demo-drone:无人机演示模拟器(独立线程+自有锁;门控=verdict tap)
         self.drone = DroneSim(self.hub)
+        # finals-demo-drone 加分项:标准 MAVLink UDP 转发(--mavlink-udp 开启;
+        # 真 QGroundControl 可直连,认证门控语义不变)
+        self.mavlink_fwd = (_mavlink_start_udp(self.hub, self.drone,
+                                               args.mavlink_udp)
+                            if getattr(args, "mavlink_udp", None) else None)
 
     # ---- 生命周期 ----
     def start(self) -> None:
@@ -1100,6 +1106,8 @@ class RealApp:
     def shutdown(self) -> None:
         self._telemetry_stop.set()
         self.drone.stop()               # finals-demo-drone:停模拟器线程
+        if self.mavlink_fwd is not None:
+            self.mavlink_fwd.stop()     # finals-demo-drone:停 MAVLink 转发
         try:
             self.mods.flush_c2_state(self.protocol, self.store)
         except Exception:
@@ -1447,6 +1455,9 @@ class MockApp:
         threading.Thread(target=self._replay_worker, name="mock-replay", daemon=True).start()
         threading.Thread(target=self._telemetry, name="telemetry", daemon=True).start()
         self.drone = DroneSim(self.hub)   # finals-demo-drone:mock 演示路径一致
+        self.mavlink_fwd = (_mavlink_start_udp(self.hub, self.drone,
+                                               args.mavlink_udp)
+                            if getattr(args, "mavlink_udp", None) else None)
 
     def _replay_worker(self) -> None:
         while True:
@@ -1497,6 +1508,8 @@ class MockApp:
 
     def shutdown(self) -> None:
         self.drone.stop()               # finals-demo-drone
+        if self.mavlink_fwd is not None:
+            self.mavlink_fwd.stop()
 
     def _telemetry(self) -> None:
         while True:
@@ -1854,6 +1867,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--reset-demo", type=int, default=None, metavar="TID",
                    help="重置小池演示终端(S5 重演)后退出")
     p.add_argument("--quiet", action="store_true", help="抑制访问日志")
+    p.add_argument("--mavlink-udp", default=None, metavar="[HOST:]PORT",
+                   help="finals-demo-drone:标准 MAVLink v2 UDP 转发(如 14550;"
+                        "QGC 建 UDP 链接监听同端口即可直连演示无人机;"
+                        "不开启则零开销)")
     return p
 
 
