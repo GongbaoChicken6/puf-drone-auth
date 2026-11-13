@@ -14,7 +14,7 @@
 import {
   AdditiveBlending, AmbientLight, BoxGeometry, BufferAttribute, BufferGeometry, Color,
   CylinderGeometry, DirectionalLight, DoubleSide, DynamicDrawUsage, Fog, GridHelper, Group,
-  IcosahedronGeometry, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial,
+  IcosahedronGeometry, InstancedMesh, Matrix4, MathUtils, Mesh, MeshBasicMaterial, MeshStandardMaterial,
   Object3D, PlaneGeometry, PointLight, Points, PointsMaterial, RingGeometry, Scene,
   Texture, TorusGeometry, Vector3,
 } from 'three';
@@ -68,6 +68,10 @@ export class World {
   private rotors: Mesh[] = [];
   private droneHalo!: Mesh;
   private droneLight!: PointLight;
+  /* finals-demo-drone:演示层飞行驱动状态 */
+  private dronePoseActive = false;
+  private droneTid: number | null = null;
+  private droneStateTxt = '';
   private poolFill!: Mesh;
   private poolRing!: Mesh;
   private poolLabel: Label;
@@ -545,7 +549,33 @@ export class World {
   }
 
   setTerminalLabel(tid: number | null): void {
-    this.droneLabel.set(tid == null ? '无人机 · 未选中' : `无人机 · tid ${tid}`, 'comm');
+    this.droneTid = tid;
+    this.droneLabel.set(
+      tid == null ? '无人机 · 未选中' : `无人机 · tid ${tid}${this.droneStateTxt}`, 'comm');
+  }
+
+  /* finals-demo-drone:站端 DroneSim 遥测驱动(设计 §4.4)。
+   * 首次调用置位 dronePoseActive,此后 update() 的待机浮动动画让位 ——
+   * 否则每帧覆写 position/rotation 会把无人机钉回锚点(R2-P2-2)。 */
+  setDronePose(x: number, y: number, z: number, yawDeg: number, rollDeg: number,
+               pitchDeg: number, hover: boolean, t: number): void {
+    this.dronePoseActive = true;
+    const bob = hover ? Math.sin(t * 1.15) * 0.05 : 0;   // 悬停呼吸浮动(替代被门控的待机动画)
+    this.droneGroup.position.set(x, y + bob, z);
+    this.droneGroup.rotation.set(
+      MathUtils.degToRad(pitchDeg), MathUtils.degToRad(yawDeg),
+      MathUtils.degToRad(rollDeg), 'YXZ');
+  }
+
+  /* 徽章状态:未解锁=灰、待命=通信色、飞行中=绿 */
+  setDroneState(state: string, unlocked: boolean): void {
+    this.droneStateTxt = unlocked ? ` · ${state}` : ' · 🔒未解锁';
+    this.setTerminalLabel(this.droneTid);
+    const c = pal();
+    (this.droneHalo.material as MeshBasicMaterial).color.setHex(
+      !unlocked ? c.muted.getHex()
+        : (state === 'LANDED' || state === 'ARMED') ? c.comm.getHex()
+        : c.green.getHex());
   }
 
   /* ---------- 灯光 ----------
@@ -572,10 +602,12 @@ export class World {
   /* ---------- 每帧 ---------- */
   /** 返回「本帧是否有变化」——静止渲染模式据此决定要不要重绘 */
   update(dt: number, t: number): boolean {
-    // 无人机悬停:正弦上下 + 极缓俯仰摆动
-    this.droneGroup.position.y = ANCHOR.drone.y + Math.sin(t * 1.15) * 0.09;
-    this.droneGroup.rotation.z = Math.sin(t * 0.7) * 0.035;
-    this.droneGroup.rotation.x = Math.cos(t * 0.55) * 0.03;
+    // 无人机待机浮动:仅在演示层未接管时演(接管后由 setDronePose 驱动,见上)
+    if (!this.dronePoseActive) {
+      this.droneGroup.position.y = ANCHOR.drone.y + Math.sin(t * 1.15) * 0.09;
+      this.droneGroup.rotation.z = Math.sin(t * 0.7) * 0.035;
+      this.droneGroup.rotation.x = Math.cos(t * 0.55) * 0.03;
+    }
     for (const r of this.rotors) r.rotation.y = t * 26;
 
     // 指纹阵缓慢自转:静止画面里也能读出 8×8 的立体感

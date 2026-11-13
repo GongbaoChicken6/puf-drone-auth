@@ -37,6 +37,7 @@ const right = new RightPanel();
 const player = new ScenarioPlayer({
   auth: (tid, mode) => doAuth(tid, mode),
   enroll: (tid) => doEnroll(tid),
+  drone: (tid, cmd, extra) => doDroneCmd(tid, cmd, extra),   // finals-demo-drone S8
 });
 
 const topbar = new Topbar({
@@ -212,6 +213,21 @@ async function doPoll(tid: number): Promise<void> {
   }
 }
 
+/* finals-demo-drone:S8 的飞控指令(与面板按钮同一 REST 面,失败入审计)。 */
+async function doDroneCmd(tid: number, cmd: string, extra?: { x?: number; y?: number }): Promise<void> {
+  try {
+    const r = await api.droneCmd({
+      terminal_id: tid, cmd: cmd as Parameters<typeof api.droneCmd>[0]['cmd'], ...extra,
+    });
+    if (!r.ok) {
+      store.log({
+        tone: 'error', sev: 'warn', terminalId: tid, runId: null, type: 'drone.cmd_ack',
+        text: `剧本飞控 ${cmd} 被拒:${r.reason ?? '?'}`,
+      });
+    }
+  } catch (e) { fail(`POST /api/drone/cmd(${cmd})`, e); }
+}
+
 async function doEnroll(tid: number): Promise<void> {
   store.select(tid);
   store.onAck(tid, 'enroll-start');
@@ -345,7 +361,8 @@ window.setInterval(() => {
 /* ---------- 6. 快捷键与自适应 ---------- */
 /* R7:场景快捷键 Shift+1–7。答辩演示的高频动作是「来,看一下仿冒」——
  * 每次都去左栏找按钮,演示节奏就断了。Shift+数字单手可及,且与纯数字
- * (相机 1–4)不冲突:按没按 Shift,e.key 同是 '1',分流必须显式判 shiftKey。 */
+ * (相机 1–4)不冲突:按没按 Shift,e.key 同是 '1',分流必须显式判 shiftKey。
+ * finals-demo-drone:扩展至 Shift+8(S8 认证解锁飞行)。 */
 function runScenario(id: ScenarioId): void {
   player.stop();
   player.play([id]);
@@ -364,8 +381,8 @@ helpOv.innerHTML = `
   <div class="help-card card" tabindex="-1">
     <div class="help-title">快捷键</div>
     <dl class="help-list">
-      <dt><kbd>Shift</kbd><kbd>1</kbd>–<kbd>7</kbd></dt>
-        <dd>触发场景 S1–S7(单跑该幕)</dd>
+      <dt><kbd>Shift</kbd><kbd>1</kbd>–<kbd>8</kbd></dt>
+        <dd>触发场景 S1–S8(单跑该幕;S8=认证解锁飞行)</dd>
       <dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>3D 相机:全景 / 跟踪 / 特写 / 俯瞰</dd>
       <dt><kbd>F</kbd></dt><dd>导出当前舞台画面</dd>
       <dt><kbd>H</kbd></dt><dd>隐藏 / 显示顶栏(录屏用)</dd>
@@ -403,7 +420,7 @@ window.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.altKey || e.metaKey) return;
   if (e.key === 'Escape') { toggleHelp(false); return; }
   if (e.key === '?') { toggleHelp(); schedule(); return; }
-  if (e.shiftKey && /^[1-7]$/.test(e.key)) {
+  if (e.shiftKey && /^[1-8]$/.test(e.key)) {
     runScenario(`S${e.key}` as ScenarioId);
     schedule();
     return;

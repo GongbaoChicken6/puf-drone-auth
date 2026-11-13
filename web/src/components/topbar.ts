@@ -17,7 +17,7 @@ import { QUEUE_ALL, QUEUE_MUTEX, SCENARIOS, type PlayerStatus } from '../core/sc
 
 export interface TopbarDeps {
   onFrameMs(ms: number): void;
-  onPlay(ids: readonly ('S1' | 'S2' | 'S3' | 'S4' | 'S5' | 'S6' | 'S7')[]): void;
+  onPlay(ids: readonly ('S1' | 'S2' | 'S3' | 'S4' | 'S5' | 'S6' | 'S7' | 'S8')[]): void;
   onStep(): void;
   onPauseToggle(): void;
   onStop(): void;
@@ -72,7 +72,7 @@ export class Topbar {
       <div class="tb-scripts">
         <span class="k">剧本</span>
         <button class="btn ghost" id="tb-play-mutex" title="一键连播 S1→S2(默认互斥叙事)">S1→S2</button>
-        <button class="btn ghost" id="tb-play-all" title="全场景连播 S1…S7">全场景</button>
+        <button class="btn ghost" id="tb-play-all" title="全场景连播 S1…S8(以认证解锁飞行收尾)">全场景</button>
         <button class="btn ghost" id="tb-step" title="逐幕单步(暂停态下推一幕)">单步</button>
         <button class="btn ghost" id="tb-pause" title="暂停/继续自动推进">暂停</button>
         <button class="btn ghost" id="tb-stop" title="停止并清空剧本队列">停止</button>

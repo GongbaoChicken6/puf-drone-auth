@@ -34,7 +34,7 @@ import { resultOfFrame } from '../core/format';
 import { store } from '../core/store';
 import { api } from '../core/api';
 import { MSG } from '../core/types';
-import type { FrameEvent, Verdict } from '../core/types';
+import type { DroneAttitudeEvent, FrameEvent, Verdict } from '../core/types';
 import { ANCHOR, CAM_PRESETS, World } from './three/scene';
 import { ParticleField } from './three/particles';
 import { Fx } from './three/fx';
@@ -45,9 +45,9 @@ import { pal } from './three/palette';
  * 无人机侧不跟随悬停浮动:13 单位长的光束上 ±0.09 的抖动肉眼不可见,
  * 却要每帧重算终点,得不偿失。 */
 const STATION_TX = new Vector3(ANCHOR.station.x + 0.78, ANCHOR.corridorY, 0);
-const DRONE_RX = new Vector3(ANCHOR.drone.x, ANCHOR.corridorY, 0);
-const DRONE_HIT = new Vector3(ANCHOR.drone.x, ANCHOR.drone.y + 0.35, 0);
 const MID = new Vector3(0, ANCHOR.corridorY, 0);
+/* finals-demo-drone:无人机飞走后,光束/特效端点必须跟随 —— DRONE_RX/DRONE_HIT
+ * 从模块常量改为 Stage3d 实例字段(每帧按遥测重算),STATION_TX/MID 固定不变。 */
 
 /** 三档画质。降档顺序即「先牺牲什么」的优先级:辉光最贵、也最容易被看出代价,
  *  故最后才降它;像素比最便宜,先降。 */
@@ -243,20 +243,20 @@ class Stage3d {
     this.on('puf:frame', (f: FrameEvent) => {
       if (!accepts(f.terminal_id)) return;
       const forward = f.dir === 'server->term';
-      const from = forward ? STATION_TX : DRONE_RX;
-      const to = forward ? DRONE_RX : STATION_TX;
+      const from = forward ? STATION_TX : this.droneRx;
+      const to = forward ? this.droneRx : STATION_TX;
       this.fx.beam(from, to, this.colorOf(f), { travel: this.travelOf() });
       this.lastPath = { from: from.clone(), to: to.clone() };
     });
 
     this.on('puf:gray', (g) => {
       if (!accepts(g.terminal_id)) return;
-      this.fx.grayFork(STATION_TX, DRONE_RX, 3);
+      this.fx.grayFork(STATION_TX, this.droneRx, 3);
     });
 
     this.on('puf:verdict', (v: Verdict) => {
       if (!accepts(v.terminal_id)) return;
-      this.fx.verdict(v.result, DRONE_HIT, ANCHOR.pool);
+      this.fx.verdict(v.result, this.droneHit, ANCHOR.pool);
     });
 
     this.on('puf:confirm', (c) => {
@@ -264,7 +264,7 @@ class Stage3d {
       // S7:status!=0 表示终端侧 BLOCKED(桥接代发的信号,见 store.ts 注释),
       // 视觉上表现为终端处放电拒绝,而不是闭环
       if (c.status === 0) this.fx.confirmClose(MID);
-      else this.fx.arcBurst(DRONE_HIT, pal().red);
+      else this.fx.arcBurst(this.droneHit, pal().red);
     });
 
     this.on('puf:replay', (p) => {
@@ -273,6 +273,15 @@ class Stage3d {
     });
 
     this.on('puf:pool', (w) => { this.world.setPool(w.pct, true, w.remaining, null); });
+
+    /* finals-demo-drone:选中 tid 的遥测驱动无人机飞行(非选中终端防串台) */
+    this.on('puf:drone-state', (p) => {
+      if (!accepts(p.terminal_id)) return;
+      this.world.setDroneState(p.state, p.unlocked);
+    });
+    this.on('puf:drone-attitude', (p) => {
+      if (accepts(p.terminal_id)) this.droneAtt = p;
+    });
 
     this.on('puf:enroll', (e) => {
       // 注册完成 → 该终端有了新模板,指纹阵必须重取(否则画面停在上一次)
@@ -285,7 +294,7 @@ class Stage3d {
     });
 
     this.on('puf:runerror', (e) => {
-      this.fx.arcBurst(DRONE_HIT, pal().auth);
+      this.fx.arcBurst(this.droneHit, pal().auth);
       store.log({
         tone: 'error', sev: 'error', terminalId: null, runId: e.run_id,
         type: 'server.log', text: `3D 舞台:${e.stage} 阶段异常,已作电弧告警`,
@@ -433,6 +442,11 @@ class Stage3d {
   }
 
   /** 外部要求立刻出一帧(尺寸变化/截图/reduced-motion 下的状态更新) */
+  /* finals-demo-drone:无人机遥测与跟随端点(droneRx 平面高度、droneHit 机体) */
+  private droneAtt: DroneAttitudeEvent | null = null;
+  private droneRx = new Vector3(ANCHOR.drone.x, ANCHOR.corridorY, 0);
+  private droneHit = new Vector3(ANCHOR.drone.x, ANCHOR.drone.y + 0.35, 0);
+
   private wake(): void { if (this.running) this.loop(); }
 
   private loop = (): void => {
@@ -450,6 +464,17 @@ class Stage3d {
      * 场景保持一个静止姿态;只有事件驱动的特效继续演完 —— 完全冻结特效
      * 会让 PASS/REJECT 在画面上毫无区别,那等于把信息也一起关掉了。 */
     this.world.update(frozen ? 0 : dt, frozen ? 0 : t);
+    /* finals-demo-drone:锚点+米制偏移(东→+x,北→+z),走廊内钳位;端点跟随 */
+    if (this.droneAtt) {
+      const a = this.droneAtt;
+      const sx = Math.max(-11, Math.min(12, ANCHOR.drone.x + a.y));
+      const sz = Math.max(-8, Math.min(8, a.x));
+      const sy = ANCHOR.drone.y + a.alt;
+      this.world.setDronePose(sx, sy, sz, a.yaw, a.roll, a.pitch,
+        a.state === 'HOVER', frozen ? 0 : t);
+      this.droneRx.set(sx, ANCHOR.corridorY, sz);
+      this.droneHit.set(sx, sy + 0.35, sz);
+    }
     this.fx.update(dt);
     if (!frozen) {
       const [rx, rz] = this.fx.shakeOffset(t);

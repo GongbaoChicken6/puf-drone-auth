@@ -14,14 +14,14 @@
 import { store } from './store';
 import type { AuthMode } from './types';
 
-export type ScenarioId = 'S1' | 'S2' | 'S3' | 'S4' | 'S5' | 'S6' | 'S7';
+export type ScenarioId = 'S1' | 'S2' | 'S3' | 'S4' | 'S5' | 'S6' | 'S7' | 'S8';
 
 export interface Scenario {
   id: ScenarioId;
   name: string;
   /* 空表示该幕不是单次 auth 调用(见 kind) */
   mode: AuthMode | null;
-  kind: 'auth' | 'enroll' | 'drain';
+  kind: 'auth' | 'enroll' | 'drain' | 'drone';
   /* 指定终端;null = 跟随当前选中终端 */
   tid: number | null;
   focus: string;      // UI 焦点(§6.3 表末列,用于工具条 tooltip 与日志)
@@ -69,6 +69,14 @@ export const SCENARIOS: readonly Scenario[] = [
     focus: '双向拒绝另一半:终端侧 BLOCKED',
     expect: 'RESULT(PASS 但 R2 被篡改) → 终端侧 BLOCKED(不发 CONFIRM)',
   },
+  {
+    /* finals-demo-drone:认证解锁飞行(设计 §4.5)。mode 字段对 drone 幕
+     * 仍是 'normal'(第一拍先跑真认证);每步等真实 drone.state 终态推进,
+     * 与其他幕同一"等终态不蒙延迟"纪律。 */
+    id: 'S8', name: '认证解锁飞行', mode: 'normal', kind: 'drone', tid: null,
+    focus: 'PASS 解锁 → 起飞 → 航点A → 返航降落',
+    expect: 'verdict(PASS) → drone.state(TAKEOFF→HOVER→MOVE→HOVER→RTL→LANDED)',
+  },
 ] as const;
 
 export function scenarioById(id: ScenarioId): Scenario {
@@ -79,6 +87,8 @@ export interface ScenarioDeps {
   /* 返回桥接下发的 run_id(null = 调用失败,已由入口记日志) */
   auth(terminalId: number, mode: AuthMode): Promise<string | null>;
   enroll(terminalId: number): Promise<void>;
+  /* finals-demo-drone:S8 的飞控指令入口(REST /api/drone/cmd) */
+  drone(terminalId: number, cmd: string, extra?: { x?: number; y?: number }): Promise<void>;
 }
 
 export type PlayerState = 'idle' | 'running' | 'paused';
@@ -188,6 +198,22 @@ export class ScenarioPlayer {
     }
   }
 
+  /* finals-demo-drone:轮询 store.drones 等飞行终态(150ms 粒度)。
+   * 窗口取 RUN_TIMEOUT_MS×4:飞行链(起飞3s+航点5s+返航10s)长于单次认证。 */
+  private async waitDroneState(tid: number, states: string[], g: number): Promise<void> {
+    const t0 = performance.now();
+    while (performance.now() - t0 < RUN_TIMEOUT_MS * 4) {
+      const d = store.snapshot.drones.get(tid);
+      if (d && states.includes(d.state)) return;
+      if (this.stopFlag || g !== this.gen) return;
+      await delay(150);
+    }
+    store.log({
+      tone: 'replay', sev: 'warn', terminalId: tid, runId: null, type: 'server.log',
+      text: `S8:等待无人机状态 ${states.join('/')} 超时,跳到下一拍。`,
+    });
+  }
+
   /* 执行一幕并等待其终态事件;返回后 index 指向下一幕 */
   private async advanceOne(g: number = this.gen): Promise<void> {
     const id = this.queue[this.index];
@@ -234,6 +260,22 @@ export class ScenarioPlayer {
       case 'auth': {
         const runId = await this.deps.auth(tid, s.mode!);
         await this.waitRunEnd(runId, g);
+        break;
+      }
+      case 'drone': {
+        /* finals-demo-drone(S8):认证解锁 → 起飞 → 航点A → 返航。
+         * 每步等**真实** drone.state 终态(与 auth 幕等 verdict 同一纪律,
+         * 不用固定延迟蒙混;超时只记日志继续,剧本不卡死)。 */
+        const runId = await this.deps.auth(tid, s.mode!);
+        await this.waitRunEnd(runId, g);
+        const fly = async (cmd: string, extra: { x?: number; y?: number } | undefined,
+                            until: string[]): Promise<void> => {
+          await this.deps.drone(tid, cmd, extra);
+          await this.waitDroneState(tid, until, g);
+        };
+        await fly('launch', undefined, ['HOVER']);
+        await fly('goto', { x: 5, y: -2 }, ['HOVER']);
+        await fly('rtl', undefined, ['LANDED']);
         break;
       }
     }

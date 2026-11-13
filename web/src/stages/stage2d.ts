@@ -117,6 +117,13 @@ export class Stage2d {
     this.unbind.push(
       onPuf(STAGE_TAKEN, () => this.onTaken()),
       onPuf(STAGE_ERROR, (p) => this.onError(p.reason)),
+      /* finals-demo-drone:2D 保底下无人机状态徽章(3D 未接管时仍有读数) */
+      onPuf('puf:drone-state', (p) => {
+        const sel = store.snapshot.selectedTerminal;
+        if (sel != null && sel !== p.terminal_id) return;
+        this.hud.textContent = `无人机 · ${p.unlocked ? p.state : '🔒未解锁'} · alt ${p.pos[2].toFixed(1)}m`;
+        this.hud.hidden = false;
+      }),
     );
     // 先广播 ready,再排超时:3D 模块可能在本行之前就已加载完成(它自己查询
     // bus.stageReady()),故 taken 有可能同步到达 —— 那种情况下定时器会看到
