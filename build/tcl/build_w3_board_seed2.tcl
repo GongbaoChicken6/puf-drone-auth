@@ -122,5 +122,8 @@ if {$inregion + $seam != 160} { puts "ERROR: SEED2 region tally incomplete"; exi
 
 # auto-review P3: 机内变体标识（当前入库 bit 未重建不含此属性，见 README 已知边界；自下次构建生效）
 set_property BITSTREAM.CONFIG.USERID 0x5EED0002 [current_design]
+# QSPI 注:write_cfgmem spix4 需 BITSTREAM.CONFIG.SPI_BUSWIDTH=4,但 Vivado 2026.1
+# 该属性在 design 上不存在(属性名变更或仅 GUI 可设)。实际 QSPI 烧写走 Hardware
+# Manager 直接烧 .bit 文件(JTAG→QSPI),无需 MCS 中间文件——板上操作日执行。
 write_bitstream -force $OD/w3_top_zc706_seed2.bit
 puts "BITSTREAM_SUCCESS WNS=$wns WHS=$whs SEED2_REGION=$pick"

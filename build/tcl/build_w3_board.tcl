@@ -92,5 +92,8 @@ if {$wns < 0} {
     puts "TIMING_FAILED WNS=$wns"
     exit 4
 }
+# QSPI 注:write_cfgmem spix4 需 BITSTREAM.CONFIG.SPI_BUSWIDTH=4,但 Vivado 2026.1
+# 该属性在 design 上不存在(属性名变更或仅 GUI 可设)。实际 QSPI 烧写走 Hardware
+# Manager 直接烧 .bit 文件(JTAG→QSPI),无需 MCS 中间文件——板上操作日执行。
 write_bitstream -force $OD/w3_top_zc706.bit
 puts "BITSTREAM_SUCCESS WNS=$wns"
