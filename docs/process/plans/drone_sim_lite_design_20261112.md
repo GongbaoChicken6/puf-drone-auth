@@ -599,6 +599,19 @@ rtl，每幕等 `drone.state` 到达预期态（复用 RUN_TIMEOUT_MS 超时兜�
 - 审查员预判："修掉该句+3条P3后即可过线"。3 轮上限已用尽,按 auto-review 规则
   升级用户裁决;如需形式 PASS 判定可追加第 4 轮快速确认
 
+### 内容审查（auto-review Mode 2，2026-11-13 上午）判定链：FAIL → 全修 → PASS_WITH_NOTES → P3 清零
+
+- **六路审查**（复用 r1/r2/r3 + 新派 type/test，共识由 Lead 内联去重）：R1 全体 FAIL——
+  P1×1（面板"解锁起飞"键 LANDED 态发 takeoff 必 409，e2e 全走探针/S8 未点过按钮=盲区实证）、
+  P2×9（droneAtt 无清空路径、S8 拒后不熔断 64-96s 死画、S8 缺航点 B 拍、dist 未提交、
+  4d 测试空转、墙钟修复零回归、goto alt 垂直通道未测、脏 verdict 幻影 tid、lock 就地语义未钉）、
+  P3×14（引擎/前端/测试硬化项）。
+- **修复**：1da9719+8e6c20a（355+/79-）；引擎加 stop() 生命周期+shutdown 挂钩；测试 14→20
+  （161 passed 全绿）；e2e 补真实按钮点击（08）与可重入 S8 全链（09）。
+- **复审 R2（r1 复用，清单注入）**：8 项逐项复验全 PASS/接受（亲手重跑 161 passed、dist 特征
+  grep 命中），判定 **PASS_WITH_NOTES**，遗留 1×P3（S8 预拍漏 ARMED 残态）→ 71282d3 一行修。
+- **熔断机制 e2e 立功实录**：悬停态点 S8 → BAD_STATE:HOVER → 即时红字中止（修复前会 96s 假死）。
+
 ## 11. 60 秒演示剧本（决赛现场）
 
 1. (10s) 板上 SW7 → 五帧认证 → DS8 绿 PASS —— 评委看板端反应。
