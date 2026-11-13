@@ -18,8 +18,9 @@ _auth_round),零延迟注入必先到场。半双工碰撞(注入撞上板子发
     python tools/attack/fake_result_attack.py --port COM9            # 竞速模式
     python tools/attack/fake_result_attack.py --port COM9 --passive  # 只监听(讲"攻击者在听")
     python tools/attack/fake_result_attack.py --port COM9 --inject-now  # 空闲注入一帧(单演 Tier0 IDS)
-HC-12 同频配置用 tools/hc12 现成脚本。仅供本作品决赛演示,信道上无真实密钥
-(伪 R2 按构造就是错的)。
+HC-12 同频配置用 tools/hc12 现成脚本。双串口拓扑另一半:真基站侧用
+web_bridge.py --serial-port COM6 起桥(见 FEATURES §2 N8)。
+仅供本作品决赛演示,信道上无真实密钥(伪 R2 按构造就是错的)。
 
 CI-safe:核心类 FakeResultAttacker 不做任何 I/O(串口/时间都注入),
 tests/test_attack_tool.py 直驱验证。运行入口 main() 才 import pyserial。
@@ -61,10 +62,16 @@ class FrameSync:
         out: list[tuple[int, bytes]] = []
         self.buf.extend(data)
         while True:
-            # 丢掉 STX 之前的噪声字节
-            while self.buf and self.buf[0] != STX:
-                self.buf.pop(0)
-                self.noise += 1
+            # 丢掉 STX 之前的噪声字节(find+del,O(n);content-review P3:
+            # 逐字节 pop(0) 是 O(n²),256B 纯噪声块 ≈3 万次搬移)
+            i = self.buf.find(STX)
+            if i < 0:
+                self.noise += len(self.buf)
+                self.buf.clear()
+                break
+            if i:
+                self.noise += i
+                del self.buf[:i]
             if len(self.buf) < 2:
                 break
             total = 10 + self.buf[1] + 2
@@ -91,8 +98,12 @@ class FakeResultAttacker:
                                               file=sys.stderr))
         self._sleep = sleeper
         self._clock = clock
+        if len(r2_fake) != 8:
+            raise ValueError(f"r2_fake must be 8 bytes, got {len(r2_fake)}")
+        if mode not in ("race", "passive"):
+            raise ValueError(f"mode must be race|passive, got {mode!r}")
         self.r2_fake = r2_fake
-        self.mode = mode                    # race | passive
+        self.mode = mode
         self.delay_s = delay_s
         self.armed = True
         self.injected_rounds = 0
@@ -141,7 +152,8 @@ class FakeResultAttacker:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--port", required=True, help="攻击者电台串口(如 COM9)")
+    p.add_argument("--port", default=None,
+                   help="攻击者电台串口(如 COM9);--simulate 模式可不填")
     p.add_argument("--baud", type=int, default=115_200)
     p.add_argument("--r2-hex", default=DEFAULT_FAKE_R2.hex(),
                    help="伪 R2(8B hex,默认按构造即错)")
@@ -180,6 +192,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[SIMULATE] sent msg={HFIDAProtocol.msg_name(mid)} {fields}")
         return 0 if (args.mode == "passive" or atk.injected_rounds == 1) else 1
 
+    if not args.port:
+        p.error("--port is required for real-serial mode (or use --simulate)")
     try:
         import serial  # 仅真信道需要
     except ImportError:

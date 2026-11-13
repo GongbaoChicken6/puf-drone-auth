@@ -55,6 +55,16 @@ class TestRaceInjection(unittest.TestCase):
         atk.feed(transcript(rounds=1))                     # 第二轮:ACCESS_REQUEST 重武装
         self.assertEqual(atk.injected_rounds, 2)
 
+    def test_same_round_double_r1_injects_once(self):
+        """content-review P2:删 disarm-on-inject 后原测试仍绿——同轮第二个
+        R1(板子重传)必须不再注入,否则半双工碰撞概率翻倍。"""
+        atk, sent, _ = make()
+        stream = transcript(rounds=1)
+        atk.feed(stream)
+        atk.feed(_P.pack(MSG_RESPONSE_R1, r1s=[bytes(8)] * 4))  # 同轮第二个 R1
+        self.assertEqual(atk.injected_rounds, 1)                 # disarm 生效
+        self.assertFalse(atk.armed)
+
     def test_passive_mode_never_injects(self):
         atk, sent, _ = make(mode="passive")
         atk.feed(transcript())
@@ -70,6 +80,18 @@ class TestRaceInjection(unittest.TestCase):
         atk.feed(transcript())                              # 完整一轮:恢复触发
         self.assertEqual(len(sent), 1)
         self.assertGreater(atk.sync.noise, 0)               # 噪声被计数量丢弃
+
+
+class TestSimulateMode(unittest.TestCase):
+    """content-review P3:--simulate 排练路径与退出码契约零覆盖。"""
+
+    def test_simulate_race_returns_zero(self):
+        from tools.attack.fake_result_attack import main
+        self.assertEqual(main(["--simulate", "--mode", "race"]), 0)
+
+    def test_simulate_passive_returns_zero(self):
+        from tools.attack.fake_result_attack import main
+        self.assertEqual(main(["--simulate", "--mode", "passive"]), 0)
 
 
 class TestFrameSync(unittest.TestCase):
@@ -93,15 +115,17 @@ class TestInjectNowAndDelay(unittest.TestCase):
 
     def test_delay_honored_and_lag_recorded(self):
         slept: list[float] = []
-        t = [0.0]
-        atk = FakeResultAttacker(send=lambda f: None, r2_fake=DEFAULT_FAKE_R2,
+        sent2: list[bytes] = []
+        t = [1.0]
+        atk = FakeResultAttacker(send=sent2.append, r2_fake=DEFAULT_FAKE_R2,
                                  delay_s=0.05,
-                                 sleeper=lambda s: slept.append(s),
+                                 sleeper=lambda s: (slept.append(s), t.__setitem__(0, t[0] + s)),
                                  clock=lambda: t[0])
-        t[0] = 1.0
         atk.feed(transcript())
         self.assertEqual(slept, [0.05])                     # 延迟真的 sleep 了
-        self.assertAlmostEqual(atk.last_inject_lag_s, 0.0)  # clock 冻结:lag 记账正确
+        self.assertEqual(atk.injected_rounds, 1)            # 注入真发生了
+        self.assertEqual(len(sent2), 1)
+        self.assertAlmostEqual(atk.last_inject_lag_s, 0.05)  # 递增 clock:lag≈delay
 
 
 if __name__ == "__main__":

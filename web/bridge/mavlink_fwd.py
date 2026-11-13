@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import math
 import socket
+import sys
 import struct
 import threading
 import time
@@ -55,9 +56,10 @@ _MSG_ID = {"HEARTBEAT": 0, "ATTITUDE": 30, "LOCAL_POSITION_NED": 32,
 _CRC_X = {"HEARTBEAT": 50, "ATTITUDE": 39, "LOCAL_POSITION_NED": 185,
           "STATUSTEXT": 83, "COMMAND_ACK": 143, "COMMAND_LONG": 152}
 
-# MAV_RESULT / MAV_SEVERITY / MAV_CMD(common 枚举子集)
-ACCEPTED, DENIED, UNSUPPORTED, TEMP_REJ = 0, 2, 3, 8
-SEV_ALERT, SEV_NOTICE = 2, 5
+# MAV_RESULT / MAV_SEVERITY / MAV_CMD(common 官方枚举;content-review R1:
+# 凭记忆写的 8/2 是错的,以下为 pymavlink 2.4.50 本机实测值)
+ACCEPTED, TEMP_REJ, DENIED, UNSUPPORTED = 0, 1, 2, 3
+SEV_ALERT, SEV_NOTICE = 1, 5
 MAV_CMD = {"NAV_WAYPOINT": 16, "RTL": 20, "LAND": 21, "TAKEOFF": 22,
            "ARM_DISARM": 400}
 
@@ -73,18 +75,24 @@ def pack_v2(msg_name: str, payload: bytes, seq: int, sysid: int = 1,
     return head + payload + bytes([crc & 0xFF, crc >> 8])
 
 
-def start_udp(hub, drone, spec: str, bind_host: str = "0.0.0.0") -> "MavlinkForwarder":
-    """真 UDP 引导(桥 --mavlink-udp):单 socket 双向——发往 GCS 目标地址,
-    GCS 的回包按 UDP 语义回到同一 ephemeral 端口,读线程喂 feed_inbound。
-    QGC 侧:Application Settings→Comm Links→UDP→监听 <port> 即可直连。"""
-    # 解析 [HOST:]PORT —— 裸端口(如 "14550")= 127.0.0.1:14550。
-    # (此前 partition 写法把裸端口当主机名,sendto 变成 DNS 查询"14552",
-    # 表现为"永久阻塞"——2026-11-13 排障实录,connected UDP 暴露真因。)
+def _parse_spec(spec: str) -> tuple[str, int]:
+    """解析 [HOST:]PORT。裸端口(如 "14550")= 127.0.0.1:14550。
+    (排障教训回归锚:此前 partition 写法把裸端口当主机名,sendto 变 DNS
+    查询伪装成死锁——tests/test_mavlink_fwd.py 钉死三种形态。)"""
     if ":" in spec:
         host, port = spec.split(":", 1)
     else:
         host, port = "127.0.0.1", spec
-    addr = (host or "127.0.0.1", int(port or 14550))
+    return (host or "127.0.0.1", int(port or 14550))
+
+
+def start_udp(hub, drone, spec: str, bind_host: str = "0.0.0.0") -> "MavlinkForwarder":
+    """真 UDP 引导(桥 --mavlink-udp):单 socket 双向——发往 GCS 目标地址,
+    GCS 的回包按 UDP 语义回到同一 ephemeral 端口,读线程喂 feed_inbound。
+    QGC 侧:Application Settings→Comm Links→UDP→监听 <port> 即可直连。
+    双串口攻击演示拓扑中,真基站侧 = web_bridge --serial-port COM6(见
+    tools/attack/fake_result_attack.py docstring)。"""
+    addr = _parse_spec(spec)          # 裸端口当主机名的老 bug 见 _parse_spec 注释
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind((bind_host, 0))
     # Windows UDP 实测坑(2026-11-13 定案,三组对照实验):unconnected
@@ -95,11 +103,22 @@ def start_udp(hub, drone, spec: str, bind_host: str = "0.0.0.0") -> "MavlinkForw
     sock.setblocking(False)
     sock.connect(addr)
 
+    fail = [0]                        # 连续失败计数(content-review P3:黑洞留痕)
+
     def send_fn(frame: bytes) -> None:
         try:
             sock.send(frame)
+            fail[0] = 0
         except OSError:
-            pass                      # 含 BlockingIOError(缓冲满):丢帧无害
+            fail[0] += 1               # BlockingIOError 丢帧无害;连败才告警
+            if fail[0] == 20:          # 节流:目标不可达/QGC 未起时每 20 帧一条
+                try:
+                    hub.publish("server.log", {
+                        "level": "warn",
+                        "msg": f"mavlink-udp: 20 consecutive send failures to "
+                               f"{addr[0]}:{addr[1]} (QGC not listening?)"})
+                except Exception:
+                    pass
 
     def recv_fn() -> bytes:
         return sock.recv(512)          # 非阻塞;空/ICMP 由 _loop 统一容错
@@ -116,8 +135,12 @@ class MavlinkForwarder:
     SYSID, COMPID = 1, 1
 
     def __init__(self, hub, drone, send_fn=None, target="127.0.0.1:14550",
-                 clock=time.monotonic, recv_fn=None, on_stop=None):
+                 clock=time.monotonic, recv_fn=None, on_stop=None, tid=None):
         self._drone = drone
+        # 演示终端绑定(content-review P1):None=自动跟随(首个出站事件绑定,
+        # 之后跟随最近解锁 tid 改绑);入站指令发往绑定 tid。此前硬编码 tid=1
+        # 与演示终端空间(7/9/99)失配 → QGC 指令恒 AUTH_REQUIRED 自相矛盾。
+        self._tid = tid
         self._send_fn = send_fn          # 真模式: lambda frame: sock.sendto(frame, addr)
         self._recv_fn = recv_fn          # 真模式: lambda: sock.recvfrom(512)[0](非阻塞)
         self._on_stop = on_stop
@@ -156,7 +179,15 @@ class MavlinkForwarder:
         # (wire 序 <IBBBBB:MAVLink v2 大字段优先重排,custom_mode uint32 在最前)
         self._emit("HEARTBEAT", struct.pack("<IBBBBB", 0, 2, 8, 0, 4, 3))
 
+    def _accept_out(self, p: dict) -> bool:
+        """出站 tid 过滤:未绑定先绑,绑定后只放行本 tid(多终端防串台)。"""
+        if self._tid is None:
+            self._tid = p.get("terminal_id")
+        return p.get("terminal_id") == self._tid
+
     def _on_drone_attitude(self, p: dict) -> None:
+        if not self._accept_out(p):
+            return
         d2r = math.pi / 180.0
         self._emit("ATTITUDE", struct.pack("<Iffffff", self._ms(),
             p["roll"] * d2r, p["pitch"] * d2r, p["yaw"] * d2r, 0.0, 0.0, 0.0))
@@ -170,17 +201,23 @@ class MavlinkForwarder:
 
     def _on_drone_state(self, p: dict) -> None:
         unlocked = bool(p.get("unlocked"))
+        if unlocked:
+            self._tid = p.get("terminal_id")   # 跟随最近解锁的演示终端
+        if not self._accept_out(p):
+            return
         if unlocked != self._last_unlocked:
             self._last_unlocked = unlocked
             text = ("PUF auth PASS: flight unlocked"
                     if unlocked else "flight locked (auth lost or manual lock)")
             sev = SEV_NOTICE if unlocked else SEV_ALERT
-            raw = text.encode("utf-8")[:_STATUSTEXT_LEN - 1]
+            raw = text[:_STATUSTEXT_LEN - 1].encode("utf-8")   # 按字符截断(防劈 UTF-8)
             self._emit("STATUSTEXT", bytes([sev]) + raw.ljust(_STATUSTEXT_LEN, b"\0"))
 
     def _on_drone_reject(self, p: dict) -> None:
+        if not self._accept_out(p):
+            return
         raw = (f"cmd {p.get('cmd')} rejected: {p.get('reason')}"
-               ).encode()[:_STATUSTEXT_LEN - 1]
+               )[:_STATUSTEXT_LEN - 1].encode("utf-8")
         self._emit("STATUSTEXT", bytes([SEV_ALERT]) + raw.ljust(_STATUSTEXT_LEN, b"\0"))
 
     # ---- 入站(COMMAND_LONG → DroneSim) ----
@@ -190,9 +227,9 @@ class MavlinkForwarder:
         MAV_CMD["RTL"]: lambda p: ("rtl", {}),
         MAV_CMD["ARM_DISARM"]: lambda p:
             ("arm" if p[0] > 0.5 else "disarm", {}),
-        MAV_CMD["NAV_WAYPOINT"]: lambda p:
-            ("goto", {"x": p[4], "y": p[5]} if p[4] or p[5] else
-                      {"x": p[1], "y": p[2]}),   # param5/6 或 param1/2 兜底
+        # param5/param6 → 本地北/东(米);0/0 是合法目标(回原点上空),
+        # 不做 truthy 兜底(content-review P3:原注释与索引错位且 (0,0) 不可达)
+        MAV_CMD["NAV_WAYPOINT"]: lambda p: ("goto", {"x": p[4], "y": p[5]}),
     }
 
     def feed_inbound(self, data: bytes) -> None:
@@ -232,9 +269,18 @@ class MavlinkForwarder:
         if m is None:
             self._ack(cmd, UNSUPPORTED)
             return
+        # 入站绑定:显式 tid > 出站已绑定 > DroneSim 当前解锁 tid > 1
+        if self._tid is None:
+            unlocked = self._drone.unlocked_tids()
+            self._tid = unlocked[0] if unlocked else 1
         op, extra = m(params[0:7])
-        r = self._drone.command(1, op, extra.get("x"), extra.get("y"),
-                                extra.get("alt"))
+        # TAKEOFF 状态感知(R2 实测):ARMED 后须发 takeoff(launch 源态仅 LANDED),
+        # QGC 标准 ARM→TAKEOFF 序列在 ARMED 态点 launch 必 409
+        if cmd == MAV_CMD["TAKEOFF"]:
+            st = self._drone._st.get(self._tid)
+            op = "takeoff" if (st and st.state == "ARMED") else "launch"
+        r = self._drone.command(self._tid, op, extra.get("x"),
+                                extra.get("y"), extra.get("alt"))
         self._ack(cmd, ACCEPTED if r.get("ok") else TEMP_REJ)
 
     def _ack(self, cmd: int, result: int) -> None:
@@ -249,27 +295,31 @@ class MavlinkForwarder:
         last_hb = 0.0
         while not self._stop.is_set():
             try:
-                env = self._tap.get(timeout=0.1)
-                etype, pl = env.get("type"), env.get("payload") or {}
-                if etype == "drone.attitude":
-                    self._on_drone_attitude(pl)
-                elif etype == "drone.state":
-                    self._on_drone_state(pl)
-                elif etype == "drone.reject":
-                    self._on_drone_reject(pl)
-            except Empty:
-                pass
-            if self._recv_fn is not None:            # GCS 入站(非阻塞,收尽)
-                while True:
-                    try:
-                        self.feed_inbound(self._recv_fn())
-                    except (BlockingIOError, ConnectionResetError):
-                        break                          # 空/ICMP 回声:本轮收完
-                    except OSError:
-                        break
-            now = self._clock()
-            if now - last_hb >= 1.0:      # HEARTBEAT 1Hz
-                last_hb = now
-                self._heartbeat()
+                try:
+                    env = self._tap.get(timeout=0.1)
+                    etype, pl = env.get("type"), env.get("payload") or {}
+                    if etype == "drone.attitude":
+                        self._on_drone_attitude(pl)
+                    elif etype == "drone.state":
+                        self._on_drone_state(pl)
+                    elif etype == "drone.reject":
+                        self._on_drone_reject(pl)
+                except Empty:
+                    pass
+                if self._recv_fn is not None:        # GCS 入站(非阻塞,收尽)
+                    while True:
+                        try:
+                            self.feed_inbound(self._recv_fn())
+                        except (BlockingIOError, ConnectionResetError):
+                            break                      # 空/ICMP 回声:本轮收完
+                        except OSError:
+                            break
+                now = self._clock()
+                if now - last_hb >= 1.0:  # HEARTBEAT 1Hz
+                    last_hb = now
+                    self._heartbeat()
+            except Exception as exc:       # 线程防线(content-review P3,同 drone_sim)
+                sys.stderr.write(f"mavlink-fwd loop error (recovered): {exc!r}\n")
+                time.sleep(0.1)
         if self._on_stop is not None:
             self._on_stop()               # 循环退出后关 socket(绝无并发)

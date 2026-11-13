@@ -5,6 +5,7 @@ pymavlink 可导入时执行(importorskip 降级——常跑机已装 pymavlink 
 Run: python -m pytest tests/test_mavlink_fwd.py -q
 """
 
+import math
 import struct
 import sys
 import unittest
@@ -42,6 +43,16 @@ def make_fwd(sent=None, drone=None):
     return fwd, sim, hub, t
 
 
+class TestParseSpec(unittest.TestCase):
+    """content-review P2:裸端口解析曾是真实 bug(端口当主机名→DNS 伪装死锁)。"""
+
+    def test_three_forms(self):
+        from web.bridge.mavlink_fwd import _parse_spec
+        self.assertEqual(_parse_spec("14550"), ("127.0.0.1", 14550))
+        self.assertEqual(_parse_spec("192.168.1.5:14550"), ("192.168.1.5", 14550))
+        self.assertEqual(_parse_spec(":14550"), ("127.0.0.1", 14550))
+
+
 class TestCrcAndFrames(unittest.TestCase):
     def test_crc16_mcrf4xx_check_value(self):
         # 标准校验向量:CRC-16/MCRF4XX("123456789") = 0x6F91
@@ -53,6 +64,24 @@ class TestCrcAndFrames(unittest.TestCase):
         self.assertEqual(f[0], 0xFD)
         self.assertEqual(f[1], 9)
         self.assertEqual(f[7], 0)             # msgid 0
+
+    def test_mav_result_enums_are_official(self):
+        """content-review P2:TEMP_REJ 曾凭记忆写 8,官方=1——用 pymavlink 钉死。"""
+        import web.bridge.mavlink_fwd as M
+        self.assertEqual(M.TEMP_REJ, 1)
+        self.assertEqual(M.ACCEPTED, 0)
+        self.assertEqual(M.DENIED, 2)
+        self.assertEqual(M.UNSUPPORTED, 3)
+        try:
+            from pymavlink import mavutil
+        except ImportError:
+            self.skipTest("pymavlink 未安装")
+        E = mavutil.mavlink
+        self.assertEqual(M.TEMP_REJ, E.MAV_RESULT_TEMPORARILY_REJECTED)
+        self.assertEqual(M.ACCEPTED, E.MAV_RESULT_ACCEPTED)
+        self.assertEqual(M.DENIED, E.MAV_RESULT_DENIED)
+        self.assertEqual(M.UNSUPPORTED, E.MAV_RESULT_UNSUPPORTED)
+        self.assertEqual(M.SEV_ALERT, E.MAV_SEVERITY_ALERT)
 
     def test_crc_extra_constants_are_official(self):
         # 取自 pymavlink 2.4.50 官方生成器(gen 提取,2026-11-13)
@@ -116,12 +145,38 @@ class TestOutboundEvents(unittest.TestCase):
                "vx": 0, "vy": 0, "vz": 0, "state": "HOVER", "terminal_id": 1}
         fwd._on_drone_attitude(att)      # 第 1 帧:ATTITUDE(位置 5Hz 起始相位)
         fwd._on_drone_attitude(att)      # 第 2 帧:ATTITUDE + LOCAL_POSITION_NED
-        kinds = []
-        for f in sent:
-            dec = None
-            kinds.append(f[7] | (f[8] << 8))   # 粗粒度:msgid
+        kinds = [f[7] | (f[8] << 8) for f in sent]
+        # 5Hz 节流序列(content-review P3:两 ATTITUDE + 一 POSITION,精确钉死)
+        self.assertEqual(kinds, [_MSG_ID["ATTITUDE"], _MSG_ID["ATTITUDE"],
+                                 _MSG_ID["LOCAL_POSITION_NED"]])
         self.assertIn(_MSG_ID["ATTITUDE"], kinds)
         self.assertIn(_MSG_ID["LOCAL_POSITION_NED"], kinds)
+        # 数值映射(content-review P2:deg→rad 因子与 NED z=-alt 符号此前零断言)
+        try:
+            from pymavlink import mavutil
+        except ImportError:
+            self.skipTest("pymavlink 未安装")
+        dec = mavutil.mavlink.MAVLink(None, srcSystem=255)
+        att = [f for f in sent if (f[7] | (f[8] << 8)) == 30]
+        m = dec.parse_char(att[0])
+        self.assertAlmostEqual(m.roll, math.radians(10.0), places=5)
+        self.assertAlmostEqual(m.pitch, math.radians(-5.0), places=5)
+        self.assertAlmostEqual(m.yaw, math.radians(90.0), places=5)
+        pos = [f for f in sent if (f[7] | (f[8] << 8)) == 32]
+        p2 = dec.parse_char(pos[0])
+        self.assertAlmostEqual(p2.z, -3.0, places=4)         # NED:z = -alt
+        self.assertAlmostEqual(p2.x, 1.0, places=4)
+
+    def test_outbound_filters_other_tids(self):
+        """content-review P1 回归:绑定后其他 tid 的出站事件不转发。"""
+        sent = []
+        fwd, sim, hub, _ = make_fwd(sent)
+        fwd._on_drone_state({"terminal_id": 7, "unlocked": True})   # 绑定 7
+        fwd._on_drone_attitude({"terminal_id": 9, "roll": 1.0, "pitch": 0.0,
+                                "yaw": 0.0, "x": 0.0, "y": 0.0, "alt": 0.0,
+                                "vx": 0, "vy": 0, "vz": 0, "state": "HOVER"})
+        kinds = [f[7] | (f[8] << 8) for f in sent]
+        self.assertNotIn(_MSG_ID["ATTITUDE"], kinds)                # tid9 被滤掉
 
     def test_unlock_emits_statustext_once(self):
         sent = []
@@ -131,19 +186,34 @@ class TestOutboundEvents(unittest.TestCase):
         st = [f for f in sent if (f[7] | (f[8] << 8)) == _MSG_ID["STATUSTEXT"]]
         self.assertEqual(len(st), 1)
 
-    def test_heartbeat_periodic(self):
+    def test_reject_emits_alert_statustext(self):
+        """content-review P3:承诺三腿(解锁/上锁/拒绝)的拒绝腿零测。"""
+        sent = []
+        fwd, sim, hub, _ = make_fwd(sent)
+        fwd._on_drone_state({"terminal_id": 1, "unlocked": True})   # 绑定
+        fwd._on_drone_reject({"terminal_id": 1, "cmd": "launch",
+                              "reason": "AUTH_REQUIRED"})
+        st = [f for f in sent if (f[7] | (f[8] << 8)) == 253
+              and f[10] == 1]        # severity=ALERT(1),排除解锁的 NOTICE(5)
+        self.assertEqual(len(st), 1)
+
+    def test_heartbeat_emits_valid_frame(self):
+        """名实相符(content-review P2:原 periodic 测试名不符实——1Hz 周期
+        由 live smoke HEARTBEAT×9 把关,本测试钉帧本身的有效性)。"""
         sent = []
         fwd, sim, hub, t = make_fwd(sent)
-        # 直接驱动主循环三拍(tap 空 → Empty 路径 → 心跳节拍)
-        import web.bridge.mavlink_fwd as M
-        orig_empty = M.Empty
-        for now in (0.0, 0.5, 1.2, 2.0):
-            t[0] = now
-            # 模拟一次空 tap 轮询(不真起线程):调用 _loop 一次循环体不可行,
-            # 改测节拍逻辑:直接断言 _loop 的心跳条件
+        t[0] = 5.0                     # boot 后 5s
         fwd._heartbeat()
         hb = [f for f in sent if (f[7] | (f[8] << 8)) == 0]
         self.assertEqual(len(hb), 1)
+        try:
+            from pymavlink import mavutil
+        except ImportError:
+            self.skipTest("pymavlink 未安装")
+        dec = mavutil.mavlink.MAVLink(None, srcSystem=255)
+        m = dec.parse_char(hb[0])
+        self.assertEqual((m.type, m.autopilot, m.system_status, m.mavlink_version),
+                         (2, 8, 4, 3))
 
 
 class TestInboundCommands(unittest.TestCase):
@@ -161,6 +231,16 @@ class TestInboundCommands(unittest.TestCase):
         kw.update(target_system=1, target_component=1, command=command,
                   confirmation=0, **params)
         return cls(**kw).pack(mavutil.mavlink.MAVLink(None, srcSystem=255))
+
+    def test_tid_follows_unlocked_terminal(self):
+        """content-review P1 回归:入站指令跟随解锁 tid(非硬编码 1)。"""
+        sent = []
+        fwd, sim, hub, _ = make_fwd(sent)
+        sim._on_event("verdict", {"terminal_id": 7, "result": 0})   # 演示终端 7
+        fwd.feed_inbound(self._official_command_long(22))
+        # _dispatch 自动绑定:无出站事件时从 DroneSim 解锁 tid 推断
+        self.assertEqual(sim._st[7].state, "TAKEOFF")
+        self.assertNotIn(1, sim._st)                                # tid=1 未被触碰
 
     def test_takeoff_dispatch(self):
         sent = []
@@ -180,7 +260,17 @@ class TestInboundCommands(unittest.TestCase):
         self.assertEqual(sim._st[1].state, "LANDED")      # 未起飞
         ack = [f for f in sent if (f[7] | (f[8] << 8)) == 77]
         cmd, result = struct.unpack("<HB", ack[0][10:13])
-        self.assertEqual(result, 8)                       # TEMPORARILY_REJECTED
+        self.assertEqual(result, 1)                       # TEMPORARILY_REJECTED(官方=1)
+
+    def test_inbound_v2_frame_branch(self):
+        """content-review P2:官方生成器产 v1 帧,v2 分支(现代 QGC 真路径)
+        此前零覆盖——pack_v2 自产 v2 帧回灌(出站/入站 CRC 同源)。"""
+        sent = []
+        fwd, sim, hub, _ = make_fwd(sent)
+        sim._on_event("verdict", {"terminal_id": 1, "result": 0})
+        payload = struct.pack("<7fHBBB", 0, 0, 0, 0, 0, 0, 0, 22, 1, 1, 0)
+        fwd.feed_inbound(pack_v2("COMMAND_LONG", payload, 0))
+        self.assertEqual(sim._st[1].state, "TAKEOFF")   # v2 帧走了 v2 分支
 
     def test_waypoint_params_map_to_goto(self):
         sent = []
@@ -194,6 +284,32 @@ class TestInboundCommands(unittest.TestCase):
         fwd.feed_inbound(self._official_command_long(16, param5=5.0, param6=-2.0))
         self.assertEqual(sim._st[1].state, "MOVE")
         self.assertEqual(sim._st[1].wp, (5.0, -2.0))
+
+    def test_remaining_command_mappings(self):
+        """content-review P3:5 命令只测了 2,补 arm/land/rtl/unknown。"""
+        sent = []
+        fwd, sim, hub, _ = make_fwd(sent)
+        sim._on_event("verdict", {"terminal_id": 1, "result": 0})
+        # arm(param1>0.5)
+        fwd.feed_inbound(self._official_command_long(400, param1=1.0))
+        self.assertEqual(sim._st[1].state, "ARMED")
+        # takeoff(ARMED 态 → 状态感知映射为 takeoff 而非 launch)
+        fwd.feed_inbound(self._official_command_long(22))
+        for _ in range(80):                    # 直驱到 HOVER
+            with sim._lk:
+                for tid, st in list(sim._st.items()):
+                    sim._step(tid, st, 0.05)
+        # rtl
+        fwd.feed_inbound(self._official_command_long(20))
+        self.assertEqual(sim._st[1].state, "RTL")
+        # land
+        fwd.feed_inbound(self._official_command_long(21))
+        self.assertEqual(sim._st[1].state, "LAND")
+        # unknown command → UNSUPPORTED(3)
+        fwd.feed_inbound(self._official_command_long(999))
+        acks = [f for f in sent if (f[7] | (f[8] << 8)) == 77]
+        cmd, result = struct.unpack("<HB", acks[-1][10:13])
+        self.assertEqual((cmd, result), (999, 3))
 
     def test_bad_crc_silently_dropped(self):
         sent = []

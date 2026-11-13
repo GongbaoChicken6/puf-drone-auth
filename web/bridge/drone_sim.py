@@ -315,6 +315,11 @@ class DroneSim:
             "roll": round(st.roll, 1), "pitch": round(st.pitch, 1),
             "yaw": round(st.yaw, 1)})
 
+    def unlocked_tids(self) -> list[int]:
+        """当前解锁中的终端 ID 列表(mavlink_fwd 入站绑定用)。"""
+        with self._lk:
+            return sorted(t for t, s in self._st.items() if s.unlocked)
+
     def snapshot(self) -> dict:
         """/api/status 增量重同步字段:SSE 断档后前端一次 GET 即恢复。"""
         with self._lk:
