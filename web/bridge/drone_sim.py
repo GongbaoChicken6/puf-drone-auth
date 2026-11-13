@@ -69,16 +69,26 @@ class DroneSim:
     # 工作线程:tap 出队 + 20Hz 步进(单测 autostart=False 时直驱下列方法)
     # ------------------------------------------------------------------
     def _loop(self) -> None:
+        # 步长取**真实墙钟差分**(S8 e2e 实测 bug,2026-11-13):事件会唤醒
+        # q.get 提前返回,若每次迭代都推进固定 TICK,仿真时间会随事件频率
+        # 加速(10Hz 自发遥测即自我加速,起飞 3.2s 压缩成 ~1.9s)。墙钟差分
+        # + 0.25s 钳制(防卡顿后跳变)让物理与真实时间一致。
+        last = time.monotonic()
         while True:
             try:
                 env = self._tap.get(timeout=self.TICK)
                 self._on_event(env.get("type"), env.get("payload") or {})
             except Empty:
                 pass
+            now = time.monotonic()
+            dt = min(0.25, max(0.0, now - last))
+            last = now
+            if dt <= 0.0:
+                continue
             with self._lk:
                 # 快照迭代(R1-P1-4:防 command() 新建 tid 时 dict 变更)
                 for tid, st in list(self._st.items()):
-                    self._step(tid, st, self.TICK)
+                    self._step(tid, st, dt)
 
     def _on_event(self, etype: str, pl: dict) -> None:
         """verdict 门控:PASS 解锁 / 非 PASS 上锁+自动降落(R2-P1)。"""
