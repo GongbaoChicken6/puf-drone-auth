@@ -46,6 +46,15 @@ from pathlib import Path
 from queue import Empty, Queue
 from typing import Any
 
+# finals-demo-drone:站端无人机演示层(纯展示仿真,零 RTL/线上协议改动)。
+# ⚠ 既有测试用 importlib.spec_from_file_location 加载本文件(test_channel_ids.py
+# L29-39 一带),sys.path 不含本目录——必须先注入再 import,否则 ModuleNotFoundError
+# 且 CI 全量 pytest 必挂(协调点①,2026-11-12)。
+_BRIDGE_DIR = Path(__file__).resolve().parent
+if str(_BRIDGE_DIR) not in sys.path:
+    sys.path.insert(0, str(_BRIDGE_DIR))
+from drone_sim import DroneSim
+
 VERSION = "0.1.0"
 
 # ---- 冻结常量(docs/protocol_contract.md §4.1 / threshold.py 实读口径) ----
@@ -109,6 +118,7 @@ class SSEHub:
         self._clients: dict[int, Queue] = {}
         self._next_cid = 0
         self._laggy: set[int] = set()
+        self._taps: list[Queue] = []      # finals-demo-drone:站内消费者引出线
 
     def subscribe(self) -> tuple[int, Queue]:
         q: Queue = Queue(maxsize=QUEUE_CAP)
@@ -123,6 +133,17 @@ class SSEHub:
         with self._lock:
             self._clients.pop(cid, None)
             self._laggy.discard(cid)
+
+    def add_tap(self) -> Queue:
+        """finals-demo-drone:内部事件引出线(DroneSim 等站内消费者)。
+
+        复用 publish 的锁与丢旧保新策略;不入 SSE 客户端计数。tap 消费者
+        不得在回调内再 publish(锁递归)——DroneSim 在自己线程出队后发布。
+        """
+        q: Queue = Queue(maxsize=QUEUE_CAP)
+        with self._lock:
+            self._taps.append(q)
+        return q
 
     def publish(self, etype: str, payload: dict) -> int:
         with self._lock:
@@ -149,6 +170,14 @@ class SSEHub:
                 if q is not None:
                     try:
                         q.put_nowait(None)      # poison:SSE 循环退出
+                    except Exception:
+                        pass
+            for q in self._taps:               # finals-demo-drone:站内 tap
+                try:
+                    q.put_nowait(env)
+                except Exception:              # queue.Full:丢最旧保最新(同客户端策略)
+                    try:
+                        q.get_nowait(); q.put_nowait(env)
                     except Exception:
                         pass
             return self._seq
@@ -1059,6 +1088,8 @@ class RealApp:
         self.orch = Orchestrator(self)
         self.started = time.monotonic()
         self._telemetry_stop = threading.Event()
+        # finals-demo-drone:无人机演示模拟器(独立线程+自有锁;门控=verdict tap)
+        self.drone = DroneSim(self.hub)
 
     # ---- 生命周期 ----
     def start(self) -> None:
@@ -1172,6 +1203,7 @@ class RealApp:
                     .get("backend") == "speck64/96",
                     "keys": len(self.protocol.hsm.terminal_ids())
                     if isinstance(self.protocol.hsm, self.mods.SpeckHSM) else 0},
+            "drone": self.drone.snapshot(),   # finals-demo-drone:SSE 断档重同步
         }
 
     # ---- REST 面(全部经编排器串行化) ----
@@ -1201,6 +1233,16 @@ class RealApp:
     def demo_reset(self, tid: int) -> bool:
         return bool(self.orch.submit_sync(
             Job(kind="demo_reset", tid=tid), timeout=300).result)
+
+    def drone_cmd(self, tid: int, cmd: str, body: dict) -> dict:
+        """finals-demo-drone:飞行指令(REST /api/drone/cmd)。
+
+        自包含内存操作:DroneSim 自带互斥锁,不触碰 protocol/串口/文件,
+        故不走编排器串行化——与上方"REST 面全部经编排器"注释所针对的
+        protocol 状态类操作不同源,在此显式豁免并注明防后人误改。
+        """
+        return self.drone.command(tid, cmd,
+                                  body.get("x"), body.get("y"), body.get("alt"))
 
     # ---- 黄金帧:读 docs/protocol_contract.md §4(静态真实) ----
     def golden_frames(self) -> list[dict[str, str]]:
@@ -1403,6 +1445,7 @@ class MockApp:
         self._q: Queue = Queue()
         threading.Thread(target=self._replay_worker, name="mock-replay", daemon=True).start()
         threading.Thread(target=self._telemetry, name="telemetry", daemon=True).start()
+        self.drone = DroneSim(self.hub)   # finals-demo-drone:mock 演示路径一致
 
     def _replay_worker(self) -> None:
         while True:
@@ -1476,6 +1519,7 @@ class MockApp:
                 {"terminal_id": 9, "remaining": 496, "pool_size": 500, "pct": 99},
                 {"terminal_id": 99, "remaining": 3, "pool_size": 20, "pct": 15}],
             "hsm": {"available": True, "keys": 3},
+            "drone": self.drone.snapshot(),   # finals-demo-drone
         }
 
     def submit_auth(self, tid: int, mode: str) -> str:
@@ -1494,6 +1538,11 @@ class MockApp:
             "stage": "poll", "terminal_id": tid,
             "error": "poll requires real-serial mode: mock has no board to wake"})
         return run_id
+
+    def drone_cmd(self, tid: int, cmd: str, body: dict) -> dict:
+        """finals-demo-drone:与 RealApp 同名方法同构(mock 路径一致)。"""
+        return self.drone.command(tid, cmd,
+                                  body.get("x"), body.get("y"), body.get("alt"))
 
     def submit_enroll(self, tid: int, n: int) -> str:
         run_id = f"mock-e{int(time.time() * 1000) % 100000}"
@@ -1657,6 +1706,10 @@ class BridgeHandler(BaseHTTPRequestHandler):
                     int(body["terminal_id"]), body.get("key_hex"))})
             if path == "/api/demo/reset":        # 附加端点(S5 重演)
                 return self._json({"ok": app.demo_reset(int(body["terminal_id"]))})
+            if path == "/api/drone/cmd":          # finals-demo-drone:飞行指令
+                r = app.drone_cmd(int(body["terminal_id"]),
+                                  str(body.get("cmd", "")), body)
+                return self._json(r, 200 if r.get("ok") else 409)
             return self._json({"error": "not found"}, 404)
         except (KeyError, ValueError, TypeError) as exc:
             return self._json({"error": f"bad request: {exc}"}, 400)
