@@ -16,11 +16,12 @@ export type EventType =
   | 'gray.extra' | 'verdict' | 'confirm.done' | 'enroll.done'
   | 'pool.warning' | 'replay.reject' | 'server.log' | 'run.error'
   | 'channel.intrusion' | 'channel.noise'
-  | 'poll.sent' | 'confirm.rejected' | 'base.spoof.suspected';
+  | 'poll.sent' | 'confirm.rejected' | 'base.spoof.suspected'
+  | 'drone.state' | 'drone.attitude' | 'drone.cmd_ack' | 'drone.reject';
 
-/* 运行期事件名清单(§8.3 表 11 行的 12 个原生死类 + finals-demo 扩展 5 类:
- * channel.intrusion / channel.noise / poll.sent / confirm.rejected /
- * base.spoof.suspected,共 17 个 type —— frame.tx 与 frame.rx 同行但为两类)。
+/* 运行期事件名清单(§8.3 表 11 行的 12 个原生死类 + finals-demo 扩展 5 类
+ * + finals-demo-drone 扩展 4 类(drone.state/attitude/cmd_ack/reject),
+ * 共 21 个 type —— frame.tx 与 frame.rx 同行但为两类)。
  * 桥接层把 SSE 帧写成**具名事件**(web_bridge.py:1233 `event: <type>`),
  * 因此 EventSource 的 onmessage 不会触发,订阅方必须按名 addEventListener;
  * 这里同时是审计日志过滤器的选项来源。新增事件类型须双侧同步(扩展时同步更新计数)。
@@ -32,6 +33,7 @@ export const EVENT_TYPES = [
   'pool.warning', 'replay.reject', 'server.log', 'run.error',
   'channel.intrusion', 'channel.noise',
   'poll.sent', 'confirm.rejected', 'base.spoof.suspected',
+  'drone.state', 'drone.attitude', 'drone.cmd_ack', 'drone.reject',
 ] as const satisfies readonly (EventType & keyof PayloadMap)[];
 
 type _EventTypesExhaustive =
@@ -176,6 +178,29 @@ export interface BaseSpoofSuspected {
   terminal_says: 'FAIL';
   evidence: string;
 }
+/* ---------- finals-demo-drone:无人机演示层事件 ---------- */
+/* 飞行状态机:LANDED→ARMED→TAKEOFF→HOVER→MOVE→LAND/RTL(设计 §3.2)。 */
+export type DroneFlightState =
+  'LANDED' | 'ARMED' | 'TAKEOFF' | 'HOVER' | 'MOVE' | 'LAND' | 'RTL';
+
+export interface DroneStateEvent {
+  terminal_id: number;
+  state: DroneFlightState;
+  unlocked: boolean;          // 认证门控:verdict PASS 解锁,REJECT/上锁清除
+  pos: [number, number, number];   // x=北, y=东, alt=高度(米)
+  yaw: number;                // deg,北为 0
+  reason?: string;            // 如 "verdict:0"
+}
+export interface DroneAttitudeEvent {
+  terminal_id: number;
+  state: DroneFlightState;
+  x: number; y: number; alt: number;
+  vx: number; vy: number; vz: number;
+  roll: number; pitch: number; yaw: number;   // deg,演示级动力学
+}
+export interface DroneCmdAck { terminal_id: number; cmd: string; ok: boolean; reason?: string; }
+export interface DroneReject { terminal_id: number; cmd: string; reason: string; }
+
 export interface ServerLog { level: 'info' | 'warn' | 'error'; msg: string; }
 export interface RunError { run_id: string; stage: string; error: string; terminal_id?: number | null; }
 
@@ -198,6 +223,10 @@ export interface PayloadMap {
   'poll.sent': PollSent;
   'confirm.rejected': ConfirmRejected;
   'base.spoof.suspected': BaseSpoofSuspected;
+  'drone.state': DroneStateEvent;
+  'drone.attitude': DroneAttitudeEvent;
+  'drone.cmd_ack': DroneCmdAck;
+  'drone.reject': DroneReject;
 }
 
 /* ---------- REST(§8.2) ---------- */
@@ -226,6 +255,7 @@ export interface StatusResponse {
   templates: TemplateRow[];
   pools: PoolRow[];
   hsm: { available: boolean; keys: number };
+  drone?: { tids: Record<string, DroneStateEvent> };   // finals-demo-drone:断档重同步
 }
 export interface GoldenFrame { name: string; hex: string; note: string; }
 export interface GoldenFramesResponse { frames: GoldenFrame[]; }
@@ -236,6 +266,13 @@ export interface RunResponse { run_id: string; }
 export interface EnrollRequest { terminal_id: number; n?: number; }
 export interface OkResponse { ok: boolean; }
 export interface SetKeyRequest { terminal_id: number; key_hex?: string; }
+/* finals-demo-drone:POST /api/drone/cmd —— 200/409 都有 JSON 体(409=业务态)。 */
+export interface DroneCmdRequest {
+  terminal_id: number;
+  cmd: 'arm' | 'disarm' | 'launch' | 'takeoff' | 'goto' | 'hold' | 'land' | 'rtl' | 'lock';
+  x?: number; y?: number; alt?: number;   // goto 航点
+}
+export interface DroneCmdResponse { ok: boolean; state: DroneFlightState; reason?: string; }
 
 /* viz 数据端点 */
 /** B1:ML 攻击实验数据(/api/viz/ml;W4 真实产物,source=STATIC) */

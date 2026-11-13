@@ -10,7 +10,8 @@
  *  · ui:帧速滑杆/顶栏隐藏/右栏抽屉/3D 接管结果等纯前端偏好,不上报后端。
  * ============================================================ */
 import type {
-  ConfirmDone, EnrollDone, FrameEvent, GrayExtra, LinkStatus, PoolWarning,
+  ConfirmDone, DroneAttitudeEvent, DroneStateEvent, EnrollDone, FrameEvent,
+  GrayExtra, LinkStatus, PoolWarning,
   ResultCode, RunError, ServerLog, SessionUpdate, SourceBadge, Verdict,
 } from './types';
 import { tidNum } from './format';
@@ -93,6 +94,14 @@ export interface AppState {
   /* 数据源徽章三态(§4.4)。桥接 --mock 时 link.version 以 "-mock" 结尾
    * (web_bridge.py:1039),据此判定,不靠猜。 */
   source: SourceBadge;
+  /* finals-demo-drone:per-tid 无人机演示态(state 事件 + 最近一帧姿态遥测)。
+   * att 由 10Hz drone.attitude 滚动覆盖,不积历史。 */
+  drones: Map<number, DroneEntry>;
+}
+
+/* finals-demo-drone:store 侧无人机条目 */
+export interface DroneEntry extends DroneStateEvent {
+  att?: DroneAttitudeEvent;
 }
 
 type Listener = (s: AppState) => void;
@@ -123,6 +132,7 @@ class Store {
     },
     runCount: 0,
     source: 'REAL-LIVE',
+    drones: new Map(),
   };
   private runOrder: string[] = [];
   private listeners = new Set<Listener>();
@@ -155,8 +165,10 @@ class Store {
     link: LinkStatus;
     templates: { terminal_id: string; n_pairs: number; stable_bits: number | null }[];
     pools: { terminal_id: number; remaining: number; pool_size: number; pct: number }[];
+    drone?: { tids: Record<string, DroneStateEvent> };   // finals-demo-drone
   }): void {
     this.setLink(st.link, /* quiet */ true);
+    if (st.drone) this.ingestDrones(st.drone);
     for (const row of st.templates) {
       const id = tidNum(row.terminal_id);
       const t = this.terminal(id);
@@ -205,6 +217,40 @@ class Store {
     if (this.state.selectedTerminal === id) return;
     this.state.selectedTerminal = id;
     this.state.run = null;        // 切换选中即清舞台(§6.4 动画锁定当前终端)
+    this.emit();
+  }
+
+  /* ---------- finals-demo-drone:无人机演示态 ---------- */
+  drone(id: number): DroneEntry {
+    let d = this.state.drones.get(id);
+    if (!d) {
+      const blank: DroneEntry = {
+        terminal_id: id, state: 'LANDED', unlocked: false,
+        pos: [0, 0, 0], yaw: 0,
+      };
+      d = blank;
+      this.state.drones.set(id, d);
+    }
+    return d;
+  }
+
+  upsertDrone(id: number, ev: DroneStateEvent): void {
+    const d = this.drone(id);
+    Object.assign(d, ev);         // att 保留(姿态滚动由 setDroneAttitude 单独管)
+    this.emit();
+  }
+
+  setDroneAttitude(id: number, att: DroneAttitudeEvent): void {
+    this.drone(id).att = att;
+    this.emit();
+  }
+
+  /* /api/status.drone 全量灌入(SSE 断档重同步):重建 map,att 清空由下一帧补。 */
+  ingestDrones(drone: { tids: Record<string, DroneStateEvent> }): void {
+    this.state.drones = new Map();
+    for (const [k, ev] of Object.entries(drone.tids ?? {})) {
+      this.state.drones.set(Number(k), { ...ev });
+    }
     this.emit();
   }
 

@@ -23,6 +23,7 @@ import type { AuthMode, Envelope } from './core/types';
 
 import { AuditLog } from './components/audit-log';
 import { FrameFlight } from './components/frame-flight';
+import { DronePanel } from './components/drone-panel';
 import { IdsBanner } from './components/ids-banner';
 import { LeftPanel } from './components/left-panel';
 import { RightPanel } from './components/right-panel';
@@ -77,6 +78,9 @@ document.body.appendChild(new IdsBanner().el);
 
 /* N6(finals-demo): 帧飞行动画(自订阅 puf:frame,数据流具象化,悬浮 body) */
 document.body.appendChild(new FrameFlight().el);
+
+/* finals-demo-drone:无人机演示 HUD(自订阅 store.drones,右下悬浮) */
+document.body.appendChild(new DronePanel().el);
 
 /* 组件元素**顶替**占位容器(而非塞进去):console.html 的五个容器就是
  * #app / #console-layout 的网格项,把组件套在容器里会让网格行高与实际
@@ -142,6 +146,20 @@ function wireStore(): void {
   }));
   onPuf('puf:runerror', p => store.onRunError(p));
   onPuf('puf:session', p => store.onSession(p));
+  // finals-demo-drone:无人机演示层事件汇聚(HUD/3D/审计同源)
+  onPuf('puf:drone-state', p => store.upsertDrone(p.terminal_id, p));
+  onPuf('puf:drone-attitude', p => store.setDroneAttitude(p.terminal_id, p));
+  onPuf('puf:drone-ack', p => store.log({
+    tone: p.ok ? 'ok' : 'bad', sev: p.ok ? 'info' : 'warn',
+    terminalId: p.terminal_id, runId: null, type: 'drone.cmd_ack',
+    text: p.ok ? `飞控指令 ${p.cmd} 已接受`
+               : `飞控指令 ${p.cmd} 被拒:${p.reason ?? '?'}`,
+  }));
+  onPuf('puf:drone-reject', p => store.log({
+    tone: 'error', sev: 'error', terminalId: p.terminal_id, runId: null,
+    type: 'drone.reject',
+    text: `飞控指令 ${p.cmd} 拒绝:${p.reason === 'AUTH_REQUIRED' ? '未认证,飞行已锁定' : p.reason}`,
+  }));
   onPuf('puf:link', p => {
     store.setLink(p);
     /* 桥接每 5s 发一次 link.status 心跳(§8.3)。若逐条入日志,底栏会被

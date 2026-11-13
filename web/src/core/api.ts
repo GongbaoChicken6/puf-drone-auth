@@ -7,7 +7,8 @@
 import { dispatchPuf } from './bus';
 import { EVENT_TYPES } from './types';
 import type {
-  AuthRequest, EnrollRequest, Envelope, GoldenFramesResponse, HdSeries,
+  AuthRequest, DroneCmdRequest, DroneCmdResponse, EnrollRequest, Envelope,
+  GoldenFramesResponse, HdSeries,
   MlBundle, OkResponse, PayloadMap, ReliabilityData, SetKeyRequest,
   StatusResponse, RunResponse, VizMeasurements, VizTemplates,
 } from './types';
@@ -35,6 +36,19 @@ export const api = {
   poll: (terminalId: number) => post<RunResponse>('/poll', { terminal_id: terminalId }),
   c2reset: (terminalId: number) => post<OkResponse>('/c2reset', { terminal_id: terminalId }),
   setkey: (body: SetKeyRequest) => post<OkResponse>('/setkey', body),
+
+  /* finals-demo-drone:专用不抛错封装 —— 既有 post→json() 在 !res.ok 时直接
+   * throw,409 响应体里的 reason 会被丢掉,面板拿不到拒绝原因(设计 R1-P2-1)。 */
+  droneCmd: async (body: DroneCmdRequest): Promise<DroneCmdResponse> => {
+    const res = await fetch(`${BASE}/drone/cmd`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    // 200/409 都读响应体;仅响应体读不出(网络级)才走 catch 兜底
+    return res.json().catch(() => ({ ok: false, state: 'LANDED' as const,
+      reason: `HTTP ${res.status}` }));
+  },
 };
 
 async function post<T>(path: string, body: unknown): Promise<T> {

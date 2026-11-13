@@ -713,3 +713,36 @@
 .ff-chip.down { border-color: #8f5a2d; color: #ffd9a8; }
 .hv-field .cn { margin-left: 6px; font-style: normal; font-size: 11px; opacity: 0.72; }
 .hv-field .v.crypto { color: #ffcf7d; }
+
+/* ================= finals-demo-drone:无人机演示 HUD(右下悬浮) ================= */
+.drone-panel {
+  position: fixed; right: 14px; bottom: 44px; z-index: 60;
+  width: 292px; padding: 10px 12px;
+  background: #10151d; border: 1px solid #2a3242;
+  border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.45);
+  font-size: 12px;
+}
+.drone-panel.dp-none { opacity: .35; pointer-events: none; }
+.dp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.dp-title { font-weight: 600; }
+.dp-chip { padding: 1px 8px; border-radius: 999px; font-weight: 600; }
+.dp-chip.locked { background: #4a1f24; color: #ff9aa5; }
+.dp-chip.idle { background: #1d3342; color: #7ec8f0; }
+.dp-chip.fly { background: #16351f; color: #7df0a2; }
+.dp-body { display: flex; gap: 10px; align-items: center; }
+.dp-horizon { width: 108px; height: 108px; flex: none; }
+.dp-sky { fill: #2d6cb5; } .dp-ground { fill: #6b5a2c; }
+.dp-hline { stroke: rgba(255,255,255,.85); stroke-width: 1.2; }
+.dp-hline.dim { stroke: rgba(255,255,255,.35); }
+.dp-ring { fill: none; stroke: #3a445a; stroke-width: 2; }
+.dp-plane line { stroke: #ffd257; stroke-width: 2.6; }
+.dp-plane circle { fill: #ffd257; }
+.dp-reads { display: grid; grid-template-columns: auto auto; gap: 2px 10px; flex: 1; }
+.dp-reads div { display: flex; gap: 5px; align-items: baseline; }
+.dp-reads span { opacity: .6; }
+.dp-reads b { font-size: 13px; min-width: 38px; text-align: right; }
+.dp-reads i { opacity: .5; font-style: normal; font-size: 10px; }
+.dp-hint { margin: 7px 0 6px; color: #ffb86b; }
+.dp-actions { display: flex; gap: 6px; margin-top: 6px; }
+.dp-actions .btn { flex: 1; padding: 4px 0; font-size: 12px; }
+.dp-flash { margin-top: 7px; color: #ff9aa5; font-weight: 600; }
