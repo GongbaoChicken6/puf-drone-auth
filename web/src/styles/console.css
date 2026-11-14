@@ -746,3 +746,40 @@
 .dp-actions { display: flex; gap: 6px; margin-top: 6px; }
 .dp-actions .btn { flex: 1; padding: 4px 0; font-size: 12px; }
 .dp-flash { margin-top: 7px; color: #ff9aa5; font-weight: 600; }
+
+/* ================= N5(finals-demo): 真板指纹录入向导 ================= */
+.enroll-wizard {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(0,0,0,.55);
+  display: flex; align-items: center; justify-content: center;
+}
+.ew-card {
+  width: 380px; padding: 16px 20px;
+  background: #10151d; border: 1px solid #2a3242;
+  border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+}
+.ew-head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 14px; font-size: 15px; font-weight: 600;
+}
+.ew-form label {
+  display: block; margin: 8px 0; font-size: 13px;
+}
+.ew-form input {
+  width: 100%; margin-top: 4px; padding: 6px 10px;
+  background: #0b0f14; border: 1px solid #2a3242;
+  border-radius: 4px; color: #dcecf5; font-size: 14px;
+}
+.ew-hint { margin: 10px 0; font-size: 12px; color: #ffb86b; }
+.ew-bar {
+  height: 18px; background: #0b0f14; border: 1px solid #2a3242;
+  border-radius: 4px; overflow: hidden; margin: 16px 0 8px;
+}
+.ew-fill {
+  height: 100%; background: #2d6cb5; border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.ew-progress .mono { text-align: center; font-size: 13px; }
+.ew-result .mono div { margin: 4px 0; font-size: 14px; }
+.ew-result .mono b { display: inline-block; width: 72px; opacity: .7; font-weight: 400; }
+.ew-error { margin-top: 10px; color: #ff9aa5; font-size: 13px; }

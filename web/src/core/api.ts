@@ -39,6 +39,9 @@ export const api = {
 
   /* finals-demo-drone:专用不抛错封装 —— 既有 post→json() 在 !res.ok 时直接
    * throw,409 响应体里的 reason 会被丢掉,面板拿不到拒绝原因(设计 R1-P2-1)。 */
+  enrollReal: (body: { terminal_id: number; n?: number; measurements?: number }) =>
+    post<RunResponse>('/enroll_real', body),
+
   droneCmd: async (body: DroneCmdRequest): Promise<DroneCmdResponse> => {
     const res = await fetch(`${BASE}/drone/cmd`, {
       method: 'POST',

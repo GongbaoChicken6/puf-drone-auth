@@ -10,8 +10,8 @@
  *  · ui:帧速滑杆/顶栏隐藏/右栏抽屉/3D 接管结果等纯前端偏好,不上报后端。
  * ============================================================ */
 import type {
-  ConfirmDone, DroneAttitudeEvent, DroneStateEvent, EnrollDone, FrameEvent,
-  GrayExtra, LinkStatus, PoolWarning,
+  ConfirmDone, DroneAttitudeEvent, DroneStateEvent, EnrollDone, EnrollProgress,
+  FrameEvent, GrayExtra, LinkStatus, PoolWarning,
   ResultCode, RunError, ServerLog, SessionUpdate, SourceBadge, Verdict,
 } from './types';
 import { tidNum } from './format';
@@ -97,6 +97,8 @@ export interface AppState {
   /* finals-demo-drone:per-tid 无人机演示态(state 事件 + 最近一帧姿态遥测)。
    * att 由 10Hz drone.attitude 滚动覆盖,不积历史。 */
   drones: Map<number, DroneEntry>;
+  /* N5(finals-demo):真板注册进度(null=无进行中的注册) */
+  enrollProgress: EnrollProgress | null;
 }
 
 /* finals-demo-drone:store 侧无人机条目 */
@@ -133,6 +135,7 @@ class Store {
     runCount: 0,
     source: 'REAL-LIVE',
     drones: new Map(),
+    enrollProgress: null,
   };
   private runOrder: string[] = [];
   private listeners = new Set<Listener>();
@@ -243,6 +246,18 @@ class Store {
   setDroneAttitude(id: number, att: DroneAttitudeEvent): void {
     this.drone(id).att = att;
     this.emit();
+  }
+
+  setEnrollProgress(p: EnrollProgress): void {
+    this.state.enrollProgress = p;
+    this.emit();
+  }
+
+  clearEnrollProgress(): void {
+    if (this.state.enrollProgress != null) {
+      this.state.enrollProgress = null;
+      this.emit();
+    }
   }
 
   /* /api/status.drone 全量灌入(SSE 断档重同步):重建 map,att 清空由下一帧补。

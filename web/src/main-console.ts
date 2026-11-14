@@ -24,6 +24,7 @@ import type { AuthMode, Envelope } from './core/types';
 import { AuditLog } from './components/audit-log';
 import { FrameFlight } from './components/frame-flight';
 import { DronePanel } from './components/drone-panel';
+import { EnrollWizard } from './components/enroll-wizard';
 import { IdsBanner } from './components/ids-banner';
 import { LeftPanel } from './components/left-panel';
 import { RightPanel } from './components/right-panel';
@@ -82,6 +83,19 @@ document.body.appendChild(new FrameFlight().el);
 
 /* finals-demo-drone:无人机演示 HUD(自订阅 store.drones,右下悬浮) */
 document.body.appendChild(new DronePanel().el);
+
+/* N5(finals-demo):真板指纹录入向导(模态,注册按钮触发) */
+const enrollWizard = new EnrollWizard();
+document.body.appendChild(enrollWizard.el);
+// 终端卡的"注册"按钮在 loopback 模式走既有 enroll;真板注册按钮挂在左栏底部
+{
+  const btn = document.createElement('button');
+  btn.className = 'btn amber';
+  btn.textContent = '真板录入';
+  btn.title = 'N5: 串口指纹录入向导(需 --serial-port)';
+  btn.addEventListener('click', () => enrollWizard.open());
+  document.querySelector('#left-panel')?.appendChild(btn);
+}
 
 /* 组件元素**顶替**占位容器(而非塞进去):console.html 的五个容器就是
  * #app / #console-layout 的网格项,把组件套在容器里会让网格行高与实际
@@ -161,6 +175,15 @@ function wireStore(): void {
     type: 'drone.reject',
     text: `飞控指令 ${p.cmd} 拒绝:${p.reason === 'AUTH_REQUIRED' ? '未认证,飞行已锁定' : p.reason}`,
   }));
+  // N5(finals-demo):真板注册进度
+  onPuf('puf:enrollprogress', p => {
+    store.setEnrollProgress(p);
+    store.log({
+      tone: 'info', sev: 'info', terminalId: p.terminal_id, runId: p.run_id,
+      type: 'enroll.progress',
+      text: `注册进度: 批 ${p.batch}/${p.batches} · 测量 ${p.round}/${p.rounds}`,
+    });
+  });
   onPuf('puf:link', p => {
     store.setLink(p);
     /* 桥接每 5s 发一次 link.status 心跳(§8.3)。若逐条入日志,底栏会被

@@ -17,11 +17,12 @@ export type EventType =
   | 'pool.warning' | 'replay.reject' | 'server.log' | 'run.error'
   | 'channel.intrusion' | 'channel.noise'
   | 'poll.sent' | 'confirm.rejected' | 'base.spoof.suspected'
-  | 'drone.state' | 'drone.attitude' | 'drone.cmd_ack' | 'drone.reject';
+  | 'drone.state' | 'drone.attitude' | 'drone.cmd_ack' | 'drone.reject'
+  | 'enroll.progress';
 
 /* 运行期事件名清单(§8.3 表 11 行的 12 个原生死类 + finals-demo 扩展 5 类
  * + finals-demo-drone 扩展 4 类(drone.state/attitude/cmd_ack/reject),
- * 共 21 个 type —— frame.tx 与 frame.rx 同行但为两类)。
+ * 共 22 个 type —— frame.tx 与 frame.rx 同行但为两类)。
  * 桥接层把 SSE 帧写成**具名事件**(web_bridge.py:1233 `event: <type>`),
  * 因此 EventSource 的 onmessage 不会触发,订阅方必须按名 addEventListener;
  * 这里同时是审计日志过滤器的选项来源。新增事件类型须双侧同步(扩展时同步更新计数)。
@@ -34,6 +35,7 @@ export const EVENT_TYPES = [
   'channel.intrusion', 'channel.noise',
   'poll.sent', 'confirm.rejected', 'base.spoof.suspected',
   'drone.state', 'drone.attitude', 'drone.cmd_ack', 'drone.reject',
+  'enroll.progress',
 ] as const satisfies readonly (EventType & keyof PayloadMap)[];
 
 type _EventTypesExhaustive =
@@ -201,6 +203,16 @@ export interface DroneAttitudeEvent {
 export interface DroneCmdAck { terminal_id: number; cmd: string; ok: boolean; reason?: string; }
 export interface DroneReject { terminal_id: number; cmd: string; reason: string; }
 
+/* N5(finals-demo):真板注册进度(桥 enroll_real.py → hub → SSE) */
+export interface EnrollProgress {
+  run_id: string;
+  terminal_id: number;
+  batch: number;      // 当前批(1-based)
+  batches: number;    // 总批数
+  round: number;      // 当前测量轮(1-based)
+  rounds: number;     // 总测量轮数
+}
+
 export interface ServerLog { level: 'info' | 'warn' | 'error'; msg: string; }
 export interface RunError { run_id: string; stage: string; error: string; terminal_id?: number | null; }
 
@@ -227,6 +239,7 @@ export interface PayloadMap {
   'drone.attitude': DroneAttitudeEvent;
   'drone.cmd_ack': DroneCmdAck;
   'drone.reject': DroneReject;
+  'enroll.progress': EnrollProgress;
 }
 
 /* ---------- REST(§8.2) ---------- */
