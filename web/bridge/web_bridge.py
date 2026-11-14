@@ -2133,13 +2133,6 @@ class RealSerialListener:
                     try:
                         # R2 P2:全程持串口锁(含读写)——与 _do_poll/N5 enroll 的
                         # 写口互斥;忙标志给 poll 快速忙拒,不必等锁
-                elif (mid == 0x0092
-                      and getattr(self.app, "enroll_session_active", False)):
-                    # N5: enrollment RESPONSE_R1 -> queue
-                    try:
-                        self.app.enroll_response_q.put_nowait(fl)
-                    except Exception:
-                        pass
                         self.app.auth_in_progress = True
                         with self.app.serial_bus_lock:
                             self._auth(int(fl.get("terminal_id",0)), fl, frame)
@@ -2147,6 +2140,13 @@ class RealSerialListener:
                         self._log(f"REAL auth handler error (thread kept alive): {type(e).__name__}: {e}", "error")
                     finally:
                         self.app.auth_in_progress = False
+                elif (mid == 0x0092
+                      and getattr(self.app, "enroll_session_active", False)):
+                    # N5: enrollment RESPONSE_R1 -> queue
+                    try:
+                        self.app.enroll_response_q.put_nowait(fl)
+                    except Exception:
+                        pass
                 elif (mid in (0x0091, 0x0093, 0x0095)
                       and not getattr(self.app, "enroll_session_active", False)):
                     # N2(finals-demo) 信道 IDS:0x0091/0x0093/0x0095 是站端→终端方向的
