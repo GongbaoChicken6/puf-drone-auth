@@ -1055,6 +1055,8 @@ class RealApp:
         # 在窗口内静默(注册期站端自己连发 0x0091,防自触发)。在此显式初始化,
         # 使 N5 接线若命名/宿主漂移在导入/首跑即显形,而不是注册演示日弹假红警。
         self.enroll_session_active = False
+        # N5(finals-demo): response queue for real-board enrollment
+        self.enroll_response_q: Queue = Queue()
         # auto-review R2 P2:串口写互斥锁——_auth(监听线程)与 _do_poll(编排
         # 线程)/N5 enroll runner 并发写同一 ser 会在线上交错损帧;锁住全部写口。
         self.serial_bus_lock = threading.Lock()
@@ -1544,6 +1546,13 @@ class MockApp:
         self._q.put((run_id, int(tid), str(mode)))
         return run_id
 
+    def submit_enroll_real(self, tid, n, measurements):
+        run_id = "mock-er" + str(int(time.time() * 1000) % 100000)
+        self.hub.publish("run.error", {
+            "run_id": run_id, "stage": "enroll_real", "terminal_id": tid,
+            "error": "enroll_real requires real-serial mode: mock has no board"})
+        return run_id
+
     def submit_poll(self, tid: int) -> str:
         # N4(finals-demo): mock 模式无真板可唤醒,同步回错误(不挂起不假成功);
         # run_id 事件与返回值同源(store.onRunError 按 run_id 关联,R2 P3)
@@ -1714,6 +1723,11 @@ class BridgeHandler(BaseHTTPRequestHandler):
                     int(body["terminal_id"]), int(body.get("n", 100)))})
             if path == "/api/poll":
                 return self._json({"run_id": app.submit_poll(int(body["terminal_id"]))})
+            if path == "/api/enroll_real":        # N5(finals-demo)
+                from enroll_real import submit_enroll_real as _ser
+                return self._json({"run_id": _ser(app,
+                    int(body["terminal_id"]), int(body.get("n", 100)),
+                    int(body.get("measurements", 3)))})
             if path == "/api/c2reset":
                 return self._json({"ok": app.c2reset(int(body["terminal_id"]))})
             if path == "/api/setkey":
@@ -2119,6 +2133,13 @@ class RealSerialListener:
                     try:
                         # R2 P2:全程持串口锁(含读写)——与 _do_poll/N5 enroll 的
                         # 写口互斥;忙标志给 poll 快速忙拒,不必等锁
+                elif (mid == 0x0092
+                      and getattr(self.app, "enroll_session_active", False)):
+                    # N5: enrollment RESPONSE_R1 -> queue
+                    try:
+                        self.app.enroll_response_q.put_nowait(fl)
+                    except Exception:
+                        pass
                         self.app.auth_in_progress = True
                         with self.app.serial_bus_lock:
                             self._auth(int(fl.get("terminal_id",0)), fl, frame)
