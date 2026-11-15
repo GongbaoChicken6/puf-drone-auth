@@ -20,6 +20,33 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
 
+# 2) JTAG 自动烧 bit（QSPI 替代方案——板子上电后自动加载最新 bitstream）
+# 仅当板子通过 USB 连接时执行;找不到 JTAG 目标时跳过(不阻断启动)
+if ($SerialPort -ne 'none') {
+    Write-Host "[demo_start] JTAG 烧写双板 bit..."
+    Get-Process hw_server -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+    $vivado = "D:\vivado\2026.1\Vivado\bin\vivado.bat"
+    $tcl = Join-Path $repo "build\tcl\program_zc706.tcl"
+    $bitA = Join-Path $repo "build\board_zc706\w3_top_zc706.bit"
+    $bitB = Join-Path $repo "build\board_zc706_seed2\w3_top_zc706_seed2.bit"
+    foreach ($board in @(
+        @{ Name='板A'; Bit=$bitA; SN='210251A0195C' },
+        @{ Name='板B'; Bit=$bitB; SN='210251A04F2C' }
+    )) {
+        if (-not (Test-Path $board.Bit)) { Write-Host "  $($board.Name): bit 不存在,跳过" -ForegroundColor Yellow; continue }
+        Write-Host "  $($board.Name): 烧写 $($board.Bit)..."
+        $out = & $vivado -mode batch -nojournal -nolog -notrace -source $tcl -tclargs $board.Bit $board.SN 2>&1 | Out-String
+        if ($out -match 'PROGRAM_OK') {
+            Write-Host "  $($board.Name): PROGRAM_OK" -ForegroundColor Green
+        } else {
+            Write-Host "  $($board.Name): JTAG 烧写失败(板子可能未连接),跳过" -ForegroundColor Yellow
+        }
+    }
+    # 杀 hw_server 释放端口给串口用
+    Get-Process hw_server -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+}
+
 # 3) fresh 沙箱(铁律5) —— 提前建,后续探测/自检日志都落这里
 $sandbox = Join-Path $env:TEMP ("puf_demo_start_" + (Get-Date -Format 'yyyyMMdd_HHmmss'))
 New-Item -ItemType Directory -Path $sandbox | Out-Null
