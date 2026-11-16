@@ -1322,10 +1322,19 @@ class RealApp:
             delta = 2.2 - (time.time() - entry["last_request_ts"])
             if delta > 0:
                 time.sleep(delta)
+            # auto-review(R1-F3): 对齐睡眠期间该板被再按 SW7 → 认证已走完并
+            # 出队(finish 清了 entry/selected)。此时不再发 POLL——否则会把
+            # 已验证完的机器重新入队。按"已被并发处理"成功返回。
+            if gate.snapshot(tid) is None or gate.selected_tid != tid:
+                return 200, {"ok": True, "terminal_id": tid, "run_id": run_id,
+                             "note": "already consumed by concurrent auth"}
             try:
                 self._poll_wake_once(ln, tid, run_id)
             except TimeoutError:
                 time.sleep(2.2)   # 防御性重试(板 BLOCKED 长滞/首帧丢失)
+                if gate.snapshot(tid) is None or gate.selected_tid != tid:
+                    return 200, {"ok": True, "terminal_id": tid, "run_id": run_id,
+                                 "note": "already consumed by concurrent auth"}
                 self._poll_wake_once(ln, tid, run_id)
         except Exception as exc:  # noqa: BLE001 —— 唤醒失败必须回滚选中
             gate.clear_selected(tid)
@@ -2614,6 +2623,10 @@ class RealSerialListener:
         if gate is None:
             return
         st = gate.park(tid, self.ser.port, time.time())
+        # auto-review(R1-F1): parked 请求也必须刷新 poll 成功信号——
+        # _do_poll/_poll_wake_once 只认 last_access_request_ts;闸门模式下
+        # /api/poll 唤醒的板子回应会被入队,不刷时间戳 = poll 假超时。
+        self.app.last_access_request_ts = time.time()
         if st.startswith("conflict:"):
             # SW12 拨码疑似重复:同 tid 出现在两个串口——显式哨兵而非静默覆盖
             self._log(f"ACCESS GATE: SW12 拨码疑似重复——tid={tid} 已在 "

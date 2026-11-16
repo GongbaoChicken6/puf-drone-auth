@@ -253,6 +253,47 @@ class TestAccessSelect(unittest.TestCase):
                         f"expected ~2.1s alignment sleep, got {sleeps}")
 
 
+class TestPollWakeOnce(unittest.TestCase):
+    """auto-review R1-F2: _poll_wake_once 真路径(此前被 select 测试全 stub)。
+    覆盖:AUTH_POLL 帧写入(0xFD 头/先写后发纪律)、poll.sent+frame.tx 事件、
+    3s 无回应超时路径。"""
+
+    def _app_with_serial(self):
+        app = make_app()
+        app.hub = CapHub()
+        app.serial_bus_lock = threading.Lock()
+        app.protocol = _PROTO
+        app.last_access_request_ts = 0.0
+        ln = types.SimpleNamespace(running=True, ser=FakeSerial("COM6"))
+        return app, ln
+
+    def test_writes_frame_publishes_after_write(self):
+        app, ln = self._app_with_serial()
+        threading.Timer(0.05, lambda: setattr(
+            app, "last_access_request_ts", time.time())).start()
+        web_bridge.RealApp._poll_wake_once(app, ln, 1, "r-wake")
+        self.assertEqual(len(ln.ser.written), 1)
+        frame = ln.ser.written[0]
+        self.assertEqual(frame[0], 0xFD)              # 帧头
+        # 用协议解帧(勿猜偏移):msg_id=AUTH_POLL、tid 正确
+        mid, fl = _PROTO.parse(frame)
+        self.assertEqual(mid, 0x0097)
+        self.assertEqual(int(fl.get("terminal_id", 0)), 1)
+        kinds = [e[0] for e in app.hub.events]
+        self.assertIn("poll.sent", kinds)
+        self.assertIn("frame.tx", kinds)
+        ps = next(p for t, p in app.hub.events if t == "poll.sent")
+        self.assertEqual(ps["terminal_id"], 1)
+        self.assertIn("nonce", ps)
+
+    def test_timeout_raises_when_board_silent(self):
+        app, ln = self._app_with_serial()             # 无线程回应
+        with self.assertRaises(TimeoutError):
+            web_bridge.RealApp._poll_wake_once(app, ln, 1, "r-silent")
+        # 超时路径也必须已写过帧(先写后查,不伪造)
+        self.assertEqual(len(ln.ser.written), 1)
+
+
 class TestListenerParkPath(unittest.TestCase):
     """_loop 0x0090 分支:park 路径不进 _auth、不发 frame.rx(F12 顺序)。"""
 
@@ -269,6 +310,9 @@ class TestListenerParkPath(unittest.TestCase):
         ln.ser = FakeSerial("COM6")
         ln.running = True
         ln._park(1)
+        # auto-review R1-F1: parked 请求必须刷新 poll 成功信号(否则闸门模式下
+        # /api/poll 板子已回应却判假超时)
+        self.assertGreater(app.last_access_request_ts, 0.0)
         kinds = [e[0] for e in app.hub.events]
         self.assertIn("access.requested", kinds)
         payload = dict(app.hub.events[0][1])
