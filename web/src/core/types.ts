@@ -18,11 +18,13 @@ export type EventType =
   | 'channel.intrusion' | 'channel.noise'
   | 'poll.sent' | 'confirm.rejected' | 'base.spoof.suspected'
   | 'drone.state' | 'drone.attitude' | 'drone.cmd_ack' | 'drone.reject'
-  | 'enroll.progress';
+  | 'enroll.progress'
+  | 'access.requested' | 'access.selected' | 'access.finished' | 'access.dismissed';
 
 /* 运行期事件名清单(§8.3 表 11 行的 12 个原生死类 + finals-demo 扩展 5 类
- * + finals-demo-drone 扩展 4 类(drone.state/attitude/cmd_ack/reject),
- * 共 22 个 type —— frame.tx 与 frame.rx 同行但为两类)。
+ * + finals-demo-drone 扩展 4 类(drone.state/attitude/cmd_ack/reject)
+ * + finals-demo-N6 扩展 4 类(access.requested/selected/finished/dismissed),
+ * 共 26 个 type —— frame.tx 与 frame.rx 同行但为两类)。
  * 桥接层把 SSE 帧写成**具名事件**(web_bridge.py:1233 `event: <type>`),
  * 因此 EventSource 的 onmessage 不会触发,订阅方必须按名 addEventListener;
  * 这里同时是审计日志过滤器的选项来源。新增事件类型须双侧同步(扩展时同步更新计数)。
@@ -36,6 +38,7 @@ export const EVENT_TYPES = [
   'poll.sent', 'confirm.rejected', 'base.spoof.suspected',
   'drone.state', 'drone.attitude', 'drone.cmd_ack', 'drone.reject',
   'enroll.progress',
+  'access.requested', 'access.selected', 'access.finished', 'access.dismissed',
 ] as const satisfies readonly (EventType & keyof PayloadMap)[];
 
 type _EventTypesExhaustive =
@@ -213,6 +216,40 @@ export interface EnrollProgress {
   rounds: number;     // 总测量轮数
 }
 
+/* finals-demo-N6: 接入闸门——SW7 主动认证人工选择队列(方案v2,
+ * docs/process/plans/access_gate_design_20261116.md) */
+export interface AccessRequested {
+  terminal_id: number;
+  port: string;           // 入队监听串口(如 COM6)
+  label: string;          // --access-label 标签(默认 终端#tid)
+  first_seen_ts: number;  // epoch 秒
+  repeats: number;        // 重复按压次数(刷新等待窗)
+}
+export interface AccessSelected { terminal_id: number; ts: string; run_id: string; }
+export interface AccessFinished { terminal_id: number; state: string; }  // SESSION|BLOCKED
+export interface AccessDismissed { terminal_id: number; }
+/* GET /api/access/queue(页面刷新恢复) */
+export interface AccessQueueEntry {
+  terminal_id: number;
+  port: string;
+  label: string;
+  first_seen_ts: number;
+  last_request_ts: number;
+  repeats: number;
+}
+export interface AccessQueueResponse {
+  entries: AccessQueueEntry[];
+  selected: number | null;
+  enabled: boolean;
+}
+/* POST /api/access/select|dismiss:200/404/409 都有 JSON 体(reason 上屏) */
+export interface AccessActionResponse {
+  ok: boolean;
+  terminal_id?: number;
+  run_id?: string;
+  reason?: string;
+}
+
 export interface ServerLog { level: 'info' | 'warn' | 'error'; msg: string; }
 export interface RunError { run_id: string; stage: string; error: string; terminal_id?: number | null; }
 
@@ -240,6 +277,10 @@ export interface PayloadMap {
   'drone.cmd_ack': DroneCmdAck;
   'drone.reject': DroneReject;
   'enroll.progress': EnrollProgress;
+  'access.requested': AccessRequested;
+  'access.selected': AccessSelected;
+  'access.finished': AccessFinished;
+  'access.dismissed': AccessDismissed;
 }
 
 /* ---------- REST(§8.2) ---------- */

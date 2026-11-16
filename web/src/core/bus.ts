@@ -31,6 +31,10 @@ export const PUF_EVENT = {
   'drone.cmd_ack': 'puf:drone-ack',
   'drone.reject': 'puf:drone-reject',
   'enroll.progress': 'puf:enrollprogress',
+  'access.requested': 'puf:access-requested',
+  'access.selected': 'puf:access-selected',
+  'access.finished': 'puf:access-finished',
+  'access.dismissed': 'puf:access-dismissed',
 } as const satisfies Record<import('./types').EventType, string>;
 
 /* 舞台握手与舞台侧指令(§8.5:页面与 3D 模块的挂载契约)。

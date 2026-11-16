@@ -825,11 +825,15 @@ class Orchestrator:
         if getattr(app, "auth_in_progress", False):
             raise RuntimeError("auth in progress -- poll rejected; "
                                "retry after the current round completes")
-        ln = getattr(app, "serial_listener", None)
+        # finals-demo-N6: 按 tid 路由监听器(多口模式防 poll 打错板;单口/旧
+        # 测试 SimpleNamespace 无此方法时走原单引用路径,行为不变)
+        ln = (app.resolve_listener(tid) if hasattr(app, "resolve_listener")
+              else getattr(app, "serial_listener", None))
         if ln is None or not getattr(ln, "running", False):
             raise RuntimeError(
                 "poll requires real-serial mode (--serial-port): "
-                "loopback/mock has no board to wake")
+                "loopback/mock has no board to wake; multi-port mode needs "
+                "--tid-port (or a queued SW7 entry) to locate this tid's port")
         nonce = time.time_ns() & 0xFFFFFFFF
         frame = self.protocol.pack(
             self.P.MSG_AUTH_POLL, terminal_id=tid, nonce=nonce)
@@ -1098,6 +1102,16 @@ class RealApp:
         self.mavlink_fwd = (_mavlink_start_udp(self.hub, self.drone,
                                                args.mavlink_udp)
                             if getattr(args, "mavlink_udp", None) else None)
+        # finals-demo-N6(access gate): 接入闸门——SW7 主动认证的人工选择队列
+        # (方案v2: docs/process/plans/access_gate_design_20261116.md)。
+        # decide() 必须在 proto.on_access_request 之前调用(C2 重放窗只在其中
+        # 消费,入队不得污染:F12);多串口时 main() 强制 enabled=True——两板
+        # 并发 SW7 的串行化保护(未选中的一律入队,防 _auth 状态交叉污染)。
+        self.serial_listeners: dict = {}
+        self.tid_port_map: dict = parse_int_kv(getattr(args, "tid_port", None))
+        self.access_gate = AccessGate(
+            enabled=bool(getattr(args, "access_gate", False)),
+            labels=parse_int_kv(getattr(args, "access_label", None)))
 
     # ---- 生命周期 ----
     def start(self) -> None:
@@ -1233,6 +1247,116 @@ class RealApp:
         run_id = self.orch.next_run_id()
         self.orch.submit(Job(kind="poll", tid=tid, run_id=run_id))
         return run_id
+
+    # ---- finals-demo-N6: 接入闸门 REST 面(access gate) ----
+    def resolve_listener(self, tid: int):
+        """tid → 监听器路由。查表顺序:闸门队列 port → --tid-port 静态映射 →
+        单监听器直通;多监听器且无映射 → None(调用方给人话错误)。
+        方案v2 R1-P1 修复:原 serial_listener 单引用在双口下会把板B的 poll
+        打到板A口(含录入向导"验证认证"按钮)。"""
+        lns = getattr(self, "serial_listeners", None) or {}
+        if not lns:
+            return getattr(self, "serial_listener", None)
+        gate = getattr(self, "access_gate", None)
+        if gate is not None:
+            e = gate.snapshot(int(tid))
+            if e and e["port"] in lns:
+                return lns[e["port"]]
+        port = self.tid_port_map.get(int(tid))
+        if port and port in lns:
+            return lns[port]
+        if len(lns) == 1:
+            return next(iter(lns.values()))
+        return None
+
+    def _poll_wake_once(self, ln, tid: int, run_id: str) -> None:
+        """发一帧 AUTH_POLL 并等 ACCESS_REQUEST(3s)。纪律照抄 _do_poll:
+        串口锁内写、先写后发(时间线不出现未发出的帧)。超时抛 TimeoutError。"""
+        nonce = time.time_ns() & 0xFFFFFFFF
+        frame = self.protocol.pack(
+            type(self.protocol).MSG_AUTH_POLL, terminal_id=tid, nonce=nonce)
+        base = getattr(self, "last_access_request_ts", 0.0)
+        with self.serial_bus_lock:
+            ln.ser.write(frame); ln.ser.flush()
+        self.hub.publish("poll.sent",
+                         {"run_id": run_id, "terminal_id": tid, "nonce": nonce})
+        self.hub.publish("frame.tx", {
+            "run_id": run_id, "terminal_id": tid,
+            "msg_id": type(self.protocol).MSG_AUTH_POLL, "name": "AUTH_POLL",
+            "hex": frame.hex(), "len": len(frame),
+            "dir": "server->term", "source": "real-terminal"})
+        t0 = time.time()
+        while time.time() - t0 < 3.0:
+            if getattr(self, "last_access_request_ts", 0.0) > base:
+                return
+            time.sleep(0.02)
+        raise TimeoutError("no ACCESS_REQUEST within 3s after AUTH_POLL")
+
+    def access_select(self, tid: int) -> tuple[int, dict]:
+        """POST /api/access/select:人工选择一台排队机器 → 2.2s 边界对齐唤醒。
+
+        时序依据(方案v2 F10/F11,RTL 定案):板端 2s 等待窗内 POLL 被无视,
+        超时即回 S_IDLE——故等 last_request_ts+2.2 再发,一击命中;
+        失败防御性重试一次(再对齐 2.2s),仍失败回滚选中并 409。"""
+        tid = int(tid)
+        gate = getattr(self, "access_gate", None)
+        if gate is None or not gate.enabled:
+            return 409, {"ok": False,
+                         "reason": "access gate disabled (start with --access-gate)"}
+        reason = gate.can_select(tid)
+        if reason:
+            code = 404 if reason == "not queued" else 409
+            return code, {"ok": False, "reason": reason}
+        ln = self.resolve_listener(tid)
+        if ln is None or not getattr(ln, "running", False):
+            return 409, {"ok": False,
+                         "reason": f"tid={tid} 的串口无法定位:多口模式需 --tid-port "
+                                   f"或该机先按一次 SW7 入队"}
+        if getattr(self, "auth_in_progress", False):
+            return 409, {"ok": False,
+                         "reason": "auth in progress; retry after current round"}
+        entry = gate.snapshot(tid)
+        run_id = f"gate-{int(time.time() * 1000)}"
+        gate.set_selected(tid)   # 先置选中:唤醒到达的新请求 decide() 即放行
+        try:
+            delta = 2.2 - (time.time() - entry["last_request_ts"])
+            if delta > 0:
+                time.sleep(delta)
+            try:
+                self._poll_wake_once(ln, tid, run_id)
+            except TimeoutError:
+                time.sleep(2.2)   # 防御性重试(板 BLOCKED 长滞/首帧丢失)
+                self._poll_wake_once(ln, tid, run_id)
+        except Exception as exc:  # noqa: BLE001 —— 唤醒失败必须回滚选中
+            gate.clear_selected(tid)
+            return 409, {"ok": False, "reason":
+                         f"唤醒失败({exc}):板端可能 BLOCKED(按 SW13 重置后重试)或链路断"}
+        self.hub.publish("access.selected",
+                         {"terminal_id": tid, "ts": now_iso(), "run_id": run_id})
+        return 200, {"ok": True, "terminal_id": tid, "run_id": run_id}
+
+    def access_dismiss(self, tid: int) -> tuple[int, dict]:
+        """POST /api/access/dismiss:手动撤下排队条目(选中验证中的拒 409)。"""
+        tid = int(tid)
+        gate = getattr(self, "access_gate", None)
+        if gate is None or not gate.enabled:
+            return 409, {"ok": False, "reason": "access gate disabled"}
+        reason = gate.can_dismiss(tid)
+        if reason:
+            code = 404 if reason == "not queued" else 409
+            return code, {"ok": False, "reason": reason}
+        gate.dismiss(tid)
+        self.hub.publish("access.dismissed", {"terminal_id": tid})
+        return 200, {"ok": True, "terminal_id": tid}
+
+    def access_queue(self) -> dict:
+        """GET /api/access/queue:队列快照(页面刷新恢复)。"""
+        gate = getattr(self, "access_gate", None)
+        if gate is None or not gate.enabled:
+            return {"entries": [], "selected": None,
+                    "enabled": bool(gate is not None and gate.enabled)}
+        return {"entries": gate.queue_snapshot(),
+                "selected": gate.selected_tid, "enabled": True}
 
     def c2reset(self, tid: int) -> bool:
         return bool(self.orch.submit_sync(Job(kind="c2reset", tid=tid)).result)
@@ -1563,6 +1687,17 @@ class MockApp:
             "error": "poll requires real-serial mode: mock has no board to wake"})
         return run_id
 
+    # finals-demo-N6: mock 无真板无闸门——与 submit_poll 同款"同步回错"语义
+    def access_select(self, tid: int) -> tuple[int, dict]:
+        return 409, {"ok": False,
+                     "reason": "access gate requires real-serial mode: mock has no board"}
+
+    def access_dismiss(self, tid: int) -> tuple[int, dict]:
+        return 409, {"ok": False, "reason": "access gate disabled (mock mode)"}
+
+    def access_queue(self) -> dict:
+        return {"entries": [], "selected": None, "enabled": False}
+
     def drone_cmd(self, tid: int, cmd: str, body: dict) -> dict:
         """finals-demo-drone:与 RealApp 同名方法同构(mock 路径一致)。"""
         return self.drone.command(tid, cmd,
@@ -1688,6 +1823,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
             return self._json({"frames": app.golden_frames()})
         if path == "/api/events":
             return self._handle_sse()
+        if path == "/api/access/queue":     # finals-demo-N6: 队列快照(刷新恢复)
+            return self._json(app.access_queue())
         if path == "/api/viz/hd":
             return self._json(app.viz_hd("fresh=1" in self.path))
         if path == "/api/viz/templates":
@@ -1739,6 +1876,12 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 r = app.drone_cmd(int(body["terminal_id"]),
                                   str(body.get("cmd", "")), body)
                 return self._json(r, 200 if r.get("ok") else 409)
+            if path == "/api/access/select":       # finals-demo-N6: 人工选择唤醒
+                code, body_out = app.access_select(int(body["terminal_id"]))
+                return self._json(body_out, code)
+            if path == "/api/access/dismiss":      # finals-demo-N6: 手动撤下
+                code, body_out = app.access_dismiss(int(body["terminal_id"]))
+                return self._json(body_out, code)
             return self._json({"error": "not found"}, 404)
         except (KeyError, ValueError, TypeError) as exc:
             return self._json({"error": f"bad request: {exc}"}, 400)
@@ -1885,6 +2028,18 @@ def build_parser() -> argparse.ArgumentParser:
                    help="finals-demo-drone:标准 MAVLink v2 UDP 转发(如 14550;"
                         "QGC 建 UDP 链接监听同端口即可直连演示无人机;"
                         "不开启则零开销)")
+    p.add_argument("--serial-multi", dest="serial_port_multi", default=None,
+                   metavar="COM6,COM11",
+                   help="finals-demo-N6: 多串口监听(逗号分隔);与 --serial-port "
+                        "互斥使用,多口时接入闸门强制开启(并发串行化保护)")
+    p.add_argument("--access-gate", action="store_true",
+                   help="finals-demo-N6: 接入闸门——SW7 主动认证入队,人工选择后 "
+                        "AUTH_POLL 唤醒(多串口模式强制开启)")
+    p.add_argument("--access-label", default=None, metavar="1=板A,2=板B",
+                   help="finals-demo-N6: 接入队列终端标签(默认 终端#tid)")
+    p.add_argument("--tid-port", default=None, metavar="1=COM6,2=COM11",
+                   help="finals-demo-N6: tid→串口静态映射;/api/poll 与闸门唤醒按 "
+                        "tid 路由(多口模式推荐,防 poll 打错板)")
     return p
 
 
@@ -2046,6 +2201,123 @@ def run_once(args) -> int:
     return 0 if ok else 1
 
 
+def parse_int_kv(spec: str | None) -> dict:
+    """finals-demo-N6: "1=板A,2=COM6" → {1:"板A",2:"COM6"}。坏段跳过(容错)。"""
+    out: dict = {}
+    if not spec:
+        return out
+    for part in spec.split(","):
+        part = part.strip()
+        if "=" not in part:
+            continue
+        k, _, v = part.partition("=")
+        try:
+            out[int(k.strip())] = v.strip()
+        except ValueError:
+            continue
+    return out
+
+
+class AccessGate:
+    """finals-demo-N6: SW7 主动认证的人工选择队列(纯逻辑,不碰串口)。
+
+    设计锚点(方案v2 auto-review R2 PASS):
+    - decide() 在 proto.on_access_request 之前调用——入队不污染 C2 重放窗
+      (src/python/server/main.py:169-170,F12)。
+    - 唤醒 = 2.2s 边界对齐后发 AUTH_POLL:板端 2s 等待窗内 POLL 被无视
+      (terminal_fsm.v:392/479-492),超时 S_BLOCKED 立即回 S_IDLE(:930-932)。
+    - 同 tid 出现在不同 port = SW12 拨码疑似重复,拒绝第二条入队(显式哨兵)。
+    """
+
+    def __init__(self, enabled: bool, labels: dict | None = None):
+        self.enabled = enabled
+        self.labels = labels or {}
+        self._lock = threading.Lock()
+        self.entries: dict[int, dict] = {}
+        self.selected_tid: int | None = None
+
+    def label(self, tid: int) -> str:
+        return self.labels.get(int(tid), f"终端#{int(tid)}")
+
+    def decide(self, tid: int, enroll_active: bool = False,
+               auth_busy: bool = False) -> str:
+        """监听线程 0x0090 分支调用:'run'=照旧五帧 | 'park'=入队等待人工选择。"""
+        if not self.enabled:
+            return "run"
+        with self._lock:
+            if enroll_active or auth_busy:
+                return "park"
+            if tid == self.selected_tid:
+                return "run"
+            return "park"
+
+    def park(self, tid: int, port: str, now: float) -> str:
+        """入队/刷新。返回 'new' | 'repeat' | 'conflict:<已有port>'。"""
+        with self._lock:
+            e = self.entries.get(tid)
+            if e is not None:
+                if e["port"] != port:
+                    return f"conflict:{e['port']}"
+                e["repeats"] += 1
+                e["last_request_ts"] = now
+                return "repeat"
+            self.entries[tid] = {
+                "port": port, "label": self.label(tid),
+                "first_seen_ts": now, "last_request_ts": now, "repeats": 0}
+            return "new"
+
+    def snapshot(self, tid: int) -> dict | None:
+        with self._lock:
+            e = self.entries.get(int(tid))
+            return dict(e) if e else None
+
+    def queue_snapshot(self) -> list[dict]:
+        with self._lock:
+            out = []
+            for tid, v in sorted(self.entries.items()):
+                d = dict(v)
+                d["terminal_id"] = tid       # REST 消费者需要键内含 tid
+                out.append(d)
+            return out
+
+    def can_select(self, tid: int) -> str | None:
+        """None=可选择;否则为拒绝原因('not queued' 走 404,其余 409)。"""
+        with self._lock:
+            if tid not in self.entries:
+                return "not queued"
+            if self.selected_tid is not None and self.selected_tid != tid:
+                return "another verification in progress -- finish or dismiss it first"
+            return None
+
+    def can_dismiss(self, tid: int) -> str | None:
+        with self._lock:
+            if tid == self.selected_tid:
+                return "verification in progress -- cannot dismiss"
+            if tid not in self.entries:
+                return "not queued"
+            return None
+
+    def set_selected(self, tid: int) -> None:
+        with self._lock:
+            self.selected_tid = int(tid)
+
+    def clear_selected(self, tid: int) -> None:
+        with self._lock:
+            if self.selected_tid == int(tid):
+                self.selected_tid = None
+
+    def dismiss(self, tid: int) -> bool:
+        with self._lock:
+            return self.entries.pop(int(tid), None) is not None
+
+    def finish(self, tid: int, final_state: str) -> bool:
+        """_auth 尾部调用:清选中+出队。返回是否确有出队(有则发 finished 事件)。"""
+        with self._lock:
+            if self.selected_tid == int(tid):
+                self.selected_tid = None
+            return self.entries.pop(int(tid), None) is not None
+
+
 class RealSerialListener:
     """D2 real-hardware mode: listens on serial for board ACCESS_REQUEST, runs full auth."""
     def __init__(self, app, port, baud):
@@ -2131,11 +2403,26 @@ class RealSerialListener:
                     continue
                 if mid == 0x0090:  # ACCESS_REQUEST
                     try:
-                        # R2 P2:全程持串口锁(含读写)——与 _do_poll/N5 enroll 的
-                        # 写口互斥;忙标志给 poll 快速忙拒,不必等锁
-                        self.app.auth_in_progress = True
-                        with self.app.serial_bus_lock:
-                            self._auth(int(fl.get("terminal_id",0)), fl, frame)
+                        # finals-demo-N6: 接入闸门决策——必须在 _auth(内部调
+                        # proto.on_access_request)之前:F12 重放窗不因入队被动。
+                        # park = 入队等人工选择(access.requested),不跑认证。
+                        _tid = int(fl.get("terminal_id", 0))
+                        _gate = getattr(self.app, "access_gate", None)
+                        if _gate is not None and _gate.enabled:
+                            _act = _gate.decide(
+                                _tid,
+                                enroll_active=bool(getattr(self.app, "enroll_session_active", False)),
+                                auth_busy=bool(getattr(self.app, "auth_in_progress", False)))
+                            if _act == "park":
+                                self._park(_tid)
+                        else:
+                            _act = "run"
+                        if _act == "run":
+                            # R2 P2:全程持串口锁(含读写)——与 _do_poll/N5 enroll 的
+                            # 写口互斥;忙标志给 poll 快速忙拒,不必等锁
+                            self.app.auth_in_progress = True
+                            with self.app.serial_bus_lock:
+                                self._auth(int(fl.get("terminal_id",0)), fl, frame)
                     except Exception as e:  # noqa: BLE001 —— 监听线程必须永死不了
                         self._log(f"REAL auth handler error (thread kept alive): {type(e).__name__}: {e}", "error")
                     finally:
@@ -2311,6 +2598,36 @@ class RealSerialListener:
         else:
             _final_state="BLOCKED"
         self.hub.publish("session.update", {"terminal_id":tid,"state":_final_state})
+        # finals-demo-N6: 选中验证完成 → 出队 + access.finished(闸门关闭时 no-op)
+        _gate = getattr(self.app, "access_gate", None)
+        if _gate is not None and _gate.enabled:
+            try:
+                if _gate.finish(tid, _final_state):
+                    self.hub.publish("access.finished",
+                                     {"terminal_id": tid, "state": _final_state})
+            except Exception as _ge:  # noqa: BLE001 —— 出队失败不得杀监听线程
+                self._log(f"ACCESS GATE finish error: {type(_ge).__name__}: {_ge}", "error")
+
+    def _park(self, tid):
+        """finals-demo-N6: 入队并发布 access.requested(重复按压刷新 repeats)。"""
+        gate = getattr(self.app, "access_gate", None)
+        if gate is None:
+            return
+        st = gate.park(tid, self.ser.port, time.time())
+        if st.startswith("conflict:"):
+            # SW12 拨码疑似重复:同 tid 出现在两个串口——显式哨兵而非静默覆盖
+            self._log(f"ACCESS GATE: SW12 拨码疑似重复——tid={tid} 已在 "
+                      f"{st.split(':', 1)[1]} 入队,来自 {self.ser.port} 的第二条已拒绝",
+                      "error")
+            return
+        e = gate.snapshot(tid)
+        if e:
+            self.hub.publish("access.requested", {
+                "terminal_id": tid, "port": e["port"], "label": e["label"],
+                "first_seen_ts": e["first_seen_ts"], "repeats": e["repeats"]})
+            self._log(f"ACCESS GATE: parked tid={tid} ({e['label']}) on "
+                      f"{e['port']} repeats={e['repeats']} -- waiting for manual select")
+
     def _ef(self,rid,tid,mid,frm,out):
         self.hub.publish("frame.tx" if out else "frame.rx", {
             "run_id":rid,"terminal_id":tid,"msg_id":mid,
@@ -2343,10 +2660,27 @@ def main(argv: list[str] | None = None) -> int:
         server, port = bind_with_selfheal(app, args)
         app.start()
         _serial_listener = None
-        if getattr(args, 'serial_port', None):
-            _serial_listener = RealSerialListener(app, args.serial_port, args.serial_baud)
-            app.serial_listener = _serial_listener  # N4: _do_poll 经此发 AUTH_POLL
-            _serial_listener.start()
+        # finals-demo-N6: 多口监听(--serial-multi COM6,COM11);多口强制开闸门
+        _ports = []
+        if getattr(args, 'serial_port_multi', None):
+            _ports = [p.strip() for p in str(args.serial_port_multi).split(',') if p.strip()]
+        elif getattr(args, 'serial_port', None):
+            _ports = [str(args.serial_port)]
+        if _ports:
+            if len(_ports) > 1 and not app.access_gate.enabled:
+                print("[INFO] finals-demo-N6: 多串口模式强制开启接入闸门"
+                      "(两板并发 SW7 的串行化保护,方案v2)")
+                app.access_gate.enabled = True
+            _first = None
+            for _p in _ports:
+                _ln = RealSerialListener(app, _p, args.serial_baud)
+                app.serial_listeners[_p] = _ln
+                if _first is None:
+                    _first = _ln
+            _serial_listener = _first
+            app.serial_listener = _first  # N4: _do_poll 经此发 AUTH_POLL(单口兼容)
+            for _p in _ports:
+                app.serial_listeners[_p].start()
         url = f"http://{args.bind}:{port}/console.html"
         print(f"[INFO] serving {server.web_dist} -> {url}")
         print("[INFO] Ctrl+C 停止;仅回环流量,不触外网")

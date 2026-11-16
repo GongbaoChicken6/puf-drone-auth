@@ -21,6 +21,7 @@ import { SCENARIOS, ScenarioPlayer, type ScenarioId } from './core/scenario';
 import { store } from './core/store';
 import type { AuthMode, Envelope } from './core/types';
 
+import { AccessPopup } from './components/access-popup';
 import { AuditLog } from './components/audit-log';
 import { FrameFlight } from './components/frame-flight';
 import { DronePanel } from './components/drone-panel';
@@ -87,6 +88,13 @@ document.body.appendChild(new DronePanel().el);
 /* N5(finals-demo):真板指纹录入向导(模态,注册按钮触发) */
 const enrollWizard = new EnrollWizard();
 document.body.appendChild(enrollWizard.el);
+
+/* finals-demo-N6:接入闸门——SW7 主动认证人工选择队列(自订阅 puf:access-*,
+ * 弹窗+右下待接入徽标;方案v2 docs/process/plans/access_gate_design_20261116.md) */
+const accessPopup = new AccessPopup();
+accessPopup.bind();
+document.body.appendChild(accessPopup.el);
+document.body.appendChild(accessPopup.badgeEl);
 // 终端卡的"注册"按钮在 loopback 模式走既有 enroll;真板注册按钮挂在左栏底部
 {
   const btn = document.createElement('button');

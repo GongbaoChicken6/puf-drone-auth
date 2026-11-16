@@ -7,6 +7,7 @@
 import { dispatchPuf } from './bus';
 import { EVENT_TYPES } from './types';
 import type {
+  AccessActionResponse, AccessQueueResponse,
   AuthRequest, DroneCmdRequest, DroneCmdResponse, EnrollRequest, Envelope,
   GoldenFramesResponse, HdSeries,
   MlBundle, OkResponse, PayloadMap, ReliabilityData, SetKeyRequest,
@@ -53,6 +54,29 @@ export const api = {
     return res.json().catch(() => ({ ok: false,
       reason: `HTTP ${res.status}` } as DroneCmdResponse));
   },
+
+  /* finals-demo-N6:接入闸门。select 是同步唤醒(最坏 ~10s:2.2s 对齐 + 3s 等回应
+   * + 防御性重试),404/409 的 reason 必须上屏 → 与 droneCmd 同款不抛错封装 */
+  accessSelect: async (terminalId: number): Promise<AccessActionResponse> => {
+    const res = await fetch(`${BASE}/access/select`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ terminal_id: terminalId }),
+    });
+    return res.json().catch(() => ({ ok: false,
+      reason: `HTTP ${res.status}` } as AccessActionResponse));
+  },
+  accessDismiss: async (terminalId: number): Promise<AccessActionResponse> => {
+    const res = await fetch(`${BASE}/access/dismiss`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ terminal_id: terminalId }),
+    });
+    return res.json().catch(() => ({ ok: false,
+      reason: `HTTP ${res.status}` } as AccessActionResponse));
+  },
+  getAccessQueue: () =>
+    fetch(`${BASE}/access/queue`).then(r => json<AccessQueueResponse>(r)),
 };
 
 async function post<T>(path: string, body: unknown): Promise<T> {

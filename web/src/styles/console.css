@@ -783,3 +783,49 @@
 .ew-result .mono div { margin: 4px 0; font-size: 14px; }
 .ew-result .mono b { display: inline-block; width: 72px; opacity: .7; font-weight: 400; }
 .ew-error { margin-top: 10px; color: #ff9aa5; font-size: 13px; }
+
+/* ============ finals-demo-N6: 接入闸门弹窗 + 待接入徽标 ============ */
+.ap-overlay {
+  position: fixed; inset: 0; z-index: 82;
+  background: rgba(0,0,0,.55);
+  display: flex; align-items: center; justify-content: center;
+}
+.ap-overlay[hidden] { display: none; }   /* 显式压过 display:flex(hidden 兜底) */
+.ap-card {
+  width: 430px; max-height: 70vh; overflow: auto; padding: 16px 20px;
+  background: #10151d; border: 1px solid #2a3242;
+  border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+}
+.ap-head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px; font-size: 15px; font-weight: 600;
+}
+.ap-row {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 10px; padding: 10px 12px; margin: 6px 0;
+  background: #0b0f14; border: 1px solid #2a3242; border-radius: 8px;
+}
+.ap-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ap-name { font-size: 15px; font-weight: 600; color: #dcecf5; }
+.ap-meta { font-size: 12px; color: #7d8ca0; }
+.ap-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+.ap-sel, .ap-busy { font-size: 12px; color: #ffb86b; padding: 0 6px; }
+.ap-busy::after { content: '…'; animation: ap-pulse 1s infinite; }
+@keyframes ap-pulse { 50% { opacity: .35; } }
+.ap-empty { padding: 22px 0; text-align: center; color: #7d8ca0; font-size: 13px; }
+.ap-error {
+  margin-top: 10px; padding: 8px 10px; border-radius: 6px;
+  background: rgba(255,80,100,.08); border: 1px solid rgba(255,80,100,.35);
+  color: #ff9aa5; font-size: 13px;
+}
+.ap-hint { margin-top: 4px; font-size: 12px; color: #ffb86b; }
+/* 待接入徽标:右下角常驻(DronePanel 之上错位),队列空时隐藏 */
+.ap-badge {
+  position: fixed; right: 16px; bottom: 190px; z-index: 81;
+  padding: 7px 14px; border-radius: 999px;
+  background: #2d6cb5; border: 1px solid #4a90d9; color: #fff;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(45,108,181,.45);
+}
+.ap-badge[hidden] { display: none; }
+.ap-badge:hover { filter: brightness(1.15); }
