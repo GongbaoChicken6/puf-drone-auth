@@ -264,13 +264,17 @@ class TestPollWakeOnce(unittest.TestCase):
         app.serial_bus_lock = threading.Lock()
         app.protocol = _PROTO
         app.last_access_request_ts = 0.0
+        app.last_access_request_by_tid = {}     # R3: per-tid 信号表(真桥语义)
         ln = types.SimpleNamespace(running=True, ser=FakeSerial("COM6"))
         return app, ln
 
     def test_writes_frame_publishes_after_write(self):
         app, ln = self._app_with_serial()
-        threading.Timer(0.05, lambda: setattr(
-            app, "last_access_request_ts", time.time())).start()
+        def board_answers():                    # _park/_auth 双写(全局+per-tid)
+            t = time.time()
+            app.last_access_request_ts = t
+            app.last_access_request_by_tid[1] = t
+        threading.Timer(0.05, board_answers).start()
         web_bridge.RealApp._poll_wake_once(app, ln, 1, "r-wake")
         self.assertEqual(len(ln.ser.written), 1)
         frame = ln.ser.written[0]
@@ -292,6 +296,25 @@ class TestPollWakeOnce(unittest.TestCase):
             web_bridge.RealApp._poll_wake_once(app, ln, 1, "r-silent")
         # 超时路径也必须已写过帧(先写后查,不伪造)
         self.assertEqual(len(ln.ser.written), 1)
+
+    def test_other_tid_bump_does_not_fake_success(self):
+        """auto-review R3 核心:唤醒 tid=1 期间 tid=2 入队(刷全局戳+自己的
+        per-tid)不得让 tid=1 假成功——否则 selected 悬挂死锁闸门。"""
+        app, ln = self._app_with_serial()
+        def other_board_parks():                     # 板B入队:全局+by_tid[2]
+            t = time.time()
+            app.last_access_request_ts = t
+            app.last_access_request_by_tid[2] = t
+        threading.Timer(0.05, other_board_parks).start()
+        with self.assertRaises(TimeoutError):        # tid=1 全程沉默 → 必须超时
+            web_bridge.RealApp._poll_wake_once(app, ln, 1, "r-xboard")
+
+    def test_own_tid_bump_only_still_succeeds(self):
+        """per-tid 信号单独跳变(如 _auth 只补写 by-tid 的假想路径)也能唤醒。"""
+        app, ln = self._app_with_serial()
+        threading.Timer(0.05, lambda: app.last_access_request_by_tid.__setitem__(
+            1, time.time())).start()
+        web_bridge.RealApp._poll_wake_once(app, ln, 1, "r-owntid")   # 不抛即过
 
 
 class TestListenerParkPath(unittest.TestCase):

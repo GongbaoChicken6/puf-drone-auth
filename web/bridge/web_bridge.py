@@ -1108,6 +1108,10 @@ class RealApp:
         # 消费,入队不得污染:F12);多串口时 main() 强制 enabled=True——两板
         # 并发 SW7 的串行化保护(未选中的一律入队,防 _auth 状态交叉污染)。
         self.serial_listeners: dict = {}
+        # auto-review(R3): per-tid 请求信号——闸门唤醒的成功判据必须是"本tid
+        # 有新请求"(F1让任何板入队都刷新全局戳,跨板按压会造成假成功并
+        # selected_tid 悬挂死锁闸门)。全局戳保留给 _do_poll 遗留契约。
+        self.last_access_request_by_tid: dict = {}
         self.tid_port_map: dict = parse_int_kv(getattr(args, "tid_port", None))
         self.access_gate = AccessGate(
             enabled=bool(getattr(args, "access_gate", False)),
@@ -1275,6 +1279,11 @@ class RealApp:
         nonce = time.time_ns() & 0xFFFFFFFF
         frame = self.protocol.pack(
             type(self.protocol).MSG_AUTH_POLL, terminal_id=tid, nonce=nonce)
+        # auto-review(R3): 成功判据 per-tid(本板有新请求才算回应)。
+        # 全局戳只作无 per-tid 表(旧假 app)时的回退;闸门下其他板入队/认证
+        # 刷的全局戳不得让本次唤醒假成功——那会 selected 悬挂死锁闸门。
+        by_tid = getattr(self, "last_access_request_by_tid", None)
+        base_t = by_tid.get(tid, 0.0) if by_tid is not None else 0.0
         base = getattr(self, "last_access_request_ts", 0.0)
         with self.serial_bus_lock:
             ln.ser.write(frame); ln.ser.flush()
@@ -1287,7 +1296,10 @@ class RealApp:
             "dir": "server->term", "source": "real-terminal"})
         t0 = time.time()
         while time.time() - t0 < 3.0:
-            if getattr(self, "last_access_request_ts", 0.0) > base:
+            if by_tid is not None:
+                if by_tid.get(tid, 0.0) > base_t:
+                    return
+            elif getattr(self, "last_access_request_ts", 0.0) > base:
                 return
             time.sleep(0.02)
         raise TimeoutError("no ACCESS_REQUEST within 3s after AUTH_POLL")
@@ -1325,14 +1337,14 @@ class RealApp:
             # auto-review(R1-F3): 对齐睡眠期间该板被再按 SW7 → 认证已走完并
             # 出队(finish 清了 entry/selected)。此时不再发 POLL——否则会把
             # 已验证完的机器重新入队。按"已被并发处理"成功返回。
-            if gate.snapshot(tid) is None or gate.selected_tid != tid:
+            if gate.snapshot(tid) is None or not gate.is_selected(tid):
                 return 200, {"ok": True, "terminal_id": tid, "run_id": run_id,
                              "note": "already consumed by concurrent auth"}
             try:
                 self._poll_wake_once(ln, tid, run_id)
             except TimeoutError:
                 time.sleep(2.2)   # 防御性重试(板 BLOCKED 长滞/首帧丢失)
-                if gate.snapshot(tid) is None or gate.selected_tid != tid:
+                if gate.snapshot(tid) is None or not gate.is_selected(tid):
                     return 200, {"ok": True, "terminal_id": tid, "run_id": run_id,
                                  "note": "already consumed by concurrent auth"}
                 self._poll_wake_once(ln, tid, run_id)
@@ -2310,6 +2322,11 @@ class AccessGate:
         with self._lock:
             self.selected_tid = int(tid)
 
+    def is_selected(self, tid: int) -> bool:
+        """锁内读选中态(F3 防护用,免裸读属性)。"""
+        with self._lock:
+            return self.selected_tid == int(tid)
+
     def clear_selected(self, tid: int) -> None:
         with self._lock:
             if self.selected_tid == int(tid):
@@ -2470,6 +2487,9 @@ class RealSerialListener:
         rid = f"real-{int(time.time()*1000)}"
         # N4(finals-demo): poll 超时判定的观测点——每次收到 ACCESS_REQUEST 都刷新
         self.app.last_access_request_ts = time.time()
+        _by = getattr(self.app, "last_access_request_by_tid", None)
+        if _by is not None:
+            _by[tid] = time.time()               # R3: per-tid 信号(_poll_wake_once 用)
         c2 = ar_f.get("c2", b"\0"*8)
         self._ef(rid,tid,0x0090,ar_raw,False)
         self._log(f"REAL auth tid={tid} run={rid}")
@@ -2627,6 +2647,11 @@ class RealSerialListener:
         # _do_poll/_poll_wake_once 只认 last_access_request_ts;闸门模式下
         # /api/poll 唤醒的板子回应会被入队,不刷时间戳 = poll 假超时。
         self.app.last_access_request_ts = time.time()
+        # auto-review(R3): 同时落 per-tid 信号——唤醒判据按 tid 精确化,
+        # 防跨板按压的全局戳跳变造成 select 假成功(selected 悬挂死锁)。
+        _by = getattr(self.app, "last_access_request_by_tid", None)
+        if _by is not None:
+            _by[tid] = time.time()
         if st.startswith("conflict:"):
             # SW12 拨码疑似重复:同 tid 出现在两个串口——显式哨兵而非静默覆盖
             self._log(f"ACCESS GATE: SW12 拨码疑似重复——tid={tid} 已在 "
