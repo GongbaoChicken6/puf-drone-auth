@@ -52,6 +52,18 @@ update_compile_order -fileset sources_1
 add_files -fileset sources_1 [get_files clk_wiz_0.xci]
 update_compile_order -fileset sources_1
 
+# ---- PS7（2026-11-16 ARM 核控电机）：EMIO GPIO 4 位，供 w3_top_zc706 例化 ps7_core ----
+create_ip -name processing_system7 -vendor xilinx.com -library ip -module_name ps7_core
+set_property -dict [list \
+    CONFIG.PCW_GPIO_EMIO_GPIO_ENABLE {1} \
+    CONFIG.PCW_GPIO_EMIO_GPIO_IO {4} \
+] [get_ips ps7_core]
+set_property generate_synth_checkpoint 0 [get_files ps7_core.xci]
+generate_target all [get_ips ps7_core]
+update_compile_order -fileset sources_1
+add_files -fileset sources_1 [get_files ps7_core.xci]
+update_compile_order -fileset sources_1
+
 set_property top w3_top_zc706 [current_fileset]
 synth_design -top w3_top_zc706 -part $PART
 

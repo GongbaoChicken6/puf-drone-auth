@@ -1,4 +1,4 @@
-# demo_start.ps1 -- N9(finals-demo) 一键启动:杀残留桥 -> fresh 沙箱 -> 起桥 -> 自检
+﻿# demo_start.ps1 -- N9(finals-demo) 一键启动:杀残留桥 -> fresh 沙箱 -> 起桥 -> 自检
 # 用法:
 #   .\scripts\demo_start.ps1                     # 自动探测串口;多候选时中止并要求显式指定
 #   .\scripts\demo_start.ps1 -SerialPort COM9    # 指定串口
@@ -39,6 +39,22 @@ if ($SerialPort -ne 'none') {
         $out = & $vivado -mode batch -nojournal -nolog -notrace -source $tcl -tclargs $board.Bit $board.SN 2>&1 | Out-String
         if ($out -match 'PROGRAM_OK') {
             Write-Host "  $($board.Name): PROGRAM_OK" -ForegroundColor Green
+            # ARM 机载飞控（2026-11-16）：板B 烧完 bit 后链式加载 ELF（失败自动降级 PL 灯语路径，不阻断）
+            if ($board.Name -eq '板B') {
+                $elf  = Join-Path $repo "sw\arm_fan\arm_fan.elf"
+                $atcl = Join-Path $repo "sw\arm_fan\arm_fan.tcl"
+                if ((Test-Path $elf) -and (Test-Path $atcl)) {
+                    Write-Host "  板B: 加载 ARM 飞控 ELF..."
+                    $aout = & "D:\vivado\2026.1\Vitis\bin\xsdb.bat" $atcl 2>&1 | Out-String
+                    if ($aout -match 'ARM_FAN_OK') {
+                        Write-Host "  板B: ARM_FAN_OK（机载飞控已运行）" -ForegroundColor Green
+                    } else {
+                        Write-Host "  板B: ARM ELF 加载失败——bit 将走 PL 灯语降级路径" -ForegroundColor Yellow
+                    }
+                } else {
+                    Write-Host "  板B: arm_fan.elf/tcl 不存在，跳过 ARM 加载" -ForegroundColor Yellow
+                }
+            }
         } else {
             Write-Host "  $($board.Name): JTAG 烧写失败(板子可能未连接),跳过" -ForegroundColor Yellow
         }

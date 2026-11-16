@@ -71,6 +71,7 @@ wire rst_n = ~sys_rst_btn_n & mmcm_locked;
 // 18 个既有 TB 不受影响（CI wrapper 三元素锁不触碰本区）。
 wire [1:0] led_result_raw;
 wire       led_busy_raw;
+wire [3:0] ext_led_pl;                 // demo_led 原始外灯输出（bit0 可能被 PS 接管）
 
 //---------------- 协议顶层 ---------------//
 w3_top # ( .FREQ_HZ   ( 100_000_000 ),   // 板上时钟 100MHz
@@ -104,8 +105,31 @@ demo_led # (
     .busy_in     ( led_busy_raw    ),
     .led_result  ( led_result      ),
     .led_busy    ( led_busy        ),
-    .ext_led     ( ext_led         ),
+    .ext_led     ( ext_led_pl     ),
     .ext_buzzer  ( ext_buzzer      )
 );
+
+//---------------- PS 飞控执行器（2026-11-16 老师要求：ARM 核控电机） ---------------//
+// EMIO 位分配：GPIO_O[0]=arm_pwm（PS 软件 PWM） GPIO_O[1]=arm_sel（接管选择）
+//              GPIO_I[0]=auth_pass（PL→PS：led_result_raw==01 通过，编码见 w3_top.v L57）
+// 默认安全：PS 未上程序时 GPIO_O 复位=0 → arm_sel=0 → J58.3 走原 demo_led 灯语路径，
+//           bit 行为与不含 PS7 的旧版完全一致（ARM 线失败不影响主演示）。
+// 构建侧：ps7_core 由 build_w3_board*.tcl 经 create_ip 生成（同 clk_wiz_0 模式）；
+//           离板语法门禁（verify_wrapper.ps1）以 %TEMP% stub 替身。
+wire [3:0] ps_gpio_o;
+wire [3:0] ps_gpio_i;
+wire [3:0] ps_gpio_t;
+
+assign ps_gpio_i[0]   = ( led_result_raw == 2'b01 );   // 01=通过 10=拒绝 11=阻断
+assign ps_gpio_i[3:1] = 3'b000;
+
+ps7_core u_ps7 (
+    .GPIO_I ( ps_gpio_i ),
+    .GPIO_O ( ps_gpio_o ),
+    .GPIO_T ( ps_gpio_t )    // 单向 PL 连接，三态控制不用
+);
+
+assign ext_led[0]   = ps_gpio_o[1] ? ps_gpio_o[0] : ext_led_pl[0];  // J58.3 风扇/绿灯①
+assign ext_led[3:1] = ext_led_pl[3:1];
 
 endmodule

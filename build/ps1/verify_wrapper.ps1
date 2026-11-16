@@ -69,6 +69,15 @@ module clk_wiz_0 (input wire clk_in1_p, input wire clk_in1_n, input wire reset,
 endmodule
 '@ | Set-Content -Path $stub -Encoding ascii
 
+# ---- Step 2b: ps7_core 仿真 stub（2026-11-16 ARM 电机：EMIO GPIO 4 位）----
+$stub2 = Join-Path $env:TEMP "ps7_core_stub.v"
+@'
+module ps7_core (input wire [3:0] GPIO_I, output wire [3:0] GPIO_O, output wire [3:0] GPIO_T);
+  assign GPIO_O = 4'b0000;   // PS 复位值=0 -> arm_sel=0 -> 走 PL 原路径(默认安全)
+  assign GPIO_T = 4'b1111;
+endmodule
+'@ | Set-Content -Path $stub2 -Encoding ascii
+
 # ---- Step 3: xvlog + xelab ----
 $rtl = @(
     "src\rtl\w1_ratio\ro_ring.v", "src\rtl\w1_ratio\ro_div.v",
@@ -79,10 +88,11 @@ $rtl = @(
     "src\rtl\common\uart_tx.v", "src\rtl\common\uart_rx.v",
     "src\rtl\common\speck64_96.v",
     "src\rtl\w3_protocol\terminal_fsm.v", "src\rtl\w3_protocol\w3_top.v",
+    "src\rtl\w3_protocol\demo_led.v",
     "src\rtl\w3_protocol\$Wrapper.v"
 )
 Write-Host "=== verify_wrapper: xvlog ($Wrapper + 14 RTL + clk_wiz stub) ==="
-& "$vivado\xvlog.bat" @rtl $stub
+& "$vivado\xvlog.bat" @rtl $stub $stub2
 if ($LASTEXITCODE -ne 0) { Write-Host "VERIFY_WRAPPER_FAIL (xvlog exit $LASTEXITCODE)"; exit 1 }
 Write-Host "=== verify_wrapper: xelab $Wrapper (real ro_array netlist) ==="
 & "$vivado\xelab.bat" -debug typical $Wrapper -s "$($Wrapper)_chk"

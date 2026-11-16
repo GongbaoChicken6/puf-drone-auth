@@ -61,6 +61,18 @@ set_property -dict [list \
 set_property generate_synth_checkpoint 0 [get_files clk_wiz_0.xci]
 generate_target all [get_ips clk_wiz_0]
 update_compile_order -fileset sources_1
+
+# ---- PS7（2026-11-16 ARM 核控电机）：EMIO GPIO 4 位，供 w3_top_zc706 例化 ps7_core ----
+create_ip -name processing_system7 -vendor xilinx.com -library ip -module_name ps7_core
+set_property -dict [list \
+    CONFIG.PCW_GPIO_EMIO_GPIO_ENABLE {1} \
+    CONFIG.PCW_GPIO_EMIO_GPIO_IO {4} \
+] [get_ips ps7_core]
+set_property generate_synth_checkpoint 0 [get_files ps7_core.xci]
+generate_target all [get_ips ps7_core]
+update_compile_order -fileset sources_1
+add_files -fileset sources_1 [get_files ps7_core.xci]
+update_compile_order -fileset sources_1
 # 双保险：显式把 XCI 加入 sources_1（create_ip 在部分流程下不自动入 fileset）
 add_files -fileset sources_1 [get_files clk_wiz_0.xci]
 update_compile_order -fileset sources_1
