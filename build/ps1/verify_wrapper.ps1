@@ -1,4 +1,4 @@
-# verify_wrapper.ps1 -- 板级 wrapper 离板门禁（xvlog + xelab + XDC 端口交叉检查）
+﻿# verify_wrapper.ps1 -- 板级 wrapper 离板门禁（xvlog + xelab + XDC 端口交叉检查）
 # 用法: powershell -File build\ps1\verify_wrapper.ps1 [-Wrapper w3_top_zc706]
 #
 # ⚠ 覆盖口径（诚实声明，auto-review P1 修正）：本门禁 = 语法/端口一致性检查。
@@ -29,7 +29,7 @@ if (-not (Test-Path $xdcPath)) { Write-Host "XDC NOT FOUND: $xdcPath"; exit 1 }
 if (-not (Test-Path $vPath))   { Write-Host "WRAPPER NOT FOUND: $vPath"; exit 1 }
 $xdcRaw = Get-Content $xdcPath -Raw -Encoding UTF8
 $vRaw   = Get-Content $vPath   -Raw -Encoding UTF8
-$wrapPorts = [regex]::Matches($vRaw, "(?m)^\s*(?:input|output)\s+wire\s+(?:\[[^\]]+\]\s*)?([A-Za-z_][A-Za-z_0-9]*)") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+$wrapPorts = [regex]::Matches($vRaw, "(?m)^\s*(?:input|output|inout)\s+wire\s+(?:\[[^\]]+\]\s*)?([A-Za-z_][A-Za-z_0-9]*)") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
 $portErr = 0
 foreach ($p in $wrapPorts) {
     if ($xdcRaw -notmatch [regex]::Escape($p)) {

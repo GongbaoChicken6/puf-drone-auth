@@ -46,7 +46,8 @@ module w3_top_zc706 # (
     output wire         led_heartbeat ,   // A17 = DS35（偏暗，~0.75Hz）
 
     // N7(finals-demo): PMOD J58 外接大灯/蜂鸣器（3.3V 侧经 TXS0108E；断电插拔）
-    output wire [3:0]   ext_led       ,   // 绿1/绿2/红/琥珀（10mm 大灯）
+output wire [2:0]   ext_led       ,   // 绿2/红/琥珀（10mm 大灯）
+inout  wire         ext_fan       ,   // J58.3 三态输出：ARM 释放(Hi-Z)=L9110上拉导通 / 驱动低=停
     output wire         ext_buzzer        // 有源蜂鸣器（高=响）
   );
 
@@ -109,13 +110,13 @@ demo_led # (
     .ext_buzzer  ( ext_buzzer      )
 );
 
-//---------------- PS 飞控执行器（2026-11-16 老师要求：ARM 核控电机） ---------------//
-// EMIO 位分配：GPIO_O[0]=arm_pwm（PS 软件 PWM） GPIO_O[1]=arm_sel（接管选择）
-//              GPIO_I[0]=auth_pass（PL→PS：led_result_raw==01 通过，编码见 w3_top.v L57）
-// 默认安全：PS 未上程序时 GPIO_O 复位=0 → arm_sel=0 → J58.3 走原 demo_led 灯语路径，
-//           bit 行为与不含 PS7 的旧版完全一致（ARM 线失败不影响主演示）。
-// 构建侧：ps7_core 由 build_w3_board*.tcl 经 create_ip 生成（同 clk_wiz_0 模式）；
-//           离板语法门禁（verify_wrapper.ps1）以 %TEMP% stub 替身。
+//---------------- PS 飞控执行器 v2（2026-11-17 板载5V供电：三态释放方案） ---------------//
+// 供电路线：L9110 VCC 直接取 J63.13(5V)——"转"不再依赖 3.3V 压阈值：
+//   转 = ARM 置 OEN=0 释放引脚(Hi-Z) -> L9110 内部上拉拉向 5V -> 导通
+//   停 = ARM 置 OEN=1 且 DATA=0 驱动低
+//   调速 = 在释放/拉低间软件 PWM（对供电电压不敏感，4.5V/5V 通用）
+// EMIO: GPIO_O[1]=arm_sel(接管) GPIO_T[0]=PS三态(OEN取反) GPIO_I[0]=auth_pass
+// 默认安全：PS 未上程序 -> arm_sel=0 -> 强制驱动(T=0)走原 demo_led 路径，行为同旧 bit。
 wire [3:0] ps_gpio_o;
 wire [3:0] ps_gpio_i;
 wire [3:0] ps_gpio_t;
@@ -126,10 +127,13 @@ assign ps_gpio_i[3:1] = 3'b000;
 ps7_core u_ps7 (
     .GPIO_I ( ps_gpio_i ),
     .GPIO_O ( ps_gpio_o ),
-    .GPIO_T ( ps_gpio_t )    // 单向 PL 连接，三态控制不用
+    .GPIO_T ( ps_gpio_t )    // bit0 = ~OEN：1=悬空(释放=L9110上拉导通) 0=驱动
 );
 
-assign ext_led[0]   = ps_gpio_o[1] ? ps_gpio_o[0] : ext_led_pl[0];  // J58.3 风扇/绿灯①
-assign ext_led[3:1] = ext_led_pl[3:1];
+wire fan_val = ps_gpio_o[1] ? ps_gpio_o[0] : ext_led_pl[0];
+wire fan_t   = ps_gpio_o[1] ? ps_gpio_t[0] : 1'b0;      // ARM 未接管时恒驱动
+
+assign ext_fan     = fan_t ? 1'bz : fan_val;            // J58.3 (AK21) 三态输出
+assign ext_led[2:0] = ext_led_pl[3:1];                  // 其余大灯位不变（重排：0<-1,1<-2,2<-3）
 
 endmodule
