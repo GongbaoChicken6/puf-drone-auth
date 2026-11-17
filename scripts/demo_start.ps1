@@ -28,7 +28,8 @@ if ($SerialPort -ne 'none') {
     Start-Sleep -Milliseconds 500
     $vivado = "D:\vivado\2026.1\Vivado\bin\vivado.bat"
     $tcl = Join-Path $repo "build\tcl\program_zc706.tcl"
-    $bitA = Join-Path $repo "build\board_zc706\w3_top_zc706.bit"
+    # 2026-11-17 ARM 电机 v2：板A 用三态版 bit（ext_fan/OBUFT + PS7），风扇挂板A J58.3，供电 J63.13(5V)/地 J63.16
+    $bitA = Join-Path $repo "build\board_zc706_arm_v2\w3_top_zc706.bit"
     $bitB = Join-Path $repo "build\board_zc706_seed2\w3_top_zc706_seed2.bit"
     foreach ($board in @(
         @{ Name='板A'; Bit=$bitA; SN='210251A0195C' },
@@ -39,20 +40,20 @@ if ($SerialPort -ne 'none') {
         $out = & $vivado -mode batch -nojournal -nolog -notrace -source $tcl -tclargs $board.Bit $board.SN 2>&1 | Out-String
         if ($out -match 'PROGRAM_OK') {
             Write-Host "  $($board.Name): PROGRAM_OK" -ForegroundColor Green
-            # ARM 机载飞控（2026-11-16）：板B 烧完 bit 后链式加载 ELF（失败自动降级 PL 灯语路径，不阻断）
-            if ($board.Name -eq '板B') {
+            # ARM 机载飞控（2026-11-17 v2）：板A 烧完 bit 后链式加载 ELF（失败自动降级 PL 灯语路径，不阻断）
+            if ($board.Name -eq '板A') {
                 $elf  = Join-Path $repo "sw\arm_fan\arm_fan.elf"
                 $atcl = Join-Path $repo "sw\arm_fan\arm_fan.tcl"
                 if ((Test-Path $elf) -and (Test-Path $atcl)) {
-                    Write-Host "  板B: 加载 ARM 飞控 ELF..."
+                    Write-Host "  板A: 加载 ARM 飞控 ELF..."
                     $aout = & "D:\vivado\2026.1\Vitis\bin\xsdb.bat" $atcl 2>&1 | Out-String
                     if ($aout -match 'ARM_FAN_OK') {
-                        Write-Host "  板B: ARM_FAN_OK（机载飞控已运行）" -ForegroundColor Green
+                        Write-Host "  板A: ARM_FAN_OK（机载飞控已运行）" -ForegroundColor Green
                     } else {
-                        Write-Host "  板B: ARM ELF 加载失败——bit 将走 PL 灯语降级路径" -ForegroundColor Yellow
+                        Write-Host "  板A: ARM ELF 加载失败——bit 将走 PL 灯语降级路径" -ForegroundColor Yellow
                     }
                 } else {
-                    Write-Host "  板B: arm_fan.elf/tcl 不存在，跳过 ARM 加载" -ForegroundColor Yellow
+                    Write-Host "  板A: arm_fan.elf/tcl 不存在，跳过 ARM 加载" -ForegroundColor Yellow
                 }
             }
         } else {
