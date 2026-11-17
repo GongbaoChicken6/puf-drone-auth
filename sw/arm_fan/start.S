@@ -1,7 +1,7 @@
 .section .text.start
 .global _start
 _start:
-    ldr   sp, =0xFFFFFF88
+    ldr   sp, =0x0000FF88      @ 低位 OCM 顶端（64K，与 ocm.ld 一致）
     ldr   r0, =__bss_start
     ldr   r1, =__bss_end
     mov   r2, #0

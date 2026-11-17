@@ -1,5 +1,13 @@
 # ARM 核控制电机修改方案（Plan B 提前激活版）
 
+> **v4 附录（2026-11-17 深夜，当前版本）**：网表逻辑锥解剖发现双重根因——
+> ① v2/v3 综合器把 OBUFT/I 的 EMIO 多路器折叠成常数路径（连通性≠逻辑实现）；
+> ② 板上实测 EMIO GPIO_O 输出不跟随 DATA_2 寄存器写入（写/读全对但硬件输出恒 0）。
+> v4 修复：删除 EMIO 多路器，OBUFT 全由 PL 认证结果驱动——T = pass_pl（PASS=释放→转），I = 0（其余=驱动低→停）。
+> ARM ELF 降级为监视器（读 auth_pass），答辩叙事保留"PL 认证信任根 + PS 监视"。
+> bit = build/board_zc706_arm_v4，网表锥验证：T=led_result 组合逻辑 ✓、I=GND ✓。
+> 调试工具链：cone_trace*.tcl（网表锥）、state_*.tcl/toggle_probe.tcl（JTAG 寄存器操作）保留在 sw/arm_fan/ 供复现。
+
 > **v2 附录（2026-11-17，已实施，提交 19490ab）**：外部电源损坏 → 供电改板载 J63.13(5V) 直供；
 > PWM 从"DATA 输出高低"升级为**三态释放**（转=OEN=0 释放 Hi-Z→L9110 内部上拉导通；停=驱动低；调速=OEN 软件 PWM），
 > 对供电电压不敏感（4.5V/5V 通用）。RTL：ext_led[3:0]→[2:0] + inout ext_fan（AK21，OBUFT）；bit=build/board_zc706_arm_v2。

@@ -1,4 +1,4 @@
-﻿# demo_start.ps1 -- N9(finals-demo) 一键启动:杀残留桥 -> fresh 沙箱 -> 起桥 -> 自检
+# demo_start.ps1 -- N9(finals-demo) 一键启动:杀残留桥 -> fresh 沙箱 -> 起桥 -> 自检
 # 用法:
 #   .\scripts\demo_start.ps1                     # 自动探测串口;多候选时中止并要求显式指定
 #   .\scripts\demo_start.ps1 -SerialPort COM9    # 指定串口
@@ -29,7 +29,7 @@ if ($SerialPort -ne 'none') {
     $vivado = "D:\vivado\2026.1\Vivado\bin\vivado.bat"
     $tcl = Join-Path $repo "build\tcl\program_zc706.tcl"
     # 2026-11-17 ARM 电机 v2：板A 用三态版 bit（ext_fan/OBUFT + PS7），风扇挂板A J58.3，供电 J63.13(5V)/地 J63.16
-    $bitA = Join-Path $repo "build\board_zc706_arm_v2\w3_top_zc706.bit"
+    $bitA = Join-Path $repo "build\board_zc706_arm_v4\w3_top_zc706.bit"   # v4: PL 直控（EMIO 输出硅上不可信，根因见 arm_motor_plan）
     $bitB = Join-Path $repo "build\board_zc706_seed2\w3_top_zc706_seed2.bit"
     foreach ($board in @(
         @{ Name='板A'; Bit=$bitA; SN='210251A0195C' },

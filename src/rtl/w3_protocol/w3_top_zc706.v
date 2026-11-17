@@ -130,10 +130,10 @@ ps7_core u_ps7 (
     .GPIO_T ( ps_gpio_t )    // bit0 = ~OEN：1=悬空(释放=L9110上拉导通) 0=驱动
 );
 
-wire fan_val = ps_gpio_o[1] ? ps_gpio_o[0] : ext_led_pl[0];
-wire fan_t   = ps_gpio_o[1] ? ps_gpio_t[0] : 1'b0;      // ARM 未接管时恒驱动
-
-assign ext_fan     = fan_t ? 1'bz : fan_val;            // J58.3 (AK21) 三态输出
-assign ext_led[2:0] = ext_led_pl[3:1];                  // 其余大灯位不变（重排：0<-1,1<-2,2<-3）
+wire pass_pl  = ( led_result_raw == 2'b01 );  // v4: PL 认证直控——PASS=释放(转)，其余=驱动低(停)
+// v4 根因修正：EMIO GPIO_O 在硅上不跟随 DATA 寄存器（网表锥+板上实测双证），
+//   数据/释放多路器曾被综合折叠且 arm_sel 恒 0 —— 故 OBUFT 全部由 PL 逻辑驱动，EMIO 仅留输入监视。
+assign ext_fan     = pass_pl ? 1'bz : 1'b0;      // 释放=L9110 上拉导通；驱动低=停
+assign ext_led[2:0] = ext_led_pl[3:1];
 
 endmodule

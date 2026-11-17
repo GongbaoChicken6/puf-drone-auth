@@ -6,7 +6,7 @@
 #define DATA_2_RO   (*(volatile unsigned int *)(GPIO_BASE + 0x68 ))
 #define DIRM_2      (*(volatile unsigned int *)(GPIO_BASE + 0x284))
 #define OEN_2       (*(volatile unsigned int *)(GPIO_BASE + 0x288))
-#define ARM_PWM  (1u << 0)   /* bit0: OEN 位——1=驱动低(停) 0=释放(转) */
+#define ARM_PWM  (1u << 0)   /* bit0: OEN 位——板上实测 1=释放(转) 0=驱动低(停) */
 #define ARM_SEL  (1u << 1)   /* bit1: 接管选择，恒驱动高 */
 #define PWM_PERIOD 20u
 #define RAMP_STEP  30u
@@ -21,7 +21,7 @@ int main(void)
 {
     unsigned duty = 0, ramp = 0;
     DIRM_2 |= (ARM_PWM | ARM_SEL);
-    OEN_2  |= (ARM_PWM | ARM_SEL);            /* 全驱动，先停 */
+    OEN_2  = (OEN_2 & ~ARM_PWM) | ARM_SEL;    /* bit0=0 驱动低=停；bit1 驱动(sel) */
     DATA_2  = (DATA_2 | ARM_SEL) & ~ARM_PWM;  /* sel=1 接管；pwm 数据位恒 0 */
     for (;;) {
         unsigned pass = 1u;   /* 测试模式：强制 */
@@ -32,8 +32,8 @@ int main(void)
             duty = 0; ramp = 0;
         }
         for (unsigned t = 0; t < PWM_PERIOD; ++t) {
-            if (t < duty) OEN_2 &= ~ARM_PWM;   /* 释放 = 转 */
-            else          OEN_2 |=  ARM_PWM;   /* 驱动低 = 停 */
+            if (t < duty) OEN_2 |=  ARM_PWM;   /* 释放 = 转（OEN=1，板上实测） */
+            else          OEN_2 &= ~ARM_PWM;   /* 驱动低 = 停（OEN=0+DATA=0） */
             delay_tick();
         }
     }
