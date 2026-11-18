@@ -2440,22 +2440,43 @@ class RealSerialListener:
                         # proto.on_access_request)之前:F12 重放窗不因入队被动。
                         # park = 入队等人工选择(access.requested),不跑认证。
                         _tid = int(fl.get("terminal_id", 0))
-                        _gate = getattr(self.app, "access_gate", None)
-                        if _gate is not None and _gate.enabled:
-                            _act = _gate.decide(
-                                _tid,
-                                enroll_active=bool(getattr(self.app, "enroll_session_active", False)),
-                                auth_busy=bool(getattr(self.app, "auth_in_progress", False)))
-                            if _act == "park":
-                                self._park(_tid)
+                        # N11(finals-demo): 未注册终端的接入请求 ≠ 无人机——
+                        # 直接按信道告警(channel.intrusion kind=access,前端大警报),
+                        # 不入待接入队列、不回帧(不喂攻击者)。
+                        try:
+                            _registered = self.proto.templates.has_terminal(_tid)
+                        except Exception:
+                            _registered = True   # 查询失败不拦正常流程
+                        if not _registered:
+                            try:
+                                self.hub.publish("channel.intrusion", {
+                                    "msg_id": mid, "name": self.P.msg_name(mid),
+                                    "hex": frame.hex(), "len": len(frame),
+                                    "note": "unregistered terminal access attempt "
+                                            "-- rogue base suspected, NOT queued",
+                                    "kind": "access", "terminal_id": _tid})
+                                self._log(f"CHANNEL IDS: unregistered tid={_tid} "
+                                          f"ACCESS_REQUEST -- rogue-base alarm, "
+                                          f"NOT queued", "error")
+                            except Exception as _ie:  # noqa: BLE001
+                                self._log(f"REAL rogue-alarm error: {type(_ie).__name__}: {_ie}", "error")
                         else:
-                            _act = "run"
-                        if _act == "run":
-                            # R2 P2:全程持串口锁(含读写)——与 _do_poll/N5 enroll 的
-                            # 写口互斥;忙标志给 poll 快速忙拒,不必等锁
-                            self.app.auth_in_progress = True
-                            with self.app.serial_bus_lock:
-                                self._auth(int(fl.get("terminal_id",0)), fl, frame)
+                            _gate = getattr(self.app, "access_gate", None)
+                            if _gate is not None and _gate.enabled:
+                                _act = _gate.decide(
+                                    _tid,
+                                    enroll_active=bool(getattr(self.app, "enroll_session_active", False)),
+                                    auth_busy=bool(getattr(self.app, "auth_in_progress", False)))
+                                if _act == "park":
+                                    self._park(_tid)
+                            else:
+                                _act = "run"
+                            if _act == "run":
+                                # R2 P2:全程持串口锁(含读写)——与 _do_poll/N5 enroll 的
+                                # 写口互斥;忙标志给 poll 快速忙拒,不必等锁
+                                self.app.auth_in_progress = True
+                                with self.app.serial_bus_lock:
+                                    self._auth(int(fl.get("terminal_id",0)), fl, frame)
                     except Exception as e:  # noqa: BLE001 —— 监听线程必须永死不了
                         self._log(f"REAL auth handler error (thread kept alive): {type(e).__name__}: {e}", "error")
                     finally:

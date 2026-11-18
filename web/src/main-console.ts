@@ -26,7 +26,7 @@ import { AuditLog } from './components/audit-log';
 import { FrameFlight } from './components/frame-flight';
 import { DronePanel } from './components/drone-panel';
 import { EnrollWizard } from './components/enroll-wizard';
-import { IdsBanner } from './components/ids-banner';
+import { AlarmModal } from './components/alarm-modal';
 import { LeftPanel } from './components/left-panel';
 import { RightPanel } from './components/right-panel';
 import { Topbar } from './components/topbar';
@@ -77,7 +77,7 @@ const audit = new AuditLog({
 });
 
 /* N2(finals-demo): 信道 IDS 红警横幅(自订阅 puf:intrusion,悬浮 body) */
-document.body.appendChild(new IdsBanner().el);
+document.body.appendChild(new AlarmModal().el);   // N11:大警报弹窗
 
 /* N6(finals-demo): 帧飞行动画(自订阅 puf:frame,数据流具象化,悬浮 body) */
 document.body.appendChild(new FrameFlight().el);

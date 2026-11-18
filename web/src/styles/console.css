@@ -829,3 +829,47 @@
 }
 .ap-badge[hidden] { display: none; }
 .ap-badge:hover { filter: brightness(1.15); }
+
+
+/* ===== N11(finals-demo) 伪基站大警报弹窗(取代 N2 小横幅的演示位) ===== */
+.alarm-modal{
+  position:fixed; inset:0; z-index:2100;
+  display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(ellipse at center, rgba(70,8,14,.72), rgba(10,2,4,.88));
+}
+.alarm-modal[hidden]{ display:none; }
+.alarm-box{
+  width:min(580px, 88vw);
+  background:#1d070b; border:2px solid #ff4757; border-radius:14px;
+  box-shadow:0 0 70px rgba(255,71,87,.45), inset 0 0 34px rgba(255,71,87,.10);
+  padding:30px 30px 22px;
+  display:flex; flex-direction:column; align-items:center; gap:12px;
+  animation:alarm-in .16s ease-out;
+}
+@keyframes alarm-in{ from{ transform:scale(.94); opacity:0; } }
+.alarm-tri{
+  width:88px; height:78px;
+  filter:drop-shadow(0 0 16px rgba(255,71,87,.85));
+  animation:alarm-pulse 1.15s ease-in-out infinite;
+}
+@keyframes alarm-pulse{ 50%{ opacity:.55; transform:scale(1.06); } }
+.alarm-tri-bg{ fill:#ff4757; stroke:#ffc2c9; stroke-width:4; stroke-linejoin:round; }
+.alarm-mark{ fill:#17060a; }
+.alarm-title{ font-size:22px; font-weight:700; color:#ffdadd; letter-spacing:3px; text-align:center; }
+.alarm-detail{ font-size:14.5px; color:#ffbcc2; text-align:center; line-height:1.75; max-width:46ch; }
+.alarm-time{ font-size:12px; color:#cf9298; }
+.alarm-extra{ font-size:12px; color:#c9858c; }
+.alarm-btn{
+  margin-top:6px; padding:10px 38px; font-size:15px; letter-spacing:2px;
+  background:#7a1220; border:1px solid #ff6b78; color:#fff;
+  border-radius:8px; cursor:pointer; white-space:nowrap;
+}
+.alarm-btn:hover{ background:#a11728; }
+
+/* ===== N11: 左栏/卡片抗挤压(放大页面时按钮换行而非消失) ===== */
+.console-grid{ grid-template-columns:clamp(252px, 22vw, 324px) minmax(0,1fr) 300px; }
+.left-panel{ min-width:0; }
+.tc-actions{ flex-wrap:wrap; }
+.tc-actions .btn{ flex:1 1 auto; min-width:max-content; white-space:nowrap; }
+.scen-btn span{ display:block; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lp-scen{ grid-template-columns:repeat(auto-fit, minmax(106px, 1fr)); }

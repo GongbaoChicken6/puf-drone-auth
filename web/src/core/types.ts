@@ -148,6 +148,10 @@ export interface ChannelIntrusion {
   hex: string;
   len: number;
   note: string;
+  /* N11(finals-demo): 'frame'=站端方向注入帧(旧载荷无此字段按 frame 处理);
+   * 'access'=未注册终端接入请求(伪基站冒充,不进入待接入队列) */
+  kind?: 'frame' | 'access';
+  terminal_id?: number;
 }
 
 /* N2(finals-demo): 1s 滑窗内 >=3 次 resync —— 信道噪声洪泛疑似 DoS。
