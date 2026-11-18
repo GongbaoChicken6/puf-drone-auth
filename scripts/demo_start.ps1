@@ -140,6 +140,8 @@ if ($SerialPort -eq 'auto') {
 $bridgeArgs = @('web/bridge/web_bridge.py','--repo-root','.','--data-dir',$sandbox,
           '--port',"$Port")
 if ($portArg) { $bridgeArgs += $portArg.Split(' ') | Where-Object { $_ } }
+# 决赛演示(N6):接入闸门必须开——SW7→"待接入"弹窗→人工选择→才验证(五步演示第2步)
+$bridgeArgs += @('--access-gate', '--access-label', '1=板A,2=板B')
 if (-not $NoBrowser) { $bridgeArgs += '--open' }
 if ($StrictPort) { $bridgeArgs += '--strict-port' }
 Write-Host "[demo_start] python $($bridgeArgs -join ' ')"
