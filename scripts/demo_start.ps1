@@ -1,4 +1,4 @@
-# demo_start.ps1 -- N9(finals-demo) 一键启动:杀残留桥 -> fresh 沙箱 -> 起桥 -> 自检
+﻿# demo_start.ps1 -- N9(finals-demo) 一键启动:杀残留桥 -> fresh 沙箱 -> 起桥 -> 自检
 # 用法:
 #   .\scripts\demo_start.ps1                     # 自动探测串口;多候选时中止并要求显式指定
 #   .\scripts\demo_start.ps1 -SerialPort COM9    # 指定串口
