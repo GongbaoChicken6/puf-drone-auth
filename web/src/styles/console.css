@@ -873,3 +873,9 @@
 .tc-actions .btn{ flex:1 1 auto; min-width:max-content; white-space:nowrap; }
 .scen-btn span{ display:block; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .lp-scen{ grid-template-columns:repeat(auto-fit, minmax(106px, 1fr)); }
+
+
+/* ===== N11b: HD 仪表头/图例抗挤压(放大时 caption 文字换行互压) ===== */
+.hg-head{ flex-wrap:wrap; row-gap:3px; }
+.hg-caption{ white-space:nowrap; }
+.hg-legend{ flex-wrap:wrap; row-gap:2px; }
