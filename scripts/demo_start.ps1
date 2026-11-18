@@ -118,6 +118,7 @@ if ($SerialPort -eq 'auto') {
         if ($dotnet) {
             Fail "未探测到 USB 特征串口(CH340/CP210/FTDI)。.NET 枚举到: $($dotnet -join ', ') —— 为防误绑主板原生 COM 口不自动绑定,请用 -SerialPort <COMx> 显式指定,或 -SerialPort none 进 loopback。候选已记录: $probeLog"
         }
+    }
     "候选日志: $probeLog" | Write-Host
     if ($cand.Count -gt 1) {
         Fail "探测到多个串口候选: $($cand -join ', ')。请用 -SerialPort <COMx> 显式指定(决赛双串口日必须显式)。候选已记录: $probeLog"
