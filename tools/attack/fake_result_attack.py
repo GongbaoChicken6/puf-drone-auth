@@ -211,8 +211,12 @@ def _rogue_interactive(ser, args, r2_fake, send, log) -> int:
                 break
             if line.strip().lower() in ("q", "quit", "exit"):
                 break
-            _rogue_fire(send, args, r2_fake, log)
-            rounds += 1
+            try:
+                _rogue_fire(send, args, r2_fake, log)
+                rounds += 1
+            except Exception as exc:  # 串口异常不杀循环:提示后继续等下一轮
+                log(f"ROGUE fire failed: {type(exc).__name__}: {exc} "
+                    f"(-- 检查 HC-12 接线/串口后重试)")
     except KeyboardInterrupt:
         pass
     print(f"[ROGUE] stop. rounds={rounds}", file=sys.stderr)
@@ -237,7 +241,7 @@ _ROGUE_PAGE = """<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <script>async function fire(){document.getElementById('out').textContent='注入中…';
  try{const r=await fetch('/attack',{method:'POST'});
  const j=await r.json();document.getElementById('out').textContent=
-  '已发起 #'+j.rounds+'\n'+j.frames.join('\n');}catch(e){
+  '已发起 #'+j.rounds+'\\n'+j.frames.join('\\n');}catch(e){
   document.getElementById('out').textContent='失败:'+e;}}</script></body></html>"""
 
 
@@ -264,7 +268,18 @@ def _rogue_web(ser, args, r2_fake, send, log) -> int:
                 self.send_error(404)
                 return
             with lock:
-                burst = _rogue_fire(send, args, r2_fake, log)
+                try:
+                    burst = _rogue_fire(send, args, r2_fake, log)
+                except Exception as exc:  # 串口异常不上 traceback:页面明示,可排查
+                    log(f"ROGUE-WEB fire failed: {type(exc).__name__}: {exc}")
+                    err = json.dumps({"ok": False,
+                                      "error": f"{type(exc).__name__}: {exc}"}).encode("utf-8")
+                    self.send_response(500)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(err)))
+                    self.end_headers()
+                    self.wfile.write(err)
+                    return
                 state["rounds"] += 1
                 desc = [f"{name} ({len(f)}B) {f.hex()[:40]}…" for name, f in burst]
             body = json.dumps({"ok": True, "rounds": state["rounds"],
@@ -278,7 +293,12 @@ def _rogue_web(ser, args, r2_fake, send, log) -> int:
         def log_message(self, fmt, *a):        # 静默访问日志
             pass
 
-    srv = http.server.ThreadingHTTPServer(("127.0.0.1", int(args.rogue_web)), _H)
+    try:
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", int(args.rogue_web)), _H)
+    except OSError as exc:
+        print(f"[ROGUE-WEB] 端口 {args.rogue_web} 起不来({exc}) — "
+              f"换一个: --rogue-web 8644", file=sys.stderr)
+        return 3
     print(f"[ROGUE-WEB] http://127.0.0.1:{int(args.rogue_web)}/ — Ctrl+C 退出",
           file=sys.stderr)
     try:
