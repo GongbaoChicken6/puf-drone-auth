@@ -18,6 +18,8 @@ _auth_round),零延迟注入必先到场。半双工碰撞(注入撞上板子发
     python tools/attack/fake_result_attack.py --port COM9            # 竞速模式
     python tools/attack/fake_result_attack.py --port COM9 --passive  # 只监听(讲"攻击者在听")
     python tools/attack/fake_result_attack.py --port COM9 --inject-now  # 空闲注入一帧(单演 Tier0 IDS)
+    python tools/attack/fake_result_attack.py --port COM9 --rogue        # N10 伪基站接入演示(Enter 触发)
+    python tools/attack/fake_result_attack.py --port COM9 --rogue-web    # N10 浏览器单按钮版(http://127.0.0.1:8643)
 HC-12 同频配置用 tools/hc12 现成脚本。双串口拓扑另一半:真基站侧用
 web_bridge.py --serial-port COM6 起桥(见 FEATURES §2 N8)。
 仅供本作品决赛演示,信道上无真实密钥(伪 R2 按构造就是错的)。
@@ -28,7 +30,10 @@ tests/test_attack_tool.py 直驱验证。运行入口 main() 才 import pyserial
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -150,6 +155,140 @@ class FakeResultAttacker:
         return fake
 
 
+# ---- N10(finals-demo): 伪基站接入演示 ---------------------------------
+# 剧本:攻击者在自己的电脑上"点击认证"→本工具发一组帧→真站前端播放
+# "有别的基站在尝试连接→已拒绝"。板 A 全程不参与:0x0090 板端不解析,
+# 0x0093 仅 S_WAIT_RESULT 受理(S_IDLE 无条件无视),不动板子状态机。
+ROGUE_TID_DEFAULT = 99     # 未注册终端号:真站 on_access_request 查无模板→REJECT
+
+
+def build_rogue_burst(pack_fn=None, tid: int = ROGUE_TID_DEFAULT,
+                      c2: bytes | None = None, banner: bool = True,
+                      r2_fake: bytes = DEFAULT_FAKE_R2) -> list[tuple[str, bytes]]:
+    """伪基站"点击认证"一次所发的帧组。
+
+    ① banner 帧 0x0093 伪 RESULT —— 真站 RX 听到站端方向帧→Tier0 信道 IDS
+       红横幅"疑似伪基站注入";板端 S_IDLE 不受理 0x0093。
+    ② ACCESS_REQUEST(0x0090, 未注册 tid) —— 板端不解析 0x0090;真站闸门弹窗
+       (多口模式)或直接验证:无模板→REJECT+BLOCKED→前端拒绝动画。
+    """
+    if pack_fn is None:
+        pack_fn = HFIDAProtocol().pack
+    if c2 is None:
+        c2 = os.urandom(8)
+    if len(c2) != 8:
+        raise ValueError(f"c2 must be 8 bytes, got {len(c2)}")
+    out: list[tuple[str, bytes]] = []
+    if banner:
+        out.append(("banner_fake_result_0x0093",
+                    pack_fn(MSG_RESULT, result=RESULT_PASS, hd=5, r2=r2_fake)))
+    out.append(("rogue_access_request_0x0090",
+                pack_fn(MSG_ACCESS_REQUEST, terminal_id=tid, c2=c2)))
+    return out
+
+
+def _rogue_fire(send, args, r2_fake: bytes, log) -> list[tuple[str, bytes]]:
+    burst = build_rogue_burst(tid=args.rogue_tid,
+                              banner=not args.no_banner, r2_fake=r2_fake)
+    for i, (name, frame) in enumerate(burst):
+        if i:
+            time.sleep(0.3)      # 帧间隔:真站分帧解析,IDS 与拒绝动画各自成立
+        send(frame)
+        log(f">>> ROGUE {name} ({len(frame)}B) {frame.hex()[:44]}…")
+    log(">>> ROGUE burst done: 真站应先后出现 IDS 红横幅 + 拒绝动画/BLOCKED")
+    return burst
+
+
+def _rogue_interactive(ser, args, r2_fake, send, log) -> int:
+    print(f"[ROGUE] 伪基站接入演示 tid={args.rogue_tid} @ {ser.port} — "
+          f"Enter=发起一次, q=退出", file=sys.stderr)
+    rounds = 0
+    try:
+        while True:
+            try:
+                line = input()
+            except EOFError:
+                break
+            if line.strip().lower() in ("q", "quit", "exit"):
+                break
+            _rogue_fire(send, args, r2_fake, log)
+            rounds += 1
+    except KeyboardInterrupt:
+        pass
+    print(f"[ROGUE] stop. rounds={rounds}", file=sys.stderr)
+    return 0
+
+
+_ROGUE_PAGE = """<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<title>伪基站控制台</title><style>
+ body{background:#160608;color:#f5c8c8;font-family:system-ui,'Segoe UI',sans-serif;
+      display:flex;flex-direction:column;align-items:center;margin-top:8vh;gap:18px}
+ h1{font-size:22px;letter-spacing:2px} button{font-size:20px;padding:16px 42px;
+   background:#7a1220;color:#fff;border:1px solid #ff5a5a;border-radius:10px;
+   cursor:pointer} button:active{transform:scale(.97)}
+ #out{white-space:pre-wrap;font:12px/1.6 Consolas,monospace;color:#ffb3b3;
+      max-width:720px;word-break:break-all} .tip{color:#a97;font-size:13px}
+</style></head><body>
+<h1>☠ 伪基站控制台(仅供决赛演示)</h1>
+<button onclick="fire()">发起伪基站认证</button>
+<div class="tip">每次点击 = 注入 1 帧伪 RESULT(真站 IDS 红横幅) + 1 帧未注册接入请求
+(真站弹窗/验证→拒绝动画 + BLOCKED)。板 A 不参与、不受影响。</div>
+<div id="out">待命…</div>
+<script>async function fire(){document.getElementById('out').textContent='注入中…';
+ try{const r=await fetch('/attack',{method:'POST'});
+ const j=await r.json();document.getElementById('out').textContent=
+  '已发起 #'+j.rounds+'\n'+j.frames.join('\n');}catch(e){
+  document.getElementById('out').textContent='失败:'+e;}}</script></body></html>"""
+
+
+def _rogue_web(ser, args, r2_fake, send, log) -> int:
+    import http.server
+
+    state = {"rounds": 0}
+    lock = threading.Lock()
+
+    class _H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):                      # noqa: N802
+            if self.path.split("?")[0] != "/":
+                self.send_error(404)
+                return
+            body = _ROGUE_PAGE.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self):                     # noqa: N802
+            if self.path.split("?")[0] != "/attack":
+                self.send_error(404)
+                return
+            with lock:
+                burst = _rogue_fire(send, args, r2_fake, log)
+                state["rounds"] += 1
+                desc = [f"{name} ({len(f)}B) {f.hex()[:40]}…" for name, f in burst]
+            body = json.dumps({"ok": True, "rounds": state["rounds"],
+                               "frames": desc}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, fmt, *a):        # 静默访问日志
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", int(args.rogue_web)), _H)
+    print(f"[ROGUE-WEB] http://127.0.0.1:{int(args.rogue_web)}/ — Ctrl+C 退出",
+          file=sys.stderr)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    print(f"[ROGUE-WEB] stop. rounds={state['rounds']}", file=sys.stderr)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--port", default=None,
@@ -164,7 +303,18 @@ def main(argv: list[str] | None = None) -> int:
                    help="启动即注入一帧(单演 Tier0 IDS)后退出")
     p.add_argument("--simulate", action="store_true",
                    help="不连串口,回放内置演示字节流(排练用,零硬件)")
+    p.add_argument("--rogue", action="store_true",
+                   help="N10 伪基站接入演示:每按一次 Enter 发一组(banner+接入请求)")
+    p.add_argument("--rogue-tid", type=int, default=ROGUE_TID_DEFAULT,
+                   help="伪基站自称的终端号(默认 99,未注册→真站 REJECT)")
+    p.add_argument("--no-banner", action="store_true",
+                   help="rogue 模式不发 0x0093 banner 帧(只发接入请求)")
+    p.add_argument("--rogue-web", nargs="?", const=8643, type=int,
+                   default=None, metavar="PORT",
+                   help="rogue 模式浏览器单按钮版(默认端口 8643)")
     args = p.parse_args(argv)
+    if args.rogue and args.rogue_web is not None:
+        p.error("--rogue and --rogue-web are exclusive")
 
     r2 = bytes.fromhex(args.r2_hex)
     if len(r2) != 8:
@@ -190,6 +340,12 @@ def main(argv: list[str] | None = None) -> int:
         for f in sent:
             mid, fields = HFIDAProtocol.parse(f)
             print(f"[SIMULATE] sent msg={HFIDAProtocol.msg_name(mid)} {fields}")
+        if args.rogue or args.rogue_web is not None:   # N10 排练:打印将发的帧组
+            for name, frame in build_rogue_burst(tid=args.rogue_tid,
+                                                 banner=not args.no_banner,
+                                                 r2_fake=r2):
+                rm, rf = proto.parse(frame)
+                print(f"[SIMULATE][ROGUE] {name}: {proto.msg_name(rm)} {rf}")
         return 0 if (args.mode == "passive" or atk.injected_rounds == 1) else 1
 
     if not args.port:
@@ -207,6 +363,10 @@ def main(argv: list[str] | None = None) -> int:
             ser.write(frame)
             ser.flush()
         atk._send = send
+        if args.rogue or args.rogue_web is not None:      # N10 伪基站接入演示
+            if args.rogue_web is not None:
+                return _rogue_web(ser, args, r2, send, atk._log)
+            return _rogue_interactive(ser, args, r2, send, atk._log)
         if args.inject_now:
             atk.inject_now()
             return 0

@@ -13,7 +13,8 @@ if __package__ in (None, ""):
 
 from src.python.server.protocol import HFIDAProtocol
 from tools.attack.fake_result_attack import (
-    DEFAULT_FAKE_R2, FakeResultAttacker, FrameSync, MSG_RESPONSE_R1)
+    DEFAULT_FAKE_R2, FakeResultAttacker, FrameSync, MSG_RESPONSE_R1,
+    build_rogue_burst)
 
 _P = HFIDAProtocol()
 
@@ -128,5 +129,43 @@ class TestInjectNowAndDelay(unittest.TestCase):
         self.assertAlmostEqual(atk.last_inject_lag_s, 0.05)  # 递增 clock:lag≈delay
 
 
+
+
+class TestRogueBurst(unittest.TestCase):
+    """N10 伪基站接入演示帧组(零 I/O,只验构造与解析回读)。"""
+
+    def test_default_burst_two_frames(self):
+        burst = build_rogue_burst()
+        self.assertEqual([n for n, _ in burst],
+                         ["banner_fake_result_0x0093",
+                          "rogue_access_request_0x0090"])
+        mid, fl = HFIDAProtocol.parse(burst[0][1])
+        self.assertEqual(mid, 0x0093)
+        self.assertEqual(fl["result"], 0)          # PASS 伪装
+        self.assertEqual(fl["r2"], DEFAULT_FAKE_R2)
+        mid2, fl2 = HFIDAProtocol.parse(burst[1][1])
+        self.assertEqual(mid2, 0x0090)
+        self.assertEqual(fl2["terminal_id"], 99)   # 未注册 tid
+        self.assertEqual(len(fl2["c2"]), 8)
+
+    def test_no_banner_custom_tid_c2(self):
+        burst = build_rogue_burst(tid=7, banner=False, c2=bytes(range(8)))
+        self.assertEqual(len(burst), 1)
+        mid, fl = HFIDAProtocol.parse(burst[0][1])
+        self.assertEqual(mid, 0x0090)
+        self.assertEqual(fl["terminal_id"], 7)
+        self.assertEqual(fl["c2"], bytes(range(8)))
+
+    def test_c2_random_each_call(self):
+        a = build_rogue_burst(banner=False)[0][1]
+        b = build_rogue_burst(banner=False)[0][1]
+        self.assertNotEqual(a, b)                  # c2 每次随机→不触发真站重放窗
+
+    def test_bad_c2_rejected(self):
+        with self.assertRaises(ValueError):
+            build_rogue_burst(c2=b"\x00" * 7)
+
+
 if __name__ == "__main__":
     unittest.main()
+
