@@ -159,7 +159,8 @@ class FakeResultAttacker:
 # 剧本:攻击者在自己的电脑上"点击认证"→本工具发一组帧→真站前端播放
 # "有别的基站在尝试连接→已拒绝"。板 A 全程不参与:0x0090 板端不解析,
 # 0x0093 仅 S_WAIT_RESULT 受理(S_IDLE 无条件无视),不动板子状态机。
-ROGUE_TID_DEFAULT = 99     # 未注册终端号:真站 on_access_request 查无模板→REJECT
+ROGUE_TID_DEFAULT = 77     # 未注册终端号:真站 on_access_request 查无模板→REJECT
+# (勿用 99:repo templates.json 残留 tid99 测试模板,会被种进演示沙箱→秒拒剧本失效)
 
 
 def build_rogue_burst(pack_fn=None, tid: int = ROGUE_TID_DEFAULT,
@@ -326,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rogue", action="store_true",
                    help="N10 伪基站接入演示:每按一次 Enter 发一组(banner+接入请求)")
     p.add_argument("--rogue-tid", type=int, default=ROGUE_TID_DEFAULT,
-                   help="伪基站自称的终端号(默认 99,未注册→真站 REJECT)")
+                   help="伪基站自称的终端号(默认 77,未注册→真站 REJECT)")
     p.add_argument("--no-banner", action="store_true",
                    help="rogue 模式不发 0x0093 banner 帧(只发接入请求)")
     p.add_argument("--rogue-web", nargs="?", const=8643, type=int,

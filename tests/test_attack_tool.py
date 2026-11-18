@@ -145,7 +145,7 @@ class TestRogueBurst(unittest.TestCase):
         self.assertEqual(fl["r2"], DEFAULT_FAKE_R2)
         mid2, fl2 = HFIDAProtocol.parse(burst[1][1])
         self.assertEqual(mid2, 0x0090)
-        self.assertEqual(fl2["terminal_id"], 99)   # 未注册 tid
+        self.assertEqual(fl2["terminal_id"], 77)   # 未注册 tid
         self.assertEqual(len(fl2["c2"]), 8)
 
     def test_no_banner_custom_tid_c2(self):
