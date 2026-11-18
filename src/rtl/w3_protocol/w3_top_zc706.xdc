@@ -41,8 +41,8 @@ set_property -dict {PACKAGE_PIN A17 IOSTANDARD LVCMOS15} [get_ports led_heartbea
 # === N7(finals-demo): PMOD J58 外接大灯/蜂鸣器 —— UG954 v1.8 Table 1-31 实读 ===
 # （锚点自校验: PMOD1_0=AJ21/PMOD1_2=AB21 与上方 UART 两行一致；勿用 J57=I2C 扩展口）
 # 外接 10mm LED+330Ω 到 J58 对应脚与 GND；断电插拔（R4 红线）
-set_property -dict {PACKAGE_PIN AK21 IOSTANDARD LVCMOS25} [get_ports ext_fan]   ;# PMOD1_1 = J58.3 三态风扇口（ARM 释放/驱动）
-set_property -dict {PACKAGE_PIN AB16 IOSTANDARD LVCMOS25} [get_ports {ext_led[0]}]   ;# PMOD1_3 = J58.7  绿2
+set_property -dict {PACKAGE_PIN AB16 IOSTANDARD LVCMOS25} [get_ports ext_fan]   ;# PMOD1_3 = J58.7 三态风扇口（v5:换通道避开J58.3的TXS反灌）
+set_property -dict {PACKAGE_PIN AK21 IOSTANDARD LVCMOS25} [get_ports {ext_led[0]}]   ;# PMOD1_1 = J58.1 绿1（v5:与ext_fan交换）
 set_property -dict {PACKAGE_PIN Y20  IOSTANDARD LVCMOS25} [get_ports {ext_led[1]}]   ;# PMOD1_4 = J58.2  红
 set_property -dict {PACKAGE_PIN AA20 IOSTANDARD LVCMOS25} [get_ports {ext_led[2]}]   ;# PMOD1_5 = J58.4  琥珀
 set_property -dict {PACKAGE_PIN AC18 IOSTANDARD LVCMOS25} [get_ports ext_buzzer]     ;# PMOD1_6 = J58.6  蜂鸣器

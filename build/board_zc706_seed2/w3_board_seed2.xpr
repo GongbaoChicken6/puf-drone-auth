@@ -7,7 +7,7 @@
 <Project Product="Vivado" Version="7" Minor="72" Path="D:/puf-drone-auth/build/board_zc706_seed2/w3_board_seed2.xpr">
   <DefaultLaunch Dir="$PRUNDIR"/>
   <Configuration>
-    <Option Name="Id" Val="646b8fe4636a463c88033f9ead299a36"/>
+    <Option Name="Id" Val="3454f99163b84fb08b80e76ff8e3b391"/>
     <Option Name="Part" Val="xc7z045ffg900-2"/>
     <Option Name="CompiledLibDir" Val="$PCACHEDIR/compile_simlib"/>
     <Option Name="CompiledLibDirXSim" Val=""/>
@@ -97,6 +97,13 @@
         </FileInfo>
       </File>
       <File Path="$PPRDIR/../../src/rtl/common/crc16_mcrf4xx.v">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <File Path="$PPRDIR/../../src/rtl/w3_protocol/demo_led.v">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>

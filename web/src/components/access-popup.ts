@@ -10,6 +10,7 @@
  * ============================================================ */
 import { api } from '../core/api';
 import { onPuf } from '../core/bus';
+import { store } from '../core/store';
 import type { AccessQueueEntry } from '../core/types';
 
 function fmtWait(ts: number): string {
@@ -65,6 +66,9 @@ export class AccessPopup {
       this.selected = p.terminal_id;
       this.busyTid = null;
       this.hide();          /* 选中即收起,五帧动画接管屏幕 */
+      /* 舞台焦点跟随人工选择:否则 stageAccepts() 过滤掉该终端事件,
+       * 五帧/判定/激光只进日志不上演(2026-11-16 现场复现) */
+      store.select(p.terminal_id);
       this.render();
     });
     onPuf('puf:access-finished', p => {
@@ -90,6 +94,7 @@ export class AccessPopup {
       this.busyTid = null;
       if (r.ok) {
         this.hide();        /* 保险:事件先到也已收起 */
+        store.select(tid);  /* 舞台锁定被选终端(与 access.selected 双保险) */
       } else {
         this.errText = r.reason ?? '未知错误';
         this.show();        /* 409/404 时保持弹窗,原因上屏 */

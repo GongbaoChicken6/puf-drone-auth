@@ -34,7 +34,17 @@ def _do_enroll_real(app, job) -> str:
     n = max(4, int(job.n or 100))
     rounds = max(1, int(job.measurements or 3))
     run_id = job.run_id
-    ln = getattr(app, "serial_listener", None)
+    # 多口(N6)路由修复:双串口下 app.serial_listener 只是第一个口,
+    # 会把握手帧打到别的板;先按 tid 路由(resolve_listener),再回退。
+    ln = None
+    _resolve = getattr(app, "resolve_listener", None)
+    if _resolve is not None:
+        try:
+            ln = _resolve(tid)
+        except Exception:
+            ln = None
+    if ln is None:
+        ln = getattr(app, "serial_listener", None)
     if ln is None or not getattr(ln, "running", False):
         app.hub.publish("run.error", {
             "run_id": run_id, "stage": "enroll_real", "terminal_id": tid,
@@ -89,7 +99,7 @@ def _do_enroll_real(app, job) -> str:
             "added": s.get("added", n),
             "stable_bits": s.get("stable_bits", 0),
             "stability_pct": s.get("stability_pct", 0),
-            "pool": app._pool_payload(tid),
+            "pool": app.orch._pool_payload(tid),
             "source": "real"})
         return run_id
     except Exception as exc:

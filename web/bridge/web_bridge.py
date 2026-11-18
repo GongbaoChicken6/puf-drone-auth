@@ -481,6 +481,7 @@ class Job:
     tid: int | None = None
     mode: str = "normal"
     n: int = 100
+    measurements: int = 3         # N5 enroll_real: 每 CRP 的测量轮数(多数表决)
     key_hex: str | None = None
     fresh: bool = False            # 注册前清空该终端模板与池(重注册语义)
     run_id: str | None = None      # 由提交方预生成,REST 返回值与事件流一致
@@ -534,7 +535,13 @@ class Orchestrator:
             except Empty:
                 continue
             try:
-                job.result = getattr(self, f"_do_{job.kind}")(job)
+                # N5 enroll_real 带自定义 runner(串口握手逻辑在 enroll_real.py);
+                # 旧分发按 kind 拼方法名,会忽略 _runner 直接 AttributeError。
+                _runner = getattr(job, "_runner", None)
+                if _runner is not None:
+                    job.result = _runner()
+                else:
+                    job.result = getattr(self, f"_do_{job.kind}")(job)
             except Exception as exc:  # noqa: BLE001 —— 兜底成 run.error,进程不倒
                 job.error = f"{type(exc).__name__}: {exc}"
                 self.hub.publish("run.error", {
@@ -2495,7 +2502,9 @@ class RealSerialListener:
         self._log(f"REAL auth tid={tid} run={rid}")
         try: chal = self.proto.on_access_request(tid, c2=c2)
         except Exception as e:
-            self._log(f"REAL error: {e}","error"); return
+            self._log(f"REAL error: {e}","error")
+            self._early_reject(tid, rid, {"result": 2, "hd": 255})
+            return
         mid,chf = self.proto.parse(chal)
         if mid == 0x0093:  # RESULT=error(REPLAY/ERROR/POOL_EMPTY 等)
             # 帧必须真的写给板子,否则板侧只能等超时,而网页却展示了一条"已发送"——
@@ -2507,6 +2516,7 @@ class RealSerialListener:
                 self._log(f"REAL early-RESULT mid=0x{mid:04x} written to board (run={rid})")
             except Exception as e:
                 self._log(f"REAL early-RESULT write failed: {e}", "error")
+            self._early_reject(tid, rid, chf)
             return
         # CHALLENGE → board
         # 节奏修复(1103):真串口路径的帧间 sleep 不得超过板侧等待窗——R1→RESULT 必须
@@ -2525,10 +2535,13 @@ class RealSerialListener:
             if n: rep+=self.ser.read(n)
             else: time.sleep(0.005)
         if len(rep)<rl:
-            self._log(f"REAL timeout RESPONSE {len(rep)}/{rl}","error"); return
+            self._log(f"REAL timeout RESPONSE {len(rep)}/{rl}","error")
+            self._early_reject(tid, rid, {"result": 2, "hd": 255})
+            return
         try: _,rf = self.proto.parse(rep)
         except Exception as e:
             self._log(f"REAL RESPONSE_R1 parse failed ({len(rep)}B): {type(e).__name__}: {e}", "error")
+            self._early_reject(tid, rid, {"result": 2, "hd": 255})
             return
         r1s = rf["r1s"]
         time.sleep(0.2)
@@ -2635,6 +2648,49 @@ class RealSerialListener:
                     self.hub.publish("access.finished",
                                      {"terminal_id": tid, "state": _final_state})
             except Exception as _ge:  # noqa: BLE001 —— 出队失败不得杀监听线程
+                self._log(f"ACCESS GATE finish error: {type(_ge).__name__}: {_ge}", "error")
+
+    def _early_reject(self, tid, rid, rf2):
+        """早期失败(池空/重放/无模板)的终态补全:verdict + session.update + 闸门出队。
+
+        N6 现场缺陷(2026-11-16): 板A无模板时 on_access_request 直接返回/抛出,
+        _auth 静默 return —— 前端收不到 verdict,拒绝动画不播,且 gate.finish
+        没跑导致 selected 悬挂、界面永久"验证中"。"""
+        from src.python.server.threshold import TAU_PASS, TAU_REJECT
+        try:
+            rv = int(rf2.get("result", 2))
+        except Exception:
+            rv = 2
+        # 演示语义(步骤④): 未注册机器(该tid无任何模板)不是"池空"这种内部错误,
+        # 而是明确的 REJECT。其余早期错误保持原码(POOL_EMPTY/REPLAY/ERROR)。
+        try:
+            _has_tpl = bool(self.proto.templates.templates.get(str(tid)))
+        except Exception:
+            _has_tpl = True
+        if not _has_tpl and rv != 0:
+            rv = 1
+        pool_st = {"remaining": 0, "pool_size": 0, "pct": 0}
+        try:
+            _ps = self.proto.pools.get(tid).status()
+            pool_st = {"remaining": _ps["remaining"], "pool_size": _ps["pool_size"],
+                       "pct": _ps["remaining_pct"]}
+        except Exception:
+            pass
+        self.hub.publish("verdict", {
+            "run_id": rid, "terminal_id": tid, "result": rv,
+            "result_name": RESULT_NAMES.get(rv, str(rv)),
+            "n_responses": 0, "hd": int(rf2.get("hd", 255)),
+            "hd_per_response": [], "pool": pool_st,
+            "thresholds": {"tau_pass": TAU_PASS, "tau_reject": TAU_REJECT,
+                           "scaled_pass": TAU_PASS, "scaled_reject": TAU_REJECT}})
+        self.hub.publish("session.update", {"terminal_id": tid, "state": "BLOCKED"})
+        _gate = getattr(self.app, "access_gate", None)
+        if _gate is not None and _gate.enabled:
+            try:
+                if _gate.finish(tid, "BLOCKED"):
+                    self.hub.publish("access.finished",
+                                     {"terminal_id": tid, "state": "BLOCKED"})
+            except Exception as _ge:  # noqa: BLE001
                 self._log(f"ACCESS GATE finish error: {type(_ge).__name__}: {_ge}", "error")
 
     def _park(self, tid):
