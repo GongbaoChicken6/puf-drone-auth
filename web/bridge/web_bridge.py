@@ -975,7 +975,7 @@ class Orchestrator:
         # 必须在一切动作之前拒绝。
         if int(tid) in getattr(self.app, "real_serial_tids", set()):
             why = (f"demo_reset tid={tid} 已拒绝:该终端为真板终端,重置会删除其实板"
-                   f"挑战池文件并清空重放记录(不可逆)。S5 重演请用演示终端(7/9/99)。")
+                   f"挑战池文件并清空重放记录(不可逆)。S5 重演请用演示终端(7/9/88)。")
             self.hub.publish("server.log", {"level": "warn", "msg": why})
             self.hub.publish("run.error", {"run_id": self.next_run_id(), "stage": "demo_reset",
                                             "error": why, "terminal_id": tid})
@@ -1682,11 +1682,11 @@ class MockApp:
             "templates": [
                 {"terminal_id": "7", "n_pairs": 500, "stable_bits": 61},
                 {"terminal_id": "9", "n_pairs": 500, "stable_bits": 60},
-                {"terminal_id": "99", "n_pairs": 20, "stable_bits": 62}],
+                {"terminal_id": "88", "n_pairs": 20, "stable_bits": 62}],
             "pools": [
                 {"terminal_id": 7, "remaining": 484, "pool_size": 500, "pct": 97},
                 {"terminal_id": 9, "remaining": 496, "pool_size": 500, "pct": 99},
-                {"terminal_id": 99, "remaining": 3, "pool_size": 20, "pct": 15}],
+                {"terminal_id": 88, "remaining": 3, "pool_size": 20, "pct": 15}],
             "hsm": {"available": True, "keys": 3},
             "drone": self.drone.snapshot(),   # finals-demo-drone
         }
@@ -1774,7 +1774,7 @@ class MockApp:
     def viz_templates(self) -> dict:
         rng = _secrets.SystemRandom()
         out: dict[str, Any] = {}
-        for tid in ("7", "9", "99"):
+        for tid in ("7", "9", "88"):
             responses = {rng.randbytes(8).hex(): rng.randbytes(8).hex() for _ in range(12)}
             out[tid] = {"responses": responses,
                         "stability_mask": "1" * 58 + "0" * 6}
@@ -2041,8 +2041,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--measurements", type=int, default=3, help="注册时每挑战重复测量次数")
     p.add_argument("--demo-terminal", dest="demo_terminals", action="append",
                    type=parse_demo_terminal, metavar="TID[:SIZE]",
-                   default=[DemoTerminal(7, 500), DemoTerminal(9, 500), DemoTerminal(99, 20)],
-                   help="演示终端 tid[:池容量],可重复(默认 7、9、99:20)")
+                   default=[DemoTerminal(7, 500), DemoTerminal(9, 500), DemoTerminal(88, 20)],
+                   help="演示终端 tid[:池容量],可重复(默认 7、9、88:20; N11:99 已让给伪基站攻击)")
     p.add_argument("--mock", action="store_true",
                    help="MOCK 回放模式:零 server 依赖、零数据写入")
     p.add_argument("--once", choices=["s1", "s2", "s3", "s4", "s5", "s6", "s7", "golden"],

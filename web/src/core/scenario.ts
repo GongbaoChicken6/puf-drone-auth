@@ -55,7 +55,7 @@ export const SCENARIOS: readonly Scenario[] = [
     expect: 'CHALLENGE → RESPONSE → gray.extra(加测) → RESULT',
   },
   {
-    id: 'S5', name: '池耗尽', mode: 'normal', kind: 'drain', tid: 99,
+    id: 'S5', name: '池耗尽', mode: 'normal', kind: 'drain', tid: 88,
     focus: '池水位空 + 维护引导',
     expect: '反复认证至 draw 失败 → RESULT(result=3 池耗尽)',
   },
@@ -239,7 +239,7 @@ export class ScenarioPlayer {
     }
 
     // 舞台按 run_id 锁定当前选中终端(§6.4),故执行前先把选中切到本幕目标,
-    // 否则 S5(终端 99)的事件会被判为非选中终端而只进日志、不进舞台。
+    // 否则 S5(终端 88)的事件会被判为非选中终端而只进日志、不进舞台。
     store.select(tid);
     store.log({
       tone: 'info', sev: 'info', terminalId: tid, runId: null, type: 'server.log',

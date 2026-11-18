@@ -64,24 +64,6 @@
     "55": {
       "key_hex": "97a0ab1beafcbf979e7ce8f6",
       "c2_history": []
-    },
-    "99": {
-      "key_hex": "cb11d689c5aed38cc40c5ebf",
-      "c2_history": [
-        "a1a2a3a4a5a6a7a8",
-        "a2a3a4a5a6a7a8a9",
-        "a3a4a5a6a7a8a9aa",
-        "a4a5a6a7a8a9aaab",
-        "a5a6a7a8a9aaabac",
-        "a6a7a8a9aaabacad",
-        "a7a8a9aaabacadae",
-        "a8a9aaabacadaeaf",
-        "a9aaabacadaeafb0",
-        "aaabacadaeafb0b1",
-        "abacadaeafb0b1b2",
-        "1718191a1b1c1d1e",
-        "1a1b1c1d1e1f2021"
-      ]
     }
   }
 }
