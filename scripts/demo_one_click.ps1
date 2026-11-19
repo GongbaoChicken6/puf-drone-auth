@@ -1,6 +1,6 @@
 ﻿# demo_one_click.ps1 -- N12/N13(finals-demo) 一键启动 v3 (2026-11-19)
 # 变更(N13):
-#   1) 板A 烧 v4b(三键并联: SW7|SW8|SW9), 板B 烧 seed2b(差异化布局+三键)
+#   1) 不烧录: 板A/板B 从 SD 卡自举(官方FSBL+v4c/seed2c, SW11=00110), 脚本纯 PC 侧
 #   2) 双串口自动归类: 逐口 AUTH_POLL 点名, 回谁 tid 就是谁(板A=COM6/板B=COM11 端口号变了也认)
 #   3) 桥走 --serial-multi + --tid-port 路由; 单板自动降级
 #   4) setkey tid1/tid2 双补; 模板缺失自动录入(A n=100 / B n=30, B池只有32格)
@@ -18,7 +18,7 @@ param(
     [string]$SerialPort = 'auto',
     [ValidateRange(1, 65535)]
     [int]$Port = 8642,
-    [switch]$NoBurn,
+    [switch]$NoBurn,   # 兼容保留: 脚本已不再烧录(板子从 SD 卡自举)
     [switch]$NoBrowser,
     [switch]$Enroll,
     [string]$RevokedTids = '2',   # N16: 已吊销终端(板B本身份->拒绝接入); 空串禁用
@@ -31,8 +31,8 @@ Set-Location $repo
 $KEY_HEX = '0001020308090a0b10111213'
 $SN_A = '210251A0195C'
 $SN_B = '210251A04F2C'
-$BIT_A = Join-Path $repo 'build\board_zc706_arm_v4b\w3_top_zc706.bit'
-$BIT_B = Join-Path $repo 'build\board_zc706_seed2b\w3_top_zc706_seed2.bit'
+$BIT_A = Join-Path $repo 'build\board_zc706_arm_v4c\w3_top_zc706.bit'
+$BIT_B = Join-Path $repo 'build\board_zc706_seed2c\w3_top_zc706_seed2.bit'
 $state = Join-Path $repo '.demo_state'
 $manifest = Join-Path $state 'bit_manifest.json'
 
@@ -61,23 +61,10 @@ Get-Process hw_server -ErrorAction SilentlyContinue | Stop-Process -Force -Error
 Start-Sleep -Milliseconds 500
 
 # ---------- [2/8] JTAG 烧写(板A v4b + 板B seed2b) ----------
-Step 2 'JTAG 烧写(板A=v4b 三键 / 板B=seed2b 差异化布局)'
-if ($SerialPort -eq 'none' -or $NoBurn) {
-    Warn '跳过烧写(板子必须仍带电持有bit; 断电过请去掉 -NoBurn)'
-} else {
-    foreach ($b in @(@{n='板A'; bit=$BIT_A; sn=$SN_A}, @{n='板B'; bit=$BIT_B; sn=$SN_B})) {
-        if (-not (Test-Path $b.bit)) { Warn "$($b.n) bit 不存在: $($b.bit) -- 先建流" ; continue }
-        $out = & 'D:\vivado\2026.1\Vivado\bin\vivado.bat' -mode batch -nojournal -nolog -notrace -source 'build\tcl\program_zc706.tcl' -tclargs $b.bit $b.sn 2>&1 | Out-String
-        if ($out -match 'PROGRAM_OK') { Ok "$($b.n) PROGRAM_OK" } else { Warn "$($b.n) 烧写未确认(板子未上电?) -- 由链路自检裁决" }
-        Get-Process hw_server -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    }
-    $elf = Join-Path $repo 'sw\arm_fan\arm_fan.elf'
-    $atcl = Join-Path $repo 'sw\arm_fan\arm_fan.tcl'
-    if ((Test-Path $elf) -and (Test-Path $atcl)) {
-        $aout = & 'D:\vivado\2026.1\Vitis\bin\xsdb.bat' $atcl 2>&1 | Out-String
-        if ($aout -match 'ARM_FAN_OK') { Ok '板A ARM 监视器 ELF ARM_FAN_OK' } else { Warn 'ELF 未加载(不阻断)' }
-    }
-}
+Step 2 '板子确认(SD 卡自举模式, 本脚本不烧录)'
+# 决赛口径: 两块板直接从 SD 卡自举(SW11=00110, 官方FSBL+v4c/seed2c), 无需 JTAG。
+# 请确认: 板已上电且 INIT(DS35) 黄+心跳; 若心跳异常 -> 检查卡在 J30/SW11/断电重启。
+$sdA = $false; $sdB = $false   # 由后续点名归类实际验证在线情况
 
 # ---------- [3/8] bit 一致性防呆 + 可选清模板 ----------
 Step 3 'bit 清单核对(换bit会使 PUF 模板失效)'
@@ -296,7 +283,9 @@ else:
             Set-Content -Encoding utf8 $stmp (($smokePy.Replace('BASEURL', "http://127.0.0.1:$bound")).Replace('TIDNUM', "$t"))
             $sr = & python $stmp 2>&1 | Out-String
             Remove-Item $stmp -ErrorAction SilentlyContinue
+            $isRevoked = (@($RevokedTids -split ',') -contains "$t")
             if ($sr -match 'SMOKE PASS') { Ok ("tid$t 认证冒烟 PASS: " + ($sr -replace '\r?\n', ' ').Trim()) }
+            elseif ($isRevoked -and $sr -match 'SMOKE REJECT') { Ok "tid$t 已吊销 -> REJECT 拒绝接入(预期表现): " + ($sr -replace '\r?\n', ' ').Trim() }
             elseif ($sr -match 'SMOKE') { $smokeFail += $t; Warn ("tid$t 认证冒烟异常: " + ($sr -replace '\r?\n', ' ').Trim()) }
             else { Warn "tid$t 冒烟无输出(板子忙?) -- 不阻断, 但演示前请手测一次" }
         }
@@ -321,6 +310,9 @@ if ($SerialPort -ne 'none') { Write-Host "  端口: $portsTxt" -ForegroundColor 
 Write-Host "  前端: http://127.0.0.1:$bound/console.html" -ForegroundColor Green
 Write-Host '  发起认证: 板A 按 SW8(右) | 板B 按 SW8(右)' -ForegroundColor Yellow
 Write-Host '  !! 板A 的 SW7 触点已坏, 不要按; SW7/SW9 为冗余备键' -ForegroundColor Yellow
-Write-Host '  伪基站演示: python tools/attack/fake_result_attack.py --rogue  (或 http://127.0.0.1:8643)' -ForegroundColor Gray
+Write-Host '  伪基站演示: python tools/attack/fake_result_attack.py --via-bridge --rogue-web 8643' -ForegroundColor Gray
+Write-Host '             然后浏览器开 http://127.0.0.1:8643 (武装竞速/伪基站接入 两按钮)' -ForegroundColor Gray
+Write-Host '  板B 剧本: SW12=0010 按 SW8=拒绝接入 | SW12=0001 按 SW8=假冒警报 (收尾拨回0010)' -ForegroundColor Yellow
+Write-Host '  板子: SD 卡插 J30 + SW11=00110, 上电即自举(INIT 黄+心跳); 本脚本只管 PC 侧' -ForegroundColor Gray
 Write-Host '  不做: 不按SW13; PMOD断电才插拔; 换bit后必须重录模板(-Enroll)' -ForegroundColor Gray
 Write-Host '  ============================================' -ForegroundColor Green
