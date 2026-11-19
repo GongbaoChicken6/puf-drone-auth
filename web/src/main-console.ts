@@ -91,6 +91,20 @@ document.body.appendChild(enrollWizard.el);
 
 /* finals-demo-N6:接入闸门——SW7 主动认证人工选择队列(自订阅 puf:access-*,
  * 弹窗+右下待接入徽标;方案v2 docs/process/plans/access_gate_design_20261116.md) */
+/* N11b(finals-demo): 真机认证活动自动接管舞台焦点——SW7 直跑(无弹窗)轮次
+ * 没有任何事件把 selectedTerminal 切到板A,五帧动画被 stageAccepts() 过滤成
+ * "只进日志不上屏"(2026-11-19 现场复现,与 11-16 弹窗版同款病)。
+ * 真板 ACCESS_REQUEST 一到就把舞台焦点切过去;仿真帧(source 非 real-terminal)
+ * 不动焦点,不干扰 S1-S8 演示。 */
+onPuf('puf:frame', p => {
+  if (p.name === 'ACCESS_REQUEST' && p.source === 'real-terminal') {
+    store.select(p.terminal_id);
+  }
+});
+/* 停驻路径只发 access.requested(无 frame.rx),同样切焦点 */
+onPuf('puf:access-requested', p => {
+  if (p.terminal_id != null) store.select(p.terminal_id);
+});
 const accessPopup = new AccessPopup();
 accessPopup.bind();
 document.body.appendChild(accessPopup.el);
