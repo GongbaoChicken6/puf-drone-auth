@@ -1,0 +1,5 @@
+the_ROM_image:
+{
+[bootloader]official/fsbl_official.elf
+w3_top_zc706_seed2c.bit
+}
