@@ -134,6 +134,8 @@ web/.out/
 /build/board_zc706_seed2/
 /build/board_zc706_seed2b/
 /build/board_zc706_arm_v4b/
+/build/board_zc706_arm_v4c/
+/build/board_zc706_seed2c/
 /build/bg_std*.txt
 /build/sd_boot/*.bin
 /build/sd_boot/*.bit
