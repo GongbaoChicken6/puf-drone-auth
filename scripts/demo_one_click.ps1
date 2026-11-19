@@ -21,6 +21,7 @@ param(
     [switch]$NoBurn,
     [switch]$NoBrowser,
     [switch]$Enroll,
+    [string]$RevokedTids = '2',   # N16: 已吊销终端(板B本身份->拒绝接入); 空串禁用
     [string]$TidMap = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -200,6 +201,7 @@ else {
 
 }
 $bargs += @('--access-gate','--access-label','1=板A,2=板B')
+if ($RevokedTids) { $bargs += @('--revoked-tids', $RevokedTids); Ok "已吊销终端: $RevokedTids (排队->验证->REJECT 拒绝接入)" }
 if (-not $NoBrowser) { $bargs += '--open' }
 $log = Join-Path $state ('bridge_' + (Get-Date -Format HHmmss) + '.log')
 $proc = Start-Process -FilePath 'python' -ArgumentList $bargs -WorkingDirectory $repo -RedirectStandardOutput $log -RedirectStandardError ($log + '.err') -PassThru -WindowStyle Hidden

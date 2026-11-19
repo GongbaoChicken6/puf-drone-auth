@@ -1124,6 +1124,10 @@ class RealApp:
         self.access_gate = AccessGate(
             enabled=bool(getattr(args, "access_gate", False)),
             labels=parse_int_kv(getattr(args, "access_label", None)))
+        # N16: 已吊销/未授权终端——照常排队接受验证,但本轮必 REJECT
+        self.revoked_tids = {int(x) for x in str(getattr(args, "revoked_tids", "") or "").split(",") if x.strip().isdigit()}
+        if self.revoked_tids:
+            print(f"[N16] revoked tids: {sorted(self.revoked_tids)} (queued, round always REJECT)")
 
     # ---- 生命周期 ----
     def start(self) -> None:
@@ -2143,6 +2147,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--access-gate", action="store_true",
                    help="finals-demo-N6: 接入闸门——SW7 主动认证入队,人工选择后 "
                         "AUTH_POLL 唤醒(多串口模式强制开启)")
+    p.add_argument("--revoked-tids", default=None,
+                   help="N16: revoked/unauthorized terminal ids (csv, e.g. 2): still queued and verified, but the round ends REJECT (demo: board B denied as itself)")
     p.add_argument("--access-label", default=None, metavar="1=板A,2=板B",
                    help="finals-demo-N6: 接入队列终端标签(默认 终端#tid)")
     p.add_argument("--tid-port", default=None, metavar="1=COM6,2=COM11",
@@ -2527,6 +2533,10 @@ class RealSerialListener:
                             _registered = self.proto.templates.has_terminal(_tid)
                         except Exception:
                             _registered = True   # 查询失败不拦正常流程
+                        # N16: 已吊销终端仍是"已知设备"——照常排队接受人工选择,
+                        # 但验证轮必以 REJECT 收场(演示:板B 本身份被拒绝接入)
+                        if _tid in getattr(self.app, "revoked_tids", set()):
+                            _registered = True
                         if not _registered:
                             try:
                                 self.hub.publish("channel.intrusion", {
@@ -2593,6 +2603,41 @@ class RealSerialListener:
                                   f"{type(e).__name__}: {e}", "error")
     def _auth(self, tid, ar_f, ar_raw):
         rid = f"real-{int(time.time()*1000)}"
+        # N16: 已吊销/未授权设备——五帧走完(板子等 CHALLENGE,不发它就超时假死),
+        # 但 RESULT 恒为 REJECT:基站长里没有它的接入资格。拒绝动画照常播。
+        if int(tid) in getattr(self.app, "revoked_tids", set()):
+            import secrets as _sec
+            self._ef(rid, tid, 0x0090, ar_raw, False)
+            self._log(f"REAL auth tid={tid} run={rid} [REVOKED: round will end REJECT]")
+            try:
+                _seeds = [_sec.SystemRandom().getrandbits(64).to_bytes(8, "little") for _ in range(4)]
+                chal = self.proto.pack(0x0091, seeds=_seeds)
+                time.sleep(0.2)
+                self._ef(rid, tid, 0x0091, chal, True)
+                self.ser.write(chal); self.ser.flush()
+                rl = 12 + 8 * 4; rep = b""; t0 = time.time()
+                while len(rep) < rl and time.time() - t0 < 3.0:
+                    n = min(self.ser.in_waiting, rl - len(rep))
+                    if n: rep += self.ser.read(n)
+                    else: time.sleep(0.005)
+                if len(rep) >= rl:
+                    self._ef(rid, tid, 0x0092, rep, False)
+                rej = self.proto.pack(0x0093, result=1, hd=255, r2=b"\x00" * 8)
+                time.sleep(0.2)
+                self._ef(rid, tid, 0x0093, rej, True)
+                self.ser.write(rej); self.ser.flush()
+                self.hub.publish("verdict", {
+                    "run_id": rid, "terminal_id": int(tid), "result": 1,
+                    "result_name": "REJECT",
+                    "note": "device revoked/unauthorized -- access denied",
+                    "n_responses": 4, "hd": 255, "hd_per_response": [64, 64, 64, 64],
+                    "thresholds": {"tau_pass": 6, "scaled_pass": 24}})
+                self._log(f"REVOKED tid={tid}: REJECT sent (run={rid})", "error")
+            except Exception as _e:  # noqa: BLE001
+                self._log(f"REVOKED round error: {type(_e).__name__}: {_e}", "error")
+            finally:
+                self._emit_session(int(tid))
+            return
         # N4(finals-demo): poll 超时判定的观测点——每次收到 ACCESS_REQUEST 都刷新
         self.app.last_access_request_ts = time.time()
         _by = getattr(self.app, "last_access_request_by_tid", None)
@@ -2697,7 +2742,24 @@ class RealSerialListener:
             "thresholds":{"tau_pass":TAU_PASS,"tau_reject":TAU_REJECT,
                 "scaled_pass":TAU_PASS*max(nr,1),"scaled_reject":TAU_REJECT*max(nr,1)}}
         if rv==0 and "r2" in rf2: vp["r2"]=rf2["r2"].hex()
+        vp["impostor"] = bool(rv == 1 and hd and nr and (sum(hd) / nr) >= TAU_REJECT)
         self.hub.publish("verdict", vp)
+        # N16: 假冒接入分类——REJECT 且平均 HD 达板间级(深红,~TAU_REJECT bit/响应)
+        # = 对面硬件根本不是登记的那台(克隆/冒充),而非噪声失配。
+        if vp["impostor"]:
+            try:
+                self.hub.publish("channel.intrusion", {
+                    "msg_id": 0x0090, "name": "ACCESS_REQUEST",
+                    "hex": ar_raw.hex(), "len": len(ar_raw),
+                    "note": f"IMPOSTOR access: tid={tid} claimed but hardware fingerprint "
+                            f"is at inter-device level (mean HD {sum(hd)//nr}/64 per response) "
+                            f"-- cloned/spoofed identity, access denied",
+                    "kind": "access", "source": "impostor-classifier",
+                    "terminal_id": int(tid)})
+                self._log(f"IMPOSTOR: tid={tid} fingerprint at inter-device level "
+                          f"(mean HD {sum(hd)//nr}/64) -- spoofed identity REJECT", "error")
+            except Exception as _e:  # noqa: BLE001
+                self._log(f"IMPOSTOR publish error: {_e}", "error")
         # ← CONFIRM (if PASS) — R4 frame-sync fix (defect-c1 P1)
         # 竞速攻击下串口缓冲含 [攻击RESULT 22B][CONFIRM_FAIL 17B]=39B,
         # 旧裸读17B一把吞→parse失败→三重证据丢失+屏幕假PASS。
