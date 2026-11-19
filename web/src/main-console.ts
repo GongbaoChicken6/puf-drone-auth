@@ -17,7 +17,6 @@ import './styles/console.css';
 import { api, SseClient, type SseState } from './core/api';
 import { STAGE_CAMERA, STAGE_SHOT, emit, onPuf } from './core/bus';
 import { resultOfFrame } from './core/format';
-import { SCENARIOS, ScenarioPlayer, type ScenarioId } from './core/scenario';
 import { store } from './core/store';
 import type { AuthMode, Envelope } from './core/types';
 
@@ -36,23 +35,8 @@ import { Stage2d } from './stages/stage2d';
 const stage = new Stage2d();
 const right = new RightPanel();
 
-const player = new ScenarioPlayer({
-  auth: (tid, mode) => doAuth(tid, mode),
-  enroll: (tid) => doEnroll(tid),
-  drone: (tid, cmd, extra) => doDroneCmd(tid, cmd, extra),   // finals-demo-drone S8
-});
-
 const topbar = new Topbar({
   onFrameMs: ms => store.patchUi({ frameMs: ms }),
-  onPlay: ids => player.play(ids as ScenarioId[]),
-  onStep: () => player.step(),
-  onPauseToggle: () => {
-    const s = player.status().state;
-    if (s === 'paused') player.resume();
-    else if (s === 'running') player.pause();
-    else player.step(SCENARIOS.map(x => x.id));
-  },
-  onStop: () => player.stop(),
 });
 
 const left = new LeftPanel({
@@ -62,10 +46,6 @@ const left = new LeftPanel({
   c2reset: id => { void doC2Reset(id); },
   setkey: id => { void doSetKey(id); },
   poll: id => { void doPoll(id); },
-  runScenario: id => {
-    player.stop();
-    player.play([id]);
-  },
 });
 
 /* 原始信封账本(§6.2 导出＝答辩证据附件,要的是未加工的原始事件流) */
@@ -82,8 +62,12 @@ document.body.appendChild(new AlarmModal().el);   // N11:大警报弹窗
 /* N6(finals-demo): 帧飞行动画(自订阅 puf:frame,数据流具象化,悬浮 body) */
 document.body.appendChild(new FrameFlight().el);
 
-/* finals-demo-drone:无人机演示 HUD(自订阅 store.drones,右下悬浮) */
-document.body.appendChild(new DronePanel().el);
+/* finals-demo-drone:无人机演示 HUD(自订阅 store.drones)。
+ * 挂在舞台视图右下 —— 与舞台同一坐标系,不再悬浮在底栏/右栏上。 */
+{
+  const stageView = stage.el.querySelector('.stage-view');
+  (stageView ?? document.body).appendChild(new DronePanel().el);
+}
 
 /* N5(finals-demo):真板指纹录入向导(模态,注册按钮触发) */
 const enrollWizard = new EnrollWizard();
@@ -95,7 +79,7 @@ document.body.appendChild(enrollWizard.el);
  * 没有任何事件把 selectedTerminal 切到板A,五帧动画被 stageAccepts() 过滤成
  * "只进日志不上屏"(2026-11-19 现场复现,与 11-16 弹窗版同款病)。
  * 真板 ACCESS_REQUEST 一到就把舞台焦点切过去;仿真帧(source 非 real-terminal)
- * 不动焦点,不干扰 S1-S8 演示。 */
+ * 不动焦点。 */
 onPuf('puf:frame', p => {
   if (p.name === 'ACCESS_REQUEST' && p.source === 'real-terminal') {
     store.select(p.terminal_id);
@@ -174,12 +158,12 @@ function wireStore(): void {
   // 第三重(confirm.rejected 此前零消费,R2 ar-spec/silent-c1)
   onPuf('puf:poll', p => store.log({
     tone: 'info', sev: 'info', terminalId: p.terminal_id, runId: p.run_id,
-    type: 'poll.sent', text: `巡检已下发(AUTH_POLL nonce=0x${p.nonce.toString(16)})`,
+    type: 'poll.sent', text: `基站已主动发起认证（随机数 0x${p.nonce.toString(16)}）`,
   }));
   onPuf('puf:confirmrejected', p => store.log({
     tone: 'error', sev: 'error', terminalId: p.terminal_id, runId: p.run_id,
     type: 'confirm.rejected',
-    text: `终端拒认本站判决(status=${p.status})——R2 失配,疑似收到伪基站 RESULT`,
+    text: `终端拒绝本站判决（状态码 ${p.status}）—— R2 不一致，疑似收到假冒基站的判决结果`,
   }));
   onPuf('puf:runerror', p => store.onRunError(p));
   onPuf('puf:session', p => store.onSession(p));
@@ -217,8 +201,10 @@ function wireStore(): void {
       linkKey = key;
       store.log({
         tone: 'info', sev: 'info', terminalId: null, runId: null, type: 'link.status',
-        text: `链路 ${p.mode} connected=${p.connected}`
-          + (p.proxy ? ' · 终端侧代演' : '') + (p.version ? ` · bridge ${p.version}` : ''),
+        text: `链路 ${p.mode === 'loopback' ? '本机模拟' : '串口'}`
+          + `${p.connected ? '已连接' : '未连接'}`
+          + (p.proxy ? ' · 终端侧由 PC 模拟' : ' · 真实终端')
+          + (p.version ? ` · 基站服务 ${p.version}` : ''),
       });
     }
   });
@@ -258,23 +244,6 @@ async function doPoll(tid: number): Promise<void> {
   }
 }
 
-/* finals-demo-drone:S8 的飞控指令(与面板按钮同一 REST 面)。
- * 返回是否被接受(false 时 S8 熔断,content-review P2)。 */
-async function doDroneCmd(tid: number, cmd: string, extra?: { x?: number; y?: number }): Promise<boolean> {
-  try {
-    const r = await api.droneCmd({
-      terminal_id: tid, cmd: cmd as Parameters<typeof api.droneCmd>[0]['cmd'], ...extra,
-    });
-    if (!r.ok) {
-      store.log({
-        tone: 'error', sev: 'warn', terminalId: tid, runId: null, type: 'drone.cmd_ack',
-        text: `剧本飞控 ${cmd} 被拒:${r.reason ?? '?'}`,
-      });
-    }
-    return r.ok;
-  } catch (e) { fail(`POST /api/drone/cmd(${cmd})`, e); return false; }
-}
-
 async function doEnroll(tid: number): Promise<void> {
   store.select(tid);
   store.onAck(tid, 'enroll-start');
@@ -292,7 +261,7 @@ async function doC2Reset(tid: number): Promise<void> {
     store.onAck(tid, 'c2reset');
     store.log({
       tone: 'info', sev: 'info', terminalId: tid, runId: null, type: 'server.log',
-      text: 'C2 回放窗已清空 —— 重放演示可重新触发(S3)。',
+      text: 'C2 反挑战计数器已复位 —— 可重新发起重放演示。',
     });
   } catch (e) { fail(`POST /api/c2reset(tid=${tid})`, e); }
 }
@@ -303,7 +272,7 @@ async function doSetKey(tid: number): Promise<void> {
     store.onAck(tid, 'setkey');
     store.log({
       tone: 'info', sev: 'info', terminalId: tid, runId: null, type: 'server.log',
-      text: '已装入 W3 演示密钥(默认)。全新终端首次认证的 R2 应与黄金 R2 一致 —— 见右栏金角标。',
+      text: '已装入公开测试密钥。新终端首次认证的 R2 应与标准应答一致 —— 见右栏「标准 R2」角标。',
     });
   } catch (e) { fail(`POST /api/setkey(tid=${tid})`, e); }
 }
@@ -314,7 +283,7 @@ function exportEvents(runId: string | null): void {
     ? envLedger
     : envLedger.filter(e => (e.payload as { run_id?: string } | null)?.run_id === runId);
   const artifact = {
-    _what: 'PUF 无人机认证 · 演示控制台原始 SSE 事件流(未加工,逐条原样含 seq/ts/type/payload)',
+    _what: 'PUF 无人机认证 · 演示控制台原始事件流（未加工，逐条原样保留序号、时间、类型与载荷）',
     _note: '本文件即报告 §6.2 的「导出本次运行 JSON」产物,用作答辩证据附件。',
     _source: store.snapshot.source,
     _bridge_version: store.snapshot.link?.version ?? null,
@@ -375,8 +344,8 @@ void api.getGoldenFrames().then(g => {
   right.setGolden({ r2: gr2, note: gold?.note ?? '' });
   store.log({
     tone: 'info', sev: 'info', terminalId: null, runId: null, type: 'server.log',
-    text: `黄金向量已载入 ${g.frames.length} 条 · 金标准 ${gold?.name ?? '—'}`
-      + ` R2=${gr2 ?? '—'} —— 右栏金角标据此逐字符比对。`,
+    text: `标准测试向量已载入 ${g.frames.length} 条 · 标准应答帧 ${gold?.name ?? '—'}`
+      + ` R2=${gr2 ?? '—'} —— 右栏「标准 R2」角标据此逐字符比对。`,
   });
 }).catch(e => fail('GET /api/golden-frames', e));
 
@@ -387,17 +356,15 @@ function schedule(): void {
   raf = requestAnimationFrame(() => {
     raf = 0;
     const s = store.snapshot;
-    const ps = player.status();
-    topbar.update(s, sseState, ps);
+    topbar.update(s, sseState);
     topbar.el.classList.toggle('hidden', s.ui.topbarHidden);
-    left.update(s, ps.current);
+    left.update(s);
     right.update(s);
     audit.update(s.logs, s.run?.run_id ?? null);
     stage.update(s);
   });
 }
 store.subscribe(schedule);
-player.onChange(schedule);
 
 /* 运行中的耗时秒表要靠补帧驱动(store 只在事件到达时广播) */
 window.setInterval(() => {
@@ -406,16 +373,7 @@ window.setInterval(() => {
 }, 120);
 
 /* ---------- 6. 快捷键与自适应 ---------- */
-/* R7:场景快捷键 Shift+1–7。答辩演示的高频动作是「来,看一下仿冒」——
- * 每次都去左栏找按钮,演示节奏就断了。Shift+数字单手可及,且与纯数字
- * (相机 1–4)不冲突:按没按 Shift,e.key 同是 '1',分流必须显式判 shiftKey。
- * finals-demo-drone:扩展至 Shift+8(S8 认证解锁飞行)。 */
-function runScenario(id: ScenarioId): void {
-  player.stop();
-  player.play([id]);
-}
-
-/* R7:快捷键帮助浮层。H/R/1–4/F/Shift+1–7 此前只活在源码里,顶栏那个
+/* R7:快捷键帮助浮层。H/R/1–4/F 此前只活在源码里,顶栏那个
  * 20px 的「H」小方块谁也不会去点 —— 交互入口藏起来等于不存在。
  * role=dialog + Esc 关闭 + 点背板关闭;再开再关不重建节点,只切 hidden。 */
 const helpOv = document.createElement('div');
@@ -428,8 +386,6 @@ helpOv.innerHTML = `
   <div class="help-card card" tabindex="-1">
     <div class="help-title">快捷键</div>
     <dl class="help-list">
-      <dt><kbd>Shift</kbd><kbd>1</kbd>–<kbd>8</kbd></dt>
-        <dd>触发场景 S1–S8(单跑该幕;S8=认证解锁飞行)</dd>
       <dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>3D 相机:全景 / 跟踪 / 特写 / 俯瞰</dd>
       <dt><kbd>F</kbd></dt><dd>导出当前舞台画面</dd>
       <dt><kbd>H</kbd></dt><dd>隐藏 / 显示顶栏(录屏用)</dd>
@@ -467,11 +423,6 @@ window.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.altKey || e.metaKey) return;
   if (e.key === 'Escape') { toggleHelp(false); return; }
   if (e.key === '?') { toggleHelp(); schedule(); return; }
-  if (e.shiftKey && /^[1-8]$/.test(e.key)) {
-    runScenario(`S${e.key}` as ScenarioId);
-    schedule();
-    return;
-  }
   switch (e.key.toLowerCase()) {
     case 'h':
       store.patchUi({ topbarHidden: !store.snapshot.ui.topbarHidden });

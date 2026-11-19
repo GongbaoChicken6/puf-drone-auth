@@ -20,6 +20,16 @@ import type { RunState } from '../core/store';
 
 type Mode = 'live' | 'golden';
 
+/* 协议帧的中文名：与论文第二部分的六帧叫法一致 */
+const FRAME_CN: Record<string, string> = {
+  ACCESS_REQUEST: '接入请求',
+  CHALLENGE: '挑战',
+  RESPONSE_R1: '指纹响应',
+  RESULT: '判决结果',
+  CONFIRM: '确认',
+  EXTRA_CHALLENGE: '加测',
+};
+
 interface GoldenFrame { name: string; hex: string; note: string; }
 
 export class HexViewer {
@@ -41,7 +51,7 @@ export class HexViewer {
         <span class="hv-title">帧结构查看器</span>
         <div class="hv-modes">
           <button class="btn hv-mode primary" data-mode="live">实时帧</button>
-          <button class="btn hv-mode" data-mode="golden">黄金帧回放</button>
+          <button class="btn hv-mode" data-mode="golden">标准帧回放</button>
         </div>
         <span class="hv-note" id="hv-note"></span>
       </div>
@@ -65,12 +75,12 @@ export class HexViewer {
       b.classList.toggle('primary', b.dataset.mode === m);
     });
     if (m === 'golden' && this.goldens == null) {
-      this.note.textContent = '取黄金帧…';
+      this.note.textContent = '取标准帧…';
       try {
         this.goldens = (await api.getGoldenFrames()).frames;
       } catch {
         this.goldens = [];
-        this.note.textContent = '黄金帧获取失败(桥接不可达)';
+        this.note.textContent = '标准帧获取失败（基站服务不可达）';
       }
     }
     this.render();
@@ -105,11 +115,11 @@ export class HexViewer {
       this.note.textContent = '';
       const p = document.createElement('p');
       p.className = 'hv-empty';
-      p.textContent = '尚无实时帧 —— 触发 S1 后此处逐帧展开字段结构';
+      p.textContent = '尚无实时帧 —— 开始一次认证后此处逐帧展开字段结构';
       this.body.append(p);
       return;
     }
-    this.note.textContent = `run ${run.run_id} · ${run.frames.length} 帧`;
+    this.note.textContent = `认证轮次 ${run.run_id} · ${run.frames.length} 帧`;
 
     // 帧选择 chip(名称 + 字节数)
     run.frames.forEach((f, i) => {
@@ -117,9 +127,9 @@ export class HexViewer {
       b.className = 'chip hv-chip' + (i === this.selFrame ? ' cyan' : '');
       // 「选中了第几帧」此前只有 cyan 描边在说 —— 那是颜色单独承载信息
       b.setAttribute('aria-pressed', String(i === this.selFrame));
-      b.textContent = `${i + 1}. ${f.name} ${f.len}B`;
+      b.textContent = `${i + 1}. ${FRAME_CN[f.name] ?? f.name} ${f.len}B`;
       b.title = `${f.dir === 'term->server' ? '终端→基站' : '基站→终端'}`
-        + ` · ${f.source === 'simulated-terminal' ? '代演' : '真机'} · seq=${frameParts(f.hex)?.seq ?? '?'}`;
+        + ` · ${f.source === 'simulated-terminal' ? 'PC 模拟' : '实板'} · 序号 ${frameParts(f.hex)?.seq ?? '?'}`;
       b.addEventListener('click', () => { this.selFrame = i; this.renderLive(run); });
       this.pick.append(b);
     });
@@ -141,12 +151,12 @@ export class HexViewer {
     wrap.className = 'hv-frame';
     const head = document.createElement('div');
     head.className = 'hv-frame-head';
-    head.innerHTML = `<b>${name}</b>
+    head.innerHTML = `<b>${FRAME_CN[name] ?? name}</b>
       <span class="chip">${dir === 'term->server' ? '终端→基站' : '基站→终端'}</span>
       <span class="chip ${source === 'simulated-terminal' ? 'amber' : 'green'}">`
-      + `${source === 'simulated-terminal' ? '代演' : '真机'}</span>
-      <span class="hint">msg_id=0x${(parts?.msgId ?? 0).toString(16).padStart(4, '0')}`
-      + ` · len=${len} · seq=${parts?.seq ?? '?'} · 共 ${hexBytes(hex).length}B</span>`;
+      + `${source === 'simulated-terminal' ? 'PC 模拟' : '实板'}</span>
+      <span class="hint">消息号 0x${(parts?.msgId ?? 0).toString(16).padStart(4, '0')}`
+      + ` · 长度 ${len} · 序号 ${parts?.seq ?? '?'} · 共 ${hexBytes(hex).length} 字节</span>`;
     wrap.append(head);
 
     const segs = segmentFrame(hex, parts?.msgId ?? 0);
@@ -195,16 +205,16 @@ export class HexViewer {
       const res = parseInt(p.payload[0] ?? '0', 16);
       rows.push({ k: 'result', cn: '判决',
           v: `${res}(${['通过', '拒绝', '错误', '池耗尽', '重放嫌疑'][res] ?? '?'})` },
-        { k: 'hd', cn: '海明距离', v: String(parseInt(p.payload[1] ?? '0', 16)) });
+        { k: 'hd', cn: '汉明距离', v: String(parseInt(p.payload[1] ?? '0', 16)) });
       if (p.payload.length >= 10)
-        rows.push({ k: 'R2(8B)', cn: '基站证明密文', v: p.payload.slice(2, 10).join('').toLowerCase(), crypto: true });
+        rows.push({ k: 'R2(8B)', cn: '基站应答', v: p.payload.slice(2, 10).join('').toLowerCase(), crypto: true });
     } else if (p.msgId === 0x0094) {
       rows.push({ k: 'terminal_id', cn: '终端号', v: String(leU32(p.payload, 0)) },
         { k: 'status', cn: '确认状态',
-          v: `${parseInt(p.payload[4] ?? '0', 16)}(0=通过 1=拒认基站)` });
+          v: `${parseInt(p.payload[4] ?? '0', 16)}(0=同意，1=判定基站假冒)` });
     } else if (p.msgId === 0x0097) {
       rows.push({ k: 'terminal_id', cn: '终端号', v: String(leU32(p.payload, 0)) },
-        { k: 'nonce', cn: '巡检随机数', v: `0x${leU32(p.payload, 4).toString(16).padStart(8, '0')}` });
+        { k: 'nonce', cn: '认证随机数', v: `0x${leU32(p.payload, 4).toString(16).padStart(8, '0')}` });
     }
     if (rows.length === 0) return null;
     const box = document.createElement('div');
@@ -249,16 +259,15 @@ export class HexViewer {
     head.innerHTML = `<b>逐响应差异</b>
       <span class="chip ${mismatched ? 'red' : 'green'}">`
       + `${mismatched
-          ? `${nBad} / ${v.hd_per_response.length} 个响应与模板不一致(HD>τ=${tau})`
-          : `全部响应与模板一致(翻转位在噪声门限 τ=${tau} 内)`}</span>
-      <span class="hint">数据源:verdict.hd_per_response[] × /api/viz/templates 模板响应(逐位 XOR 复算;τ=TAU_PASS 单响应门限)</span>`;
+          ? `${nBad} / ${v.hd_per_response.length} 组响应与模板不一致（偏差 > 单组门限 ${tau} 位）`
+          : `全部响应与模板一致（偏差在单组噪声门限 ${tau} 位以内）`}</span>
+      <span class="hint">与注册模板逐位复算 · 单组门限 ${tau} 位</span>`;
     box.append(head);
 
     if (v.hd_per_response.every(h => h === 0)) {
       const t = document.createElement('p');
       t.className = 'hv-empty';
-      t.textContent = `HD 全 0(共 ${v.hd_per_response.length} 个响应)—— 无需差异高亮。`
-        + `触发 S2 仿冒攻击可看到高亮效果。`;
+      t.textContent = `全部响应偏差为 0（共 ${v.hd_per_response.length} 组），无需高亮。`;
       box.append(t);
       this.diffBox.append(box);
       return;
@@ -276,7 +285,7 @@ export class HexViewer {
       if (r1s.length === 0) {
         const t = document.createElement('p');
         t.className = 'hv-empty';
-        t.textContent = '本轮帧序列里没有 RESPONSE_R1,无法做响应-模板比对。';
+        t.textContent = '本轮没有指纹响应帧。';
         box.append(t);
       }
     });
@@ -312,12 +321,12 @@ export class HexViewer {
     const head = document.createElement('div');
     head.className = 'hv-bitrow-head';
     head.innerHTML = `<b>响应 #${idx}</b>
-      <span class="chip ${claimedHd <= tau ? 'green' : 'red'}" title="单响应噪声门限 τ=${tau}(TAU_PASS)">HD ${claimedHd}</span>`
+      <span class="chip ${claimedHd <= tau ? 'green' : 'red'}" title="单组响应噪声门限 ${tau} 位">偏差 ${claimedHd}</span>`
       + (d ? `<span class="chip ${agree ? 'green' : 'amber'}"
-        title="${agree ? '前端由模板逐位 XOR 复算的位数与桥接下发的 hd_per_response 完全一致 —— 说明该 HD 确实是从模板算出的'
-          : '前端复算位数与桥接下发的 hd_per_response 不一致,须核对(可能模板在注册后被刷新)'}"
+        title="${agree ? '界面按注册模板逐位复算的偏差，与基站下发的逐组偏差完全一致 —— 说明汉明距离确实由模板算出'
+          : '界面复算偏差与基站下发的逐组偏差不一致，需要核对（可能模板在注册后被刷新）'}"
         >前端复算 ${d.count}${agree ? ' ✓口径一致' : ' ⚠ 与下发不一致'}</span>` : '')
-      + `<span class="hint">seed ${seed}</span>`;
+      + `<span class="hint">挑战种子 ${seed}</span>`;
     row.append(head);
 
     const paint = (title: string, hex: string, other: string | null) => {
@@ -360,16 +369,16 @@ export class HexViewer {
     this.body.replaceChildren();
     this.diffBox.replaceChildren();
     const gs = this.goldens;
-    if (!gs) { this.note.textContent = '取黄金帧…'; return; }
+    if (!gs) { this.note.textContent = '取标准帧…'; return; }
     if (gs.length === 0) {
       this.note.textContent = '';
       const p = document.createElement('p');
       p.className = 'hv-empty';
-      p.textContent = '黄金帧不可用(桥接不可达)。这 7 条取自 docs/protocol_contract.md §4,是固定回归输入。';
+      p.textContent = '标准帧不可用（基站服务不可达）。';
       this.body.append(p);
       return;
     }
-    this.note.textContent = `${gs.length} 条黄金帧 · 固定真实向量(docs/protocol_contract.md §4)`;
+    this.note.textContent = `${gs.length} 条标准帧 · 协议文档 §4`;
 
     gs.forEach((g, i) => {
       const b = document.createElement('button');
@@ -381,7 +390,7 @@ export class HexViewer {
     });
     const cmpBar = document.createElement('div');
     cmpBar.className = 'hv-cmpbar';
-    cmpBar.innerHTML = `<span class="hint">逐字节对比基线(仅黄金帧之间 —— 与实时帧对比无意义,见报告 §6.2):</span>`;
+    cmpBar.innerHTML = `<span class="hint">逐字节对比基线（仅在标准帧之间比较；与实时帧比较没有意义）:</span>`;
     const sel = document.createElement('select');
     sel.className = 'hv-select';
     sel.append(new Option('（不对比)','-1'));
@@ -432,7 +441,7 @@ export class HexViewer {
       const p = document.createElement('p');
       p.className = 'hv-empty';
       p.textContent = `差异字节位序(0 基):${diffs.join(', ')}。`
-        + `两条都是固定黄金向量,差异全部落在各自随机的载荷字段上 —— 这正是「不宜与实时帧做逐字节 diff」的原因。`;
+        + `两条都是固定标准向量，差异全部落在各自随机的载荷字段上 —— 这正是「不宜与实时帧逐字节比较」的原因。`;
       box.append(p);
     }
     return box;

@@ -35,7 +35,7 @@ export function renderV6(rel: ReliabilityData, tauPass = 6, tauReject = 16): SVG
   const yB0 = 208, yB1 = 312;
   const syB = linear([0, 1], [yB1, yB0]);
   const t2 = el('text', { x: x0, y: 194, class: 'pl-sec-title' }, svg);
-  t2.textContent = '单响应通过率(HD ≤ TAU_PASS)';
+  t2.textContent = '单组响应通过率（汉明距离 ≤ 通过阈值）';
   for (const v of [0, 0.25, 0.5, 0.75, 1]) {
     el('line', { x1: x0, y1: syB(v), x2: x1, y2: syB(v), class: 'pl-gridline' }, svg);
     const tx = el('text', { x: x0 - 8, y: syB(v) + 4, 'text-anchor': 'end', class: 'pl-tick' }, svg);

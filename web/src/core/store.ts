@@ -14,7 +14,19 @@ import type {
   FrameEvent, GrayExtra, LinkStatus, PoolWarning,
   ResultCode, RunError, ServerLog, SessionUpdate, SourceBadge, Verdict,
 } from './types';
+import { RESULT_CN } from './types';
 import { tidNum } from './format';
+
+/* 审计行里的帧名用中文,协议英文名只留在事件类型字段里 */
+const FRAME_CN: Record<string, string> = {
+  ACCESS_REQUEST: '接入请求',
+  CHALLENGE: '挑战',
+  RESPONSE_R1: '指纹响应',
+  RESULT: '判决结果',
+  CONFIRM: '确认',
+  EXTRA_CHALLENGE: '加测',
+  AUTH_POLL: '基站发起',
+};
 
 export interface TerminalState {
   id: number;
@@ -307,8 +319,9 @@ class Store {
     this.log({
       tone: 'frame', sev: 'info', terminalId: f.terminal_id, runId: f.run_id,
       type: f.dir === 'server->term' ? 'frame.tx' : 'frame.rx',
-      text: `${f.name} ${f.len}B ${f.dir === 'server->term' ? '基站→终端' : '终端→基站'}`
-        + ` [${f.source === 'simulated-terminal' ? '代演' : '真机'}]`,
+      text: `${FRAME_CN[f.name] ?? f.name} ${f.len}B `
+        + `${f.dir === 'server->term' ? '基站→终端' : '终端→基站'}`
+        + ` [${f.source === 'simulated-terminal' ? 'PC 模拟' : '实板'}]`,
     });
   }
 
@@ -320,7 +333,7 @@ class Store {
     this.log({
       tone: 'gray', sev: 'warn', terminalId: g.terminal_id, runId: g.run_id,
       type: 'gray.extra',
-      text: `灰区加测 +${g.n} 挑战(本轮共 ${4 + g.n} 个响应参与判定)`,
+      text: `待定区加测 +${g.n} 组挑战（本轮共 ${4 + g.n} 组响应参与判决）`,
     });
   }
 
@@ -346,9 +359,9 @@ class Store {
       tone: v.result === 0 ? 'ok' : 'bad',
       sev: v.result === 0 ? 'info' : v.result === 3 ? 'warn' : 'error',
       terminalId: v.terminal_id, runId: v.run_id, type: 'verdict',
-      text: `判定 ${v.result_name} HD=${v.hd}/${64 * v.n_responses}`
-        + (v.r2 ? ` R2=${v.r2}` : '')
-        + `(绿区 <${v.thresholds.scaled_pass} / 红区 ≥${v.thresholds.scaled_reject})`,
+      text: `判决 ${RESULT_CN[v.result]} · 汉明距离 ${v.hd}/${64 * v.n_responses}`
+        + (v.r2 ? ` · R2=${v.r2}` : '')
+        + `（通过 <${v.thresholds.scaled_pass} / 拒绝 ≥${v.thresholds.scaled_reject}）`,
     });
   }
 
@@ -364,8 +377,8 @@ class Store {
       sev: c.status === 0 ? 'info' : 'error',
       terminalId: c.terminal_id, runId: c.run_id, type: 'confirm.done',
       text: c.status === 0
-        ? `CONFIRM OK 双向闭环${c.verified_r2 ? '(终端侧 R2 复算一致)' : '(终端侧 R2 不一致)'}`
-        : '终端侧 BLOCKED —— 检出 R2 被篡改(假基站),拒绝发 CONFIRM',
+        ? `确认通过 · 双向互认${c.verified_r2 ? '（终端复算 R2 一致）' : '（终端复算 R2 不一致）'}`
+        : '终端拒绝确认 —— R2 不一致，判定基站假冒',
     });
   }
 

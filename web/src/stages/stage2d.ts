@@ -14,7 +14,13 @@
 import { HexViewer } from '../components/hex-viewer';
 import { FrameTimeline } from '../components/frame-timeline';
 import { STAGE_CAMERA, STAGE_ERROR, STAGE_READY, STAGE_SHOT, STAGE_TAKEN, emit, onPuf } from '../core/bus';
-import { store, type AppState } from '../core/store';
+import { store, type AppState, type RunState } from '../core/store';
+import { MSG, RESULT_CN, type FrameEvent } from '../core/types';
+
+/* 判定码 → 舞台大字配色类(与右栏同一套视觉语义) */
+const STAMP_CLS: Record<number, string> = {
+  0: 'pass', 1: 'reject', 2: 'error', 3: 'drain', 4: 'replay',
+};
 
 /* 3D 模块的应答窗口。chunk 已缓存时 taken 通常在 1–2 帧内到达,但**冷启动**
  * 要算上:分包下载 + WebGL 上下文创建 + 着色器编译(Bloom 的那几个 pass 在
@@ -34,6 +40,15 @@ export class Stage2d {
   private titleDur!: HTMLElement;
   private fallback!: HTMLElement;
   private hud!: HTMLElement;
+  private pipe!: HTMLElement;
+  private stamp!: HTMLElement;
+  private stampMain!: HTMLElement;
+  private stampSub!: HTMLElement;
+  private pipeSteps = new Map<string, { el: HTMLElement; st: HTMLElement }>();
+  private pipeSig = '';
+  private stampKey = '';
+  private stampPrimed = false;
+  private stampTimer = 0;
   private taken = false;
   private settled = false;
   private unbind: (() => void)[] = [];
@@ -60,6 +75,12 @@ export class Stage2d {
         <!-- three.js 挂载点(#stage-3d 由 console.html 预留,§8.5 契约) -->
         <div class="stage-fallback" id="stage-fallback"></div>
         <div class="stage-hint" id="stage-hint" hidden>按住拖拽旋转 · 滚轮缩放</div>
+        <!-- 常驻协议流水线:五帧走到哪一步,舞台上直接读(仅 3D 接管后显示) -->
+        <div class="stage-pipe" id="stage-pipe" hidden></div>
+        <!-- 判定压屏大字(1.6s 自动淡出,pointer-events:none) -->
+        <div class="stage-stamp" id="stage-stamp" hidden>
+          <b class="stamp-main"></b><span class="stamp-sub"></span>
+        </div>
       </div>
       <div class="stage-hex" id="stage-hex"></div>`;
 
@@ -67,6 +88,11 @@ export class Stage2d {
     this.titleDur = this.q('#st-dur');
     this.fallback = this.q('#stage-fallback');
     this.hud = this.q('#st-hud');
+    this.pipe = this.q('#stage-pipe');
+    this.stamp = this.q('#stage-stamp');
+    this.stampMain = this.q('.stamp-main');
+    this.stampSub = this.q('.stamp-sub');
+    this.buildPipe();
 
     this.fallback.append(this.timeline.el);
     this.q('#stage-hex').append(this.hex.el);
@@ -112,16 +138,42 @@ export class Stage2d {
 
   private q<T extends HTMLElement>(sel: string): T { return this.el.querySelector<T>(sel)!; }
 
+  /* 五节点流水线骨架:标签写死,状态由 update() 逐帧回填 */
+  private buildPipe(): void {
+    const defs = [
+      { k: 'ar', label: '接入请求' },
+      { k: 'ch', label: '挑战' },
+      { k: 'r1', label: '指纹响应' },
+      { k: 'res', label: '判决结果' },
+      { k: 'cf', label: '确认' },
+    ];
+    defs.forEach((d, i) => {
+      if (i > 0) {
+        const a = document.createElement('span');
+        a.className = 'sp-arrow';
+        a.textContent = '›';
+        this.pipe.append(a);
+      }
+      const el = document.createElement('div');
+      el.className = 'sp-step st-pending';
+      el.innerHTML = `<i></i><b>${d.label}</b><small>—</small>`;
+      this.pipe.append(el);
+      this.pipeSteps.set(d.k, { el, st: el.querySelector('small')! });
+    });
+  }
+
   /* ---------- 3D 握手(§8.5) ---------- */
   private handshake(): void {
     this.unbind.push(
       onPuf(STAGE_TAKEN, () => this.onTaken()),
       onPuf(STAGE_ERROR, (p) => this.onError(p.reason)),
-      /* finals-demo-drone:2D 保底下无人机状态徽章(3D 未接管时仍有读数) */
+      /* finals-demo-drone:2D 保底下无人机状态徽章(3D 已接管时由舞台右下
+       * 的无人机状态卡负责,这里不再重复) */
       onPuf('puf:drone-state', (p) => {
+        if (this.taken) return;
         const sel = store.snapshot.selectedTerminal;
         if (sel != null && sel !== p.terminal_id) return;
-        this.hud.textContent = `无人机 · ${p.unlocked ? p.state : '🔒未解锁'} · alt ${p.pos[2].toFixed(1)}m`;
+        this.hud.textContent = `无人机 · ${p.unlocked ? p.state : '🔒未解锁'} · 高度 ${p.pos[2].toFixed(1)}m`;
         this.hud.hidden = false;
       }),
     );
@@ -143,8 +195,12 @@ export class Stage2d {
     this.fallback.classList.add('hidden');
     this.q('#st-cams').hidden = false;
     this.q('#stage-hint').hidden = false;
-    this.hud.textContent = '3D 舞台 · 相机 1/2/3/4 · F 截图';
-    this.hud.hidden = false;
+    this.pipe.hidden = false;
+    this.pipeSig = '';                       // 强制下一帧重画流水线
+    this.renderPipe(store.snapshot.run);
+    /* 3D 已接管:标题条右侧不再挂状态说明文字,保持干净 */
+    this.hud.textContent = '';
+    this.hud.hidden = true;
     store.onStageTaken();
     store.log({
       tone: 'info', sev: 'info', terminalId: null, runId: null,
@@ -157,6 +213,7 @@ export class Stage2d {
     this.settled = true;
     this.taken = false;
     this.fallback.classList.remove('hidden');
+    this.pipe.hidden = true;
     this.hud.textContent = '2D 保底时序(3D 舞台未接管)';
     this.hud.hidden = false;
     store.onStageError();
@@ -178,22 +235,26 @@ export class Stage2d {
       ? s.terminals.get(s.selectedTerminal) ?? null : null;
 
     // 标题条
-    this.titleRun.textContent = run ? `run ${run.run_id}` : 'run —';
+    this.titleRun.textContent = run ? `认证轮次 ${run.run_id}` : '认证轮次 —';
     if (run) {
       const ended = run.endedAt ?? performance.now();   // 未终结则走实时秒表
       const ms = ended - run.startedAt;
       this.titleDur.textContent = run.endedAt == null
         ? `${(ms / 1000).toFixed(1)} s (进行中)`
         : `${(ms / 1000).toFixed(2)} s`;
-      const name = run.extra ? '灰区加测认证' : (run.verdict?.result_name ?? '认证中');
-      this.q('#st-name').textContent = `${name} · tid ${run.terminal_id}`;
+      const name = run.extra ? '待定区加测认证' : (run.verdict?.result_name ?? '认证中');
+      this.q('#st-name').textContent = `${name} · 终端 ${run.terminal_id}`;
     } else {
-      this.q('#st-name').textContent = term ? `认证舞台 · tid ${term.id}` : '认证舞台';
+      this.q('#st-name').textContent = term ? `认证舞台 · 终端 ${term.id}` : '认证舞台';
       this.titleDur.textContent = '—';
     }
 
     // 2D 保底只在未接管时更新(接管后其 DOM 隐藏,继续绘制纯属浪费帧)
     if (!this.taken) this.timeline.update(run, term);
+
+    // 3D 接管后:舞台常驻协议流水线 + 判定压屏大字
+    if (this.taken) this.renderPipe(run);
+    this.maybeStamp(run);
 
     // hex 查看器与 3D 无关,始终跟随(run 变了才重绘,内部有签名守卫)
     const sig = run ? `${run.run_id}:${run.frames.length}` : '';
@@ -209,8 +270,86 @@ export class Stage2d {
     }
   }
 
+  /* ---------- 协议流水线 ----------
+   * 只读 run.frames / verdict / confirm,不推断桥接没发出的帧。
+   * 状态:st-pending 未到达 / st-live 在途 / st-ok 通过 / st-fail 失败 /
+   * st-skip 本轮不会发生(如 REJECT 后没有 CONFIRM)。 */
+  private renderPipe(run: RunState | null): void {
+    if (this.pipe.hidden) return;
+    const v = run?.verdict ?? null;
+    const sig = run
+      ? `${run.run_id}:${run.frames.length}:${v?.result ?? -1}:${run.confirm?.status ?? -1}`
+      : '';
+    if (sig === this.pipeSig) return;
+    this.pipeSig = sig;
+
+    const frames = run?.frames ?? [];
+    const firstOf = (msg: number): FrameEvent | null =>
+      frames.find(f => f.msg_id === msg) ?? null;
+    const nResp = frames.filter(f => f.msg_id === MSG.RESPONSE_R1).length;
+    const extra = frames.some(f => f.msg_id === MSG.EXTRA_CHALLENGE);
+
+    const paint = (k: string, cls: string, small: string): void => {
+      const s = this.pipeSteps.get(k);
+      if (!s) return;
+      s.el.className = `sp-step ${cls}`;
+      s.st.textContent = small;
+    };
+
+    const ar = firstOf(MSG.ACCESS_REQUEST);
+    const ch = firstOf(MSG.CHALLENGE);
+    const r1 = firstOf(MSG.RESPONSE_R1);
+    const res = firstOf(MSG.RESULT);
+    const cf = firstOf(MSG.CONFIRM);
+
+    /* 判定一下来,已参与判定的四个节点统一回填通过/失败色 */
+    const doneCls = v ? (v.result === 0 ? 'st-ok' : 'st-fail') : '';
+    const clsOf = (f: FrameEvent | null): string =>
+      f ? (doneCls || 'st-live') : 'st-pending';
+    const sizeOf = (f: FrameEvent | null): string => (f ? `${f.len}B` : '—');
+
+    paint('ar', clsOf(ar), sizeOf(ar));
+    paint('ch', clsOf(ch), ch ? `${ch.len}B${extra ? ' +加测' : ''}` : '—');
+    paint('r1', clsOf(r1), r1 ? `${r1.len}B${nResp > 1 ? ` ×${nResp}` : ''}` : '—');
+    paint('res', clsOf(res), v ? (RESULT_CN[v.result] ?? v.result_name) : sizeOf(res));
+
+    const cfOk = run?.confirm != null && run.confirm.status === 0;
+    const cfBlocked = run?.confirm != null && run.confirm.status !== 0;
+    const cfCls = cfBlocked ? 'st-fail'
+      : cfOk ? 'st-ok'
+        : v && v.result !== 0 ? 'st-skip'
+          : cf ? 'st-live' : 'st-pending';
+    paint('cf', cfCls,
+      cfBlocked ? 'BLOCKED' : cfOk ? '闭环' : v && v.result !== 0 ? '未闭环' : '—');
+  }
+
+  /* ---------- 判定压屏大字 ----------
+   * 首次 update 只记基线,不补放历史判定 —— 刷新页面不该再闪一次旧结果。 */
+  private maybeStamp(run: RunState | null): void {
+    const v = run?.verdict ?? null;
+    if (!this.stampPrimed) {
+      this.stampPrimed = true;
+      if (run && v) this.stampKey = `${run.run_id}:${v.result}`;
+      return;
+    }
+    if (!this.taken || !run || !v) return;
+    const key = `${run.run_id}:${v.result}`;
+    if (key === this.stampKey) return;
+    this.stampKey = key;
+    this.stampMain.textContent = RESULT_CN[v.result] ?? v.result_name;
+    this.stampSub.textContent = '';
+    this.stamp.className = `stage-stamp show ${STAMP_CLS[v.result] ?? ''}`;
+    this.stamp.hidden = false;
+    window.clearTimeout(this.stampTimer);
+    this.stampTimer = window.setTimeout(() => {
+      this.stamp.hidden = true;
+      this.stamp.className = 'stage-stamp';
+    }, 1600);
+  }
+
   dispose(): void {
     this.unbind.forEach(f => f());
     this.unbind = [];
+    window.clearTimeout(this.stampTimer);
   }
 }

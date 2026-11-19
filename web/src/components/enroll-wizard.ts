@@ -34,7 +34,7 @@ export class EnrollWizard {
         </div>
         <div class="ew-body">
           <div class="ew-form" data-step="form">
-            <label>终端 ID (tid)
+            <label>终端编号
               <input type="number" data-tid value="7" min="1" max="255" class="mono">
             </label>
             <label>挑战数
@@ -43,7 +43,7 @@ export class EnrollWizard {
             <label>测量次数
               <input type="number" data-m value="3" min="1" max="10" class="mono">
             </label>
-            <div class="ew-hint">确保板子已上电、拨码 SW12 设为正确 tid、ENROLL_EN=1</div>
+            <div class="ew-hint">确保终端板已上电、拨码 SW12 设为正确编号、注册使能 ENROLL_EN=1</div>
             <button class="btn green" data-start>开始录入</button>
           </div>
           <div class="ew-progress" data-step="progress" hidden>
@@ -52,7 +52,7 @@ export class EnrollWizard {
           </div>
           <div class="ew-result" data-step="result" hidden>
             <div class="ew-stats mono" data-stats></div>
-            <button class="btn" data-verify title="POST /api/poll (AUTH_POLL)">验证认证</button>
+            <button class="btn" data-verify title="发送一次认证请求，验证注册结果">验证认证</button>
           </div>
           <div class="ew-error" data-error hidden></div>
         </div>
@@ -154,7 +154,7 @@ export class EnrollWizard {
     const tid = parseInt(this.tidInput.value, 10);
     try {
       await api.poll(tid);
-      this.verifyBtn.textContent = '✓ 已发送巡检(AUTH_POLL)';
+      this.verifyBtn.textContent = '✓ 已发送认证请求';
       this.verifyBtn.disabled = true;
     } catch { /* audit log captures */ }
   }

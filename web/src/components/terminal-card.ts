@@ -71,42 +71,40 @@ export class TerminalCard {
 
     this.el.innerHTML = `
       <div class="tc-head">
-        <span class="tc-id mono">tid ${t.id}</span>
+        <span class="tc-id mono">终端 ${t.id}</span>
         ${this.decChip(dec)}
       </div>
       <div class="tc-rows">
-        <div class="tc-row"><span class="k">模板对</span>
-          <span class="v mono">${t.n_pairs}</span></div>
-        <div class="tc-row"><span class="k">稳定位</span>
-          <span class="v mono" title="稳定位掩码由 TemplateDB.compute_stability 在注册时算出(64 位,翻转率阈值 0.1);「—」表示该终端尚无掩码,不是 0 位">${stableTxt}${stablePct}</span></div>
-        <div class="tc-row"><span class="k">CRP 池</span>
-          <span class="v mono">${t.pool_remaining}/${t.pool_size || '—'}</span></div>
-        <div class="tc-bar ${lowCls} ${flashCls}" title="CRP 池剩余 ${t.pool_remaining} / 容量 ${t.pool_size} — 池容量是该设备的历史上限(CRPPool.pool_size),不是当前余额"><i style="${barScale(pct)}"></i></div>
-        <div class="tc-row"><span class="k">C2 窗</span>
-          <span class="v mono ${t.c2Cleared ? 'ok' : 'dim'}">${t.c2Cleared ? '已清空' : '—'}</span>
-          <span class="k">会话</span>
-          <span class="v mono dim">${t.sessionState ?? '—'}</span></div>
+        <div class="tc-row"><span class="k">挑战-响应对</span>
+          <span class="v mono">${t.n_pairs} 组</span></div>
+        <div class="tc-row"><span class="k">稳定响应位</span>
+          <span class="v mono" title="稳定响应位由注册时的重复测量算出（64 位，翻转率阈值 0.1）；「—」表示尚未计算，不是 0 位">${stableTxt}${stablePct}</span></div>
+        <div class="tc-row"><span class="k">挑战池</span>
+          <span class="v mono">${t.pool_remaining}/${t.pool_size || '—'} 组</span></div>
+        <div class="tc-bar ${lowCls} ${flashCls}" title="挑战池剩余 ${t.pool_remaining} / 容量 ${t.pool_size} 组 —— 容量是该设备注册时的上限，不是当前余量"><i style="${barScale(pct)}"></i></div>
+        <div class="tc-row"><span class="k">C2 计数器</span>
+          <span class="v mono ${t.c2Cleared ? 'ok' : 'dim'}">${t.c2Cleared ? '已复位' : '—'}</span></div>
       </div>
-      <div class="tc-actions">
+      <div class="tc-actions tc-actions-3">
         <button class="btn green" data-mode="normal">认证</button>
-        <button class="btn red"   data-mode="spoof">仿冒</button>
+        <button class="btn red"   data-mode="spoof">假冒</button>
         <button class="btn amber" data-mode="replay">重放</button>
       </div>
-      <div class="tc-actions">
+      <div class="tc-actions tc-actions-2">
         <button class="btn" data-act="enroll" ${t.enrolling ? 'disabled' : ''}>
           ${t.enrolling ? '<span class="spin"></span>注册中…' : '注册'}</button>
-        <button class="btn ghost" data-act="c2reset">清 C2 窗</button>
+        <button class="btn ghost" data-act="c2reset">重置 C2</button>
         <button class="btn ghost" data-act="setkey"
-          title="装入 W3 演示密钥 0001020308090a0b10111213(与 docs/protocol_contract.md §4 黄金帧同一把);装入后全新终端首次认证的 R2 应与黄金 R2 一致">
-          ${t.keyInstalled ? '演示密钥 ✓' : '演示密钥'}</button>
+          title="装入公开测试密钥（与协议文档 §4 标准应答同一把）；装入后新终端首次认证的 R2 应与标准应答一致">
+          ${t.keyInstalled ? '测试密钥 ✓' : '测试密钥'}</button>
         <button class="btn ghost" data-act="poll"
-          title="基站主动巡检:下发 AUTH_POLL(0x0097),板端等效按下 SW7,发起完整五帧双向认证;3s 无响应提示按 SW13">
-          巡检</button>
+          title="基站主动发起认证：下发挑战，终端实时测量指纹，完成六帧双向认证；板端等效按下 SW7">
+          基站发起</button>
       </div>`;
   }
 
   private decChip(d: ResultCode | null): string {
-    if (d == null) return '<span class="chip">未判定</span>';
+    if (d == null) return '<span class="chip">待判定</span>';
     const cls = d === 0 ? 'green' : d === 4 ? 'amber' : d === 3 ? 'amber' : 'red';
     return `<span class="chip ${cls}">${RESULT_CN[d]}</span>`;
   }
@@ -146,8 +144,8 @@ export class TerminalCard {
     // 碰不到卡片自身的属性,而签名挡重绘时 update() 仍是每次都跑的
     this.el.setAttribute('aria-current', selected ? 'true' : 'false');
     this.el.setAttribute('aria-label',
-      `终端 tid ${t.id}${selected ? '(当前选中)' : ''}`
-      + ` · 模板对 ${t.n_pairs} · CRP 池 ${t.pool_remaining}/${t.pool_size || '未知'}`
+      `终端 ${t.id}${selected ? '(当前选中)' : ''}`
+      + ` · 挑战-响应对 ${t.n_pairs} 组 · 挑战池 ${t.pool_remaining}/${t.pool_size || '未知'} 组`
       + ` · 按 Enter 选中该终端`);
     // store 每次事件都会广播,而卡片内容绝大多数时候不变 —— 用签名挡住重复
     // 重绘,否则会反复重建按钮节点、吃掉 hover/focus 状态

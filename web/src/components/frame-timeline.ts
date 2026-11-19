@@ -11,7 +11,17 @@
  * 不按节点名猜:CONFIRM 只在 PASS 后才出现,REJECT 路线根本没有它。
  * ============================================================ */
 import type { RunState, TerminalState } from '../core/store';
-import { MSG, MSG_NAMES } from '../core/types';
+import { MSG, MSG_NAMES, RESULT_CN } from '../core/types';
+
+/* 界面上的一帧一名：中文为主,协议英文名放在 title 里(报告 §2.2.4 同款口径) */
+const FRAME_CN: Record<string, string> = {
+  ACCESS_REQUEST: '接入请求',
+  CHALLENGE: '挑战',
+  RESPONSE_R1: '指纹响应',
+  RESULT: '判决结果',
+  CONFIRM: '确认',
+  EXTRA_CHALLENGE: '加测',
+};
 
 type NodeState = 'idle' | 'tx' | 'rx' | 'ok' | 'fail';
 
@@ -23,17 +33,17 @@ interface Slot {
 }
 
 const MAIN: { key: string; label: string; msg: number }[] = [
-  { key: 'ar', label: 'ACCESS_REQUEST', msg: MSG.ACCESS_REQUEST },
-  { key: 'ch', label: 'CHALLENGE', msg: MSG.CHALLENGE },
-  { key: 'r1', label: 'RESPONSE_R1', msg: MSG.RESPONSE_R1 },
+  { key: 'ar', label: '接入请求', msg: MSG.ACCESS_REQUEST },
+  { key: 'ch', label: '挑战', msg: MSG.CHALLENGE },
+  { key: 'r1', label: '指纹响应', msg: MSG.RESPONSE_R1 },
 ];
 const TAIL: { key: string; label: string; msg: number }[] = [
-  { key: 'res', label: 'RESULT', msg: MSG.RESULT },
-  { key: 'cf', label: 'CONFIRM', msg: MSG.CONFIRM },
+  { key: 'res', label: '判决结果', msg: MSG.RESULT },
+  { key: 'cf', label: '确认', msg: MSG.CONFIRM },
 ];
 const FORK: { key: string; label: string; msg: number }[] = [
-  { key: 'xc', label: 'EXTRA_CHALLENGE', msg: MSG.EXTRA_CHALLENGE },
-  { key: 'xr1', label: 'RESPONSE_R1', msg: MSG.RESPONSE_R1 },
+  { key: 'xc', label: '加测', msg: MSG.EXTRA_CHALLENGE },
+  { key: 'xr1', label: '加测响应', msg: MSG.RESPONSE_R1 },
 ];
 
 export class FrameTimeline {
@@ -51,7 +61,7 @@ export class FrameTimeline {
 
     this.el.innerHTML = `
       <div class="ft-main" id="ft-main"></div>
-      <div class="ft-fork" id="ft-fork"><span class="ft-fork-label">灰区分叉</span></div>
+      <div class="ft-fork" id="ft-fork"><span class="ft-fork-label">待定区加测</span></div>
       <div class="ft-note" id="ft-note"></div>`;
     this.forkWrap = this.el.querySelector<HTMLElement>('#ft-fork')!;
     this.forkLink = document.createElement('div');
@@ -109,7 +119,7 @@ export class FrameTimeline {
     this.slots.forEach((_, k) => this.set(k, 'idle'));
     this.forkWrap.classList.remove('open');
     this.el.classList.remove('has-run');
-    this.note.textContent = '等待指令 —— 五个帧节点:接入请求 / 挑战 / 响应 / 判定 / 确认';
+    this.note.textContent = '等待认证 —— 六帧交互：接入请求 / 挑战 / 指纹响应 / 判决结果 / 确认 / 加测';
     this.prevKey = '';
     this.drawnRunId = '';
   }
@@ -156,8 +166,8 @@ export class FrameTimeline {
 
     if (seenExtra) {
       this.forkWrap.classList.add('open');
-      this.forkLink.textContent = `判定前分叉 · 加测 ${run.extra?.n ?? 3} 挑战,总轮次 `
-        + `${run.frames.filter(f => f.msg_id === MSG.RESPONSE_R1).length} 段响应`;
+      this.forkLink.textContent = `判决前加测 · 追加 ${run.extra?.n ?? 3} 组挑战，共 `
+        + `${run.frames.filter(f => f.msg_id === MSG.RESPONSE_R1).length} 组响应`;
     } else {
       this.forkWrap.classList.remove('open');
       this.forkLink.textContent = '';
@@ -172,9 +182,9 @@ export class FrameTimeline {
         if (s.state !== 'idle') this.set(k, cls, undefined, s.node.title);
       }
       const res = this.slots.get('res')!;
-      res.node.querySelector('.ft-st')!.textContent = `通过 · ${v.result_name}`;
+      res.node.querySelector('.ft-st')!.textContent = `通过 · ${RESULT_CN[v.result]}`;
       if (v.result !== 0) {
-        res.node.querySelector('.ft-st')!.textContent = `失败 · ${v.result_name}`;
+        res.node.querySelector('.ft-st')!.textContent = `失败 · ${RESULT_CN[v.result]}`;
       }
       if (seenExtra) {
         for (const k of ['xc', 'xr1']) {
@@ -188,10 +198,10 @@ export class FrameTimeline {
     if (run.confirm) {
       const ok = run.confirm.status === 0;
       this.set('cf', ok ? 'ok' : 'fail', 'up',
-        ok ? '终端侧 R2 复算一致,双向闭环'
-          : '终端侧检出 R2 被篡改(假基站),拒绝发 CONFIRM');
+        ok ? '终端复算的 R2 一致，双向认证闭环'
+          : '终端复算的 R2 不一致，判定为假冒基站，不回送确认帧');
       this.slots.get('cf')!.node.querySelector('.ft-st')!.textContent =
-        ok ? '通过 · 双向闭环' : '失败 · 终端侧 BLOCKED';
+        ok ? '通过 · 双向互认' : '失败 · 拒绝确认';
     }
 
     // 高频变更的只有"最新到达帧"高亮,值不变时不重排 DOM
@@ -207,14 +217,15 @@ export class FrameTimeline {
     const ms = run.endedAt != null ? `${Math.round(run.endedAt - run.startedAt)}ms` : '进行中';
     const tid = term?.id ?? run.terminal_id;
     const bits = [
-      `run ${run.run_id}`, `终端 ${tid}`,
-      `${run.frames.length} 帧`, seenExtra ? '灰区加测' : '常规',
+      `认证轮次 ${run.run_id}`, `终端 ${tid}`,
+      `${run.frames.length} 帧`, seenExtra ? '待定区加测' : '常规',
       ms,
     ];
     if (run.verdict) {
-      bits.push(`判定 ${run.verdict.result_name}(HD ${run.verdict.hd})`);
+      bits.push(`判决 ${RESULT_CN[run.verdict.result]}（汉明距离 ${run.verdict.hd}）`);
     } else {
-      bits.push(`最新 ${MSG_NAMES[run.frames[run.frames.length - 1].msg_id] ?? lastName}`);
+      const name = MSG_NAMES[run.frames[run.frames.length - 1].msg_id] ?? lastName;
+      bits.push(`最新 ${FRAME_CN[name] ?? name}`);
     }
     return bits.join(' · ');
   }

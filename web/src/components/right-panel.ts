@@ -38,6 +38,9 @@ export class RightPanel {
   private vSub!: HTMLElement;
   private vMeta!: HTMLElement;
   private vCard!: HTMLElement;
+  private statHd!: HTMLElement;
+  private statN!: HTMLElement;
+  private statTh!: HTMLElement;
   private blockBox!: HTMLElement;
   private r2Hex!: HTMLElement;
   private r2Badge!: HTMLElement;
@@ -45,7 +48,6 @@ export class RightPanel {
   private r2Copy!: HTMLButtonElement;
   private poolText!: HTMLElement;
   private poolBar!: HTMLElement;
-  private sess!: HTMLElement;
   private golden: GoldenVector = { r2: null, note: '' };
   private lastR2 = '';
 
@@ -54,26 +56,37 @@ export class RightPanel {
     this.el.className = 'right-panel';
     this.el.innerHTML = `
       <div class="rp-verdict" id="rp-verdict">
+        <div class="rp-eyebrow">判定结果</div>
         <div class="rp-big" id="rp-big">待判定</div>
         <div class="rp-sub" id="rp-sub">等待一次认证</div>
-        <div class="rp-meta mono" id="rp-meta">—</div>
-        <div class="rp-idle" id="rp-idle" hidden>
-          开始演示:左栏 <b>S1–S7</b> 场景 · 终端卡「认证」<br />
-          <span class="mono">Shift+1–7</span> 快捷触发 · <span class="mono">?</span> 全部快捷键
+        <div class="rp-stats" id="rp-stats">
+          <div class="rp-stat" title="汉明距离：指纹响应与注册模板逐位比对后不一致的位数">
+            <span class="rp-stat-k">汉明距离</span>
+            <span class="rp-stat-v mono" id="rp-stat-hd">—</span>
+          </div>
+          <div class="rp-stat" title="参与本轮判决的指纹响应组数">
+            <span class="rp-stat-k">响应组数</span>
+            <span class="rp-stat-v mono" id="rp-stat-n">—</span>
+          </div>
+          <div class="rp-stat" title="双阈值判决：偏差不超过通过阈值判通过，不小于拒绝阈值判拒绝，两者之间进入待定区加测">
+            <span class="rp-stat-k">判决阈值</span>
+            <span class="rp-stat-v mono" id="rp-stat-th">—</span>
+          </div>
         </div>
+        <div class="rp-meta mono" id="rp-meta">—</div>
       </div>
 
       <div class="rp-block" id="rp-block" hidden>
-        <div class="rp-block-t">终端侧:BLOCKED</div>
-        <div class="rp-block-d">检出假基站(R2 被篡改)—— 终端拒绝发 CONFIRM,双向认证未闭环。</div>
+        <div class="rp-block-t">终端侧拒绝确认</div>
+        <div class="rp-block-d">终端复算的 R2 与基站应答不一致，判定对方为假冒基站，拒绝回送确认帧，双向认证未闭环。</div>
       </div>
 
       <section class="rp-card" id="rp-hd"></section>
 
       <section class="rp-card">
         <div class="rp-card-h">
-          <span>R2(K_terminal 派生的会话确认值)</span>
-          <span class="chip gold" id="rp-r2-badge" hidden>黄金 R2 ✓</span>
+          <span>基站应答 R2</span>
+          <span class="chip gold" id="rp-r2-badge" hidden>标准 R2 ✓</span>
         </div>
         <div class="rp-r2">
           <code class="mono" id="rp-r2">—</code>
@@ -83,20 +96,18 @@ export class RightPanel {
       </section>
 
       <section class="rp-card">
-        <div class="rp-card-h"><span>CRP 池水位</span><span class="mono" id="rp-pool-text">—</span></div>
+        <div class="rp-card-h"><span>挑战池余量</span><span class="mono" id="rp-pool-text">—</span></div>
         <div class="tb-bar rp-pool-bar"><i id="rp-pool-bar" style="transform:scaleX(0)"></i></div>
-        <div class="rp-note">分母 pool_size = 该设备历史容量上限;pool.warning 在 remaining_pct &lt; 20 时下发。</div>
-      </section>
-
-      <section class="rp-card">
-        <div class="rp-card-h"><span>会话计数</span><span class="mono" id="rp-sess-state">—</span></div>
-        <div class="rp-kv" id="rp-sess"></div>
+        <div class="rp-note">分母为注册时容量上限；低于 20% 预警。</div>
       </section>`;
 
     this.vBig = this.q('#rp-big');
     this.vSub = this.q('#rp-sub');
     this.vMeta = this.q('#rp-meta');
     this.vCard = this.q('#rp-verdict');
+    this.statHd = this.q('#rp-stat-hd');
+    this.statN = this.q('#rp-stat-n');
+    this.statTh = this.q('#rp-stat-th');
     this.blockBox = this.q('#rp-block');
     this.r2Hex = this.q('#rp-r2');
     this.r2Badge = this.q('#rp-r2-badge');
@@ -104,7 +115,6 @@ export class RightPanel {
     this.r2Copy = this.q<HTMLButtonElement>('#rp-r2-copy');
     this.poolText = this.q('#rp-pool-text');
     this.poolBar = this.q('#rp-pool-bar');
-    this.sess = this.q('#rp-sess');
     this.q('#rp-hd').append(this.gauge.el);
 
     this.r2Copy.addEventListener('click', () => { void this.copyR2(); });
@@ -144,30 +154,39 @@ export class RightPanel {
     this.lastRun = run;
     this.lastTerminal = t;
 
-    /* R7:idle 引导。只在「本会话还一次认证都没跑过」时出现 —— 跑过之后再
-     * 空闲,操作者已经知道路,这行字就从引导降级成噪音。 */
-    this.q('#rp-idle').hidden = !(run == null && s.runCount === 0);
-
     /* ---------- 大字判定 ---------- */
     const v = run?.verdict ?? null;
     if (!v) {
       this.vBig.textContent = '待判定';
       this.vBig.className = 'rp-big';
       /* R8 D19:判定卡本体也随结果挂状态类(卡底渐变/描边),不只大字变色 */
-      this.vCard.className = 'rp-verdict';
-      this.vSub.textContent = t ? `tid ${t.id} · 等待一次认证` : '等待一次认证';
+      this.vCard.className = 'rp-verdict idle';
+      this.vSub.textContent = t ? `终端 ${t.id} · 等待一次认证` : '等待一次认证';
       this.vMeta.textContent = '—';
+      this.statHd.textContent = '—';
+      this.statN.textContent = '—';
+      this.statTh.textContent = '—';
     } else {
       this.vBig.textContent = RESULT_CN[v.result];
       this.vBig.className = `rp-big ${RESULT_CLS[v.result]}`;
       this.vCard.className = `rp-verdict st-${RESULT_CLS[v.result]}`;
-      this.vSub.textContent = `${v.result_name} · tid ${v.terminal_id}`
-        + ` · ${v.n_responses} 个响应参与判定`;
-      /* R8 D19 修订:阈值词上语义色(绿=PASS 界 / 红=REJECT 界)。值来自
-       * /api/status 的数字字段,拼进 innerHTML 无注入面。 */
-      this.vMeta.innerHTML = `run ${v.run_id} · HD ${v.hd}`
-        + ` · 阈值 <span class="th-ok">绿&lt;${v.thresholds.scaled_pass}</span>`
-        + ` / <span class="th-no">红≥${v.thresholds.scaled_reject}</span>`;
+      this.vSub.textContent = `终端 ${v.terminal_id} · ${v.n_responses} 组响应参与判决`;
+      /* 专家读数三块:HD / 参与响应数 / 绿-红阈值。数字字段来自
+       * /api/status 与 verdict 载荷,阈值两块用语义色。 */
+      this.statHd.textContent = String(v.hd);
+      this.statN.textContent = String(v.n_responses);
+      this.statTh.replaceChildren();
+      const ok = document.createElement('span');
+      ok.className = 'th-ok';
+      ok.textContent = `<${v.thresholds.scaled_pass}`;
+      const sep = document.createElement('span');
+      sep.className = 'th-sep';
+      sep.textContent = '/';
+      const no = document.createElement('span');
+      no.className = 'th-no';
+      no.textContent = `≥${v.thresholds.scaled_reject}`;
+      this.statTh.append(ok, sep, no);
+      this.vMeta.textContent = `认证轮次 ${v.run_id}`;
     }
 
     /* S7:终端侧 BLOCKED 由桥接显式下发的 confirm.done(status=1) 得出 */
@@ -186,27 +205,6 @@ export class RightPanel {
     this.poolBar.setAttribute('style', barScale(pct));
     this.poolBar.parentElement!.className = 'tb-bar rp-pool-bar'
       + (pct < 20 ? ' warn' : '') + (t?.poolWarn && pct < 20 ? ' flash' : '');
-
-    /* ---------- 会话计数 ---------- */
-    const u = t?.lastSession ?? null;
-    this.q('#rp-sess-state').textContent = u?.state ?? '—';
-    const kv: [string, string][] = u == null ? [
-      ['challenges_issued', '—'], ['responses_scored', '—'], ['hd_sum', '—'],
-    ] : [
-      ['challenges_issued', String(u.challenges_issued)],
-      ['responses_scored', String(u.responses_scored)],
-      ['hd_sum', u.hd_sum == null ? '—' : String(u.hd_sum)],
-      ['last_decision', u.last_decision ?? '—'],
-      ['terminal_id', String(u.terminal_id)],
-    ];
-    this.sess.replaceChildren(...kv.map(([k, val]) => {
-      const d = document.createElement('div');
-      d.className = 'rp-kv-row';
-      const a = document.createElement('span'); a.className = 'k'; a.textContent = k;
-      const b = document.createElement('span'); b.className = 'v mono'; b.textContent = val;
-      d.append(a, b);
-      return d;
-    }));
   }
 
   private paintR2(run: RunState | null, t: TerminalState | null): void {
@@ -217,7 +215,7 @@ export class RightPanel {
 
     if (!r2) {
       this.r2Badge.hidden = true;
-      this.r2Note.textContent = 'R2 仅在判定 PASS 时下发(RESULT 载荷 result|hd|R2,R2 占 8B)。';
+      this.r2Note.textContent = '判定通过时下发，占 8 字节。';
       return;
     }
 
@@ -228,22 +226,20 @@ export class RightPanel {
     const isGold = gr2 != null && r2 === gr2;
 
     this.r2Badge.hidden = !isGold;
-    this.r2Badge.title = `触发节拍:装入 W3 演示密钥 → 全新终端首次认证 → R2 与黄金向量`
-      + ` RESULT_A1_GOLDEN 逐字符一致(黄金值 ${gr2 ?? '—'})`;
+    this.r2Badge.title = `触发条件：装入公开测试密钥 → 新终端首次认证 → R2 与标准应答`
+      + ` 逐字符一致（标准值 ${gr2 ?? '—'}）`;
 
     const parts: string[] = [];
     if (isGold) {
-      parts.push(`与 docs/protocol_contract.md §4 的 RESULT_A1_GOLDEN 逐字符一致(${gr2})。`);
+      parts.push(`与标准应答一致（${gr2}）。`);
     } else if (gr2 == null) {
-      parts.push('黄金向量未就绪(未取到 /api/golden-frames),无法比对。');
+      parts.push('标准应答未载入。');
     } else {
-      parts.push(`非黄金 R2:黄金值为 ${gr2}。`);
+      parts.push(`非标准应答（标准值 ${gr2}）。`);
     }
-    parts.push(`本 run 的 C2=${c2 ?? '—'}`
-      + (t?.keyInstalled ? '(已装入演示密钥)' : '(该终端未装演示密钥)') + '。');
-    // 黄金帧自述原文 —— 它的前提条件(如 K_terminal=W3、C2=a1..a8)写在这里,
-    // 原样引用而不复述,避免本页转述走样。
-    if (this.golden.note) parts.push(`黄金帧自述:${this.golden.note}`);
+    parts.push(`C2=${c2 ?? '—'}` + (t?.keyInstalled ? ' · 测试密钥' : '') + '。');
     this.r2Note.textContent = parts.join(' ');
+    // 标准帧的自述前提放在悬停提示里,正文不再展开。
+    this.r2Note.title = this.golden.note ? `标准帧自述：${this.golden.note}` : '';
   }
 }

@@ -59,7 +59,7 @@ export class DronePanel {
     this.el.className = 'drone-panel';
     this.el.innerHTML = `
       <div class="dp-head">
-        <span class="dp-title">无人机演示 HUD · <span class="dp-tid mono">tid —</span></span>
+        <span class="dp-title">无人机状态 · <span class="dp-tid mono">终端 —</span></span>
         <span class="dp-chip" data-chip>未解锁</span>
       </div>
       <div class="dp-body">
@@ -78,13 +78,13 @@ export class DronePanel {
           <g class="dp-plane"><line x1="-26" y1="0" x2="-8" y2="0"/><line x1="8" y1="0" x2="26" y2="0"/><circle cx="0" cy="0" r="2.2"/></g>
         </svg>
         <div class="dp-reads mono">
-          <div><span>alt</span><b data-alt>—</b><i>m</i></div>
-          <div><span>v</span><b data-spd>—</b><i>m/s</i></div>
-          <div><span>yaw</span><b data-yaw>—</b><i>°</i></div>
-          <div><span>pos</span><b data-pos>—</b></div>
+          <div><span>高度</span><b data-alt>—</b><i>m</i></div>
+          <div><span>速度</span><b data-spd>—</b><i>m/s</i></div>
+          <div><span>航向</span><b data-yaw>—</b><i>°</i></div>
+          <div><span>位置</span><b data-pos>—</b></div>
         </div>
       </div>
-      <div class="dp-hint" data-hint>先认证解锁 —— 板上 SW7 或终端卡「巡检」</div>
+      <div class="dp-hint" data-hint>先认证解锁（板上 SW7 或「基站发起」）</div>
       <div class="dp-actions">
         <button class="btn green" data-cmd="takeoff">解锁起飞</button>
         <button class="btn" data-cmd="wpA">航点 A</button>
@@ -94,7 +94,7 @@ export class DronePanel {
         <button class="btn" data-cmd="hold">悬停</button>
         <button class="btn amber" data-cmd="rtl">返航</button>
         <button class="btn amber" data-cmd="land">降落</button>
-        <button class="btn ghost" data-cmd="lock">上锁</button>
+        <button class="btn ghost" data-cmd="lock">锁定</button>
       </div>
       <div class="dp-flash" data-flash hidden></div>`;
     this.chip = this.el.querySelector('[data-chip]')!;
@@ -164,7 +164,7 @@ export class DronePanel {
     const tid = store.snapshot.selectedTerminal;
     const d = this.cur();
     this.el.classList.toggle('dp-none', tid == null);
-    if (tid != null) this.el.querySelector<HTMLElement>('.dp-tid')!.textContent = `tid ${tid}`;
+    if (tid != null) this.el.querySelector<HTMLElement>('.dp-tid')!.textContent = `终端 ${tid}`;
 
     const st: DroneFlightState = d?.state ?? 'LANDED';
     const unlocked = d?.unlocked ?? false;
@@ -183,7 +183,7 @@ export class DronePanel {
     this.vAlt.textContent = att ? att.alt.toFixed(1) : '—';
     this.vSpd.textContent = spd == null ? '—' : spd.toFixed(1);
     this.vYaw.textContent = att ? att.yaw.toFixed(0).padStart(3, '0') : '—';
-    this.vPos.textContent = d ? `(${d.pos[0].toFixed(1)}, ${d.pos[1].toFixed(1)})` : '—';
+    this.vPos.textContent = d ? `${d.pos[0].toFixed(1)}, ${d.pos[1].toFixed(1)}` : '—';
 
     /* 按态禁用矩阵(镜像 §3.2 转移表)+ 认证门控 */
     const en = ENABLE[st];

@@ -123,13 +123,13 @@ export class AccessPopup {
         '<div class="ap-row">',
         '  <div class="ap-info">',
         '    <span class="ap-name">' + e.label + '</span>',
-        '    <span class="ap-meta">tid ' + e.terminal_id + ' · ' + e.port +
+        '    <span class="ap-meta">终端 ' + e.terminal_id + ' · ' + e.port +
         '      · 已等待 ' + fmtWait(e.first_seen_ts) +
         (e.repeats > 0 ? ' · 重复按压 ' + e.repeats + ' 次' : '') + '</span>',
         '  </div>',
         '  <div class="ap-actions">',
         (sel ? '<span class="ap-sel">验证中…</span>'
-      : busy ? '<span class="ap-busy">唤醒中…</span>'
+      : busy ? '<span class="ap-busy">处理中…</span>'
       : '<button class="btn green" data-select="' + e.terminal_id + '">开始验证</button>'),
         '    <button class="btn ghost" data-dismiss="' + e.terminal_id + '">撤下</button>',
         '  </div>',

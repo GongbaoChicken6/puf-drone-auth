@@ -111,11 +111,11 @@ export class World {
     this.buildFingerprint();
     this.buildPool();
 
-    this.fpLabel = this.mkLabel('PUF 指纹 · 未注册', 'puf', 0.42,
+    this.fpLabel = this.mkLabel('指纹场 · 未注册', 'puf', 0.42,
       new Vector3(ANCHOR.drone.x, ANCHOR.fingerY + FP_TALL + 1.15, 0));
     this.droneLabel = this.mkLabel('无人机 · 未选中', 'comm', 0.34,
       new Vector3(ANCHOR.drone.x, 0.55, 0));
-    this.poolLabel = this.mkLabel('CRP 池 —', 'green', 0.32,
+    this.poolLabel = this.mkLabel('挑战池 —', 'green', 0.32,
       new Vector3(ANCHOR.pool.x, 2.85, ANCHOR.pool.z));
     this.mkLabel('基站 · 认证服务', 'server', 0.34, new Vector3(ANCHOR.station.x, 5.2, 0));
 
@@ -421,7 +421,7 @@ export class World {
     if (this.pillarMesh.instanceColor) this.pillarMesh.instanceColor.needsUpdate = true;
 
     const stable = has ? this.fpStable.reduce((a, b) => a + b, 0) : 0;
-    this.fpLabel.set(has ? `PUF 指纹 · ${stable}/64 稳定` : 'PUF 指纹 · 未注册', 'puf');
+    this.fpLabel.set(has ? `指纹场 · ${stable}/64 稳定` : '指纹场 · 未注册', 'puf');
   }
 
   private pillarColor(i: number, c: ReturnType<typeof pal>): Color {
@@ -513,7 +513,7 @@ export class World {
     const warnChanged = this.poolWarn !== warn;
     this.poolWarn = warn;
     this.poolLabel.set(
-      (remaining != null && size != null ? `CRP 池 ${remaining}/${size}` : 'CRP 池 —') + (warn ? ' ⚠' : ''),
+      (remaining != null && size != null ? `挑战池 ${remaining}/${size}` : '挑战池 —') + (warn ? ' ⚠' : ''),
       warn ? 'auth' : 'green',
     );
     // 标签重绘很贵,但配色只在告警态翻转时才需要重算粒子色

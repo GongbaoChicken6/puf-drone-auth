@@ -119,7 +119,7 @@ export const MOCK_SPECS: Record<'v5' | 'v6' | 'v7', MockOpts> = {
     replace: '上板高低温实验:每温度点重复认证 N 次,统计通过率,落盘 CSV 后接本图',
   },
   v7: {
-    kind: 'curve', title: 'V7 · B6 ML 攻击准确率(实验 A / 实验 B)', xLabel: '攻击者累计 CRP 数', yLabel: '排序重构成功率(%)',
+    kind: 'curve', title: 'V7 · B6 建模攻击准确率（实验 A / 实验 B）', xLabel: '攻击者累计挑战-响应对数', yLabel: '排序重构成功率（%）',
     replace: '实现 docs/project_design.md §W4 的两组实验(合成 Arbiter 基线 / 自家 RO 排序重构),产出 JSON 后接本图',
   },
 };

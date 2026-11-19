@@ -12,7 +12,9 @@
 
 /* 审计日志行高。audit-log.ts 的 ROW_H 常量必须等于此值 —— 虚拟滚动靠它定位,
  * 两处一旦不一致,滚动条会把行错位(此处显式声明并交叉注释)。 */
-:root{ --log-row:22px; --topbar-h:48px; --bottom-h:264px; }
+/* 底栏高度随视口收敛:264px 在 720p 演示机上是整页的 37%,挤掉舞台。
+ * 夹在 188–236px 之间,日志仍有 8–10 行可视,舞台多出一截。 */
+:root{ --log-row:22px; --topbar-h:48px; --bottom-h:clamp(188px, 23vh, 236px); }
 
 #app{
   display:grid;
@@ -89,15 +91,6 @@
 .tb-slider input[type=range]{ width:84px; accent-color:var(--cyan); }
 .tb-slider .v{ font-size:var(--fs-sm); color:var(--cyan); min-width:52px; }
 
-.tb-scripts{ display:flex; align-items:center; gap:6px; }
-.tb-scripts .k{ color:var(--muted); font-size:var(--fs-sm); }
-.tb-scripts .btn{ padding:3px 9px; font-size:var(--fs-sm); }
-/* 单幕键 S1…S7:比队列键更紧凑,保证顶栏在 1280 宽度下不溢出 */
-.tb-one-shots{ display:flex; align-items:center; gap:2px; }
-.tb-one-shots .btn{ padding:3px 5px; font-size:var(--fs-sm); line-height:1.2; }
-.tb-one-shots .btn:not(:hover){ border-color:transparent; }
-.tb-scen-stat{ font-size:var(--fs-sm); color:var(--muted); min-width:118px; font-variant-numeric:tabular-nums; }
-
 .tb-spacer{ flex:1; }
 
 .tb-source{
@@ -170,20 +163,34 @@
   letter-spacing:.06em;
   position:sticky; top:0; background:var(--bg2); z-index:2;
 }
-.lp-head-scen{ border-top:1px solid var(--border); }
 .lp-count{ color:var(--cyan); }
-.lp-list{ flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:10px; }
+.lp-list{
+  flex:1; min-height:0; overflow-y:auto; padding:12px 12px 16px;
+  display:flex; flex-direction:column; gap:12px;
+  scrollbar-width:thin; scrollbar-color:#2a3648 transparent;
+  overscroll-behavior:contain; scrollbar-gutter:stable;
+}
+/* 卡片必须按内容取高,否则 flex 列会把它们压扁 —— 第二排按钮正是这样被裁掉的。
+ * 让列表滚动,而不是缩卡片。 */
+.lp-list>*{ flex:0 0 auto; }
+.lp-list::-webkit-scrollbar{ width:8px; }
+.lp-list::-webkit-scrollbar-track{ background:transparent; }
+.lp-list::-webkit-scrollbar-thumb{
+  border-radius:4px; background:#263144; border:2px solid var(--bg2);
+}
+.lp-list::-webkit-scrollbar-thumb:hover{ background:var(--cyan); }
 .lp-empty{ padding:14px 12px; font-size:var(--fs-sm); color:var(--muted); line-height:1.7; }
 
 /* 终端卡在 bg2 面板上抬一级到 bg3 —— 悬停上浮 1px,选中青框+内环+顶部微光 */
 .term-card{
-  cursor:pointer; padding:10px 11px; background:var(--bg3);
-  transition:transform .12s;
+  cursor:pointer; padding:12px 13px; background:var(--bg3);
+  transition:transform .12s, border-color .12s;
 }
 .term-card:hover{ border-color:var(--border2); transform:translateY(-1px); }
 .term-card.selected{
   border-color:var(--cyan);
-  box-shadow:0 0 0 1px var(--cyan-bg) inset, inset 0 1px 0 var(--edge-hi);
+  box-shadow:inset 3px 0 0 var(--cyan), 0 0 0 1px var(--cyan-bg) inset,
+    inset 0 1px 0 var(--edge-hi);
 }
 .term-card.selected::before{ content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--cyan); }
 .term-card.warn-card{ border-color:var(--amber); }
@@ -198,9 +205,9 @@
 .term-card.tc-ok::after{ background:var(--green); }
 .term-card.tc-warn::after{ background:var(--amber); }
 .term-card.tc-fail::after{ background:var(--red); }
-.tc-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; }
-.tc-id{ font-size:var(--fs-base); font-weight:700; color:var(--cyan); }
-.tc-rows{ display:flex; flex-direction:column; gap:3px; }
+.tc-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.tc-id{ font-size:var(--fs-base); font-weight:700; color:var(--cyan); letter-spacing:.4px; }
+.tc-rows{ display:flex; flex-direction:column; gap:4px; }
 .tc-row{ display:flex; align-items:center; gap:6px; font-size:var(--fs-sm); }
 .tc-row .k{ color:var(--muted); min-width:44px; }
 .tc-row .v{ margin-right:auto; }
@@ -216,8 +223,11 @@
 }
 .tc-bar.warn>i{ background:var(--amber); }
 .tc-bar.flash{ animation:pulse-glow .9s ease-in-out infinite; }
-.tc-actions{ display:flex; gap:6px; margin-top:8px; }
-.tc-actions .btn{ flex:1; padding:5px 0; font-size:var(--fs-sm); }
+/* 按钮两排:第一排三种认证模式,第二排运维动作 2×2 —— 等宽网格让中文标签
+ * 不互相挤,也不会在窄栏里因为 flex-wrap 产生一根孤键。 */
+.tc-actions{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:9px; }
+.tc-actions-2{ grid-template-columns:repeat(2,1fr); margin-top:6px; }
+.tc-actions .btn{ min-width:0; padding:5px 2px; font-size:var(--fs-sm); white-space:nowrap; }
 
 .spin{
   width:9px; height:9px; border-radius:50%; display:inline-block;
@@ -225,32 +235,6 @@
   animation:spin .7s linear infinite;
 }
 @keyframes spin{ to{ transform:rotate(360deg); } }
-
-.lp-scen{ display:grid; grid-template-columns:1fr 1fr; gap:7px; padding:10px; }
-/* R8 D19 修订:S1–S7 七键 2 列网格必落单 —— 让 S7 假基站独占整行,
- * 死区变特殊场景的强调位。 */
-.lp-scen .scen-btn:last-child{ grid-column:1 / -1; }
-/* R8 D19:场景键升级 —— 圆角走体系小档、内边距放宽;悬停给青色描边+青底
- * +1px 上浮(与终端卡同一悬停语言)。变色是状态反馈(非动画),过渡仍只
- * opacity/transform。 */
-.scen-btn{
-  flex-direction:column; gap:1px; padding:8px 5px; overflow:hidden; position:relative;
-  border-radius:var(--radius-sm);
-}
-.scen-btn:hover{ border-color:var(--cyan); background:var(--cyan-bg); transform:translateY(-1px); }
-.scen-btn:hover span{ color:var(--text); }
-.scen-btn b{ font-size:var(--fs-md); color:var(--cyan); }
-.scen-btn span{ font-size:var(--fs-xs); color:var(--muted); font-weight:500; }
-.scen-btn.running{ border-color:var(--amber); background:var(--amber-bg); }
-.scen-btn.running b{ color:var(--amber); }
-/* R7:运行中的场景键加一道横向扫光(纯 transform)—— 静态的琥珀边框在
- * 连播时不够「活着」,扫光让「正在跑」成为余光可辨的状态。 */
-.scen-btn.running::after{
-  content:''; position:absolute; top:0; bottom:0; left:0; width:34%;
-  background:linear-gradient(100deg,transparent,rgba(245,158,11,.16),transparent);
-  animation:scen-sweep 1.5s linear infinite;
-}
-@keyframes scen-sweep{ from{ transform:translateX(-110%); } to{ transform:translateX(400%); } }
 
 /* ---------- 中央舞台 ---------- */
 #center-stage{ display:flex; min-height:0; min-width:0; overflow:hidden; }
@@ -275,7 +259,7 @@
 #stage-3d canvas{ cursor:grab; }
 #stage-3d:active canvas{ cursor:grabbing; }
 .stage-hint{
-  position:absolute; right:14px; bottom:12px; z-index:5;
+  position:absolute; right:316px; bottom:12px; z-index:5;
   padding:5px 11px; border-radius:999px; white-space:nowrap;
   background:var(--bg4); border:1px solid var(--border2); color:var(--muted);
   font-size:var(--fs-xs); letter-spacing:.03em;
@@ -288,6 +272,81 @@
 .stage-view{
   position:relative; flex:1; min-height:0;
   background:radial-gradient(circle at 50% 45%,var(--bg3),var(--bg) 72%);
+}
+
+/* 舞台常驻协议流水线:五帧走到哪一步直接读,不用翻日志。
+ * 只叠 DOM,不碰 three.js 画布;pointer-events:none 不挡相机拖拽。 */
+.stage-pipe{
+  position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:5;
+  display:flex; align-items:center; gap:5px; padding:7px 12px;
+  border-radius:999px; white-space:nowrap; pointer-events:none;
+  background:rgba(7,11,20,.74); border:1px solid var(--border2);
+  box-shadow:0 10px 30px rgba(0,0,0,.45), inset 0 1px 0 var(--edge-hi);
+  backdrop-filter:blur(6px);
+}
+.stage-pipe[hidden]{ display:none; }
+.sp-step{
+  display:flex; flex-direction:column; align-items:center; gap:1px;
+  padding:0 4px; min-width:52px;
+}
+.sp-step i{
+  width:7px; height:7px; border-radius:50%;
+  background:var(--bg4); border:1px solid var(--border2);
+  transition:background .2s, box-shadow .2s;
+}
+.sp-step b{ font-size:9px; letter-spacing:.05em; color:var(--muted); font-weight:700; }
+.sp-step small{ font-size:9px; color:var(--muted); font-variant-numeric:tabular-nums; line-height:1.2; }
+.sp-step.st-live i{ background:var(--cyan); box-shadow:0 0 9px var(--cyan); }
+.sp-step.st-live b{ color:var(--cyan); }
+.sp-step.st-live small{ color:var(--text); }
+.sp-step.st-ok i{ background:var(--green); box-shadow:0 0 9px rgba(0,214,143,.85); }
+.sp-step.st-ok b{ color:var(--green); }
+.sp-step.st-ok small{ color:var(--green); }
+.sp-step.st-fail i{ background:var(--red); box-shadow:0 0 9px rgba(239,68,68,.85); }
+.sp-step.st-fail b{ color:var(--red); }
+.sp-step.st-fail small{ color:var(--red); }
+.sp-step.st-skip{ opacity:.42; }
+.sp-arrow{ color:var(--border2); font-size:12px; line-height:1; }
+
+/* 判定压屏大字:1.6s 自动淡出,纯 transform/opacity */
+.stage-stamp{
+  position:absolute; inset:0; z-index:6; pointer-events:none;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:4px; text-align:center;
+}
+.stage-stamp[hidden]{ display:none; }
+.stamp-main{
+  font-size:clamp(64px,9vw,132px); line-height:1; font-weight:900;
+  letter-spacing:.08em; color:var(--green);
+}
+.stamp-sub{ font-size:var(--fs-xl); font-weight:800; letter-spacing:.4em; color:var(--green); }
+.stage-stamp.pass .stamp-main,.stage-stamp.pass .stamp-sub{
+  color:var(--green); text-shadow:0 0 46px rgba(0,214,143,.6);
+}
+.stage-stamp.reject .stamp-main,.stage-stamp.reject .stamp-sub,
+.stage-stamp.error .stamp-main,.stage-stamp.error .stamp-sub{
+  color:var(--red); text-shadow:0 0 46px rgba(239,68,68,.6);
+}
+.stage-stamp.drain .stamp-main,.stage-stamp.drain .stamp-sub,
+.stage-stamp.replay .stamp-main,.stage-stamp.replay .stamp-sub{
+  color:var(--amber); text-shadow:0 0 46px rgba(245,158,11,.55);
+}
+.stage-stamp.show .stamp-main{ animation:stamp-in 1.6s cubic-bezier(.16,1,.3,1) forwards; }
+.stage-stamp.show .stamp-sub{
+  animation:stamp-sub-in 1.6s ease-out forwards;
+}
+@keyframes stamp-in{
+  0%{ opacity:0; transform:scale(1.3); }
+  14%{ opacity:1; transform:scale(.98); }
+  24%{ transform:scale(1); }
+  72%{ opacity:1; }
+  100%{ opacity:0; transform:scale(1.02); }
+}
+@keyframes stamp-sub-in{
+  0%,10%{ opacity:0; letter-spacing:.8em; }
+  26%{ opacity:1; letter-spacing:.4em; }
+  72%{ opacity:1; }
+  100%{ opacity:0; }
 }
 /* R8 D19:舞台取景框角标 —— 四角 L 形发丝线(蓝白系,与 --border2 同族),
  * 给中央区一个「视口」的读法,2D 保底与 3D 画布上都成立。z-index 压过
@@ -429,14 +488,41 @@
 /* ---------- 右栏 ---------- */
 .right-panel{
   display:flex; flex-direction:column; gap:10px; min-height:0; overflow-y:auto;
-  padding:11px; background:var(--bg2); border-left:1px solid var(--border);
+  padding:12px; background:var(--bg2); border-left:1px solid var(--border);
+  overscroll-behavior:contain;
+}
+/* 与左栏同理:卡片按内容取高,内容超高时由面板滚动,不能压扁判定卡。 */
+.right-panel>*{ flex:0 0 auto; }
+/* 内容不足一屏时,让最后一张卡吸收剩余高度 —— 面板底部不留悬空黑带。 */
+.right-panel>.rp-card:last-child{
+  flex:1 0 auto; display:flex; flex-direction:column; justify-content:space-between;
 }
 .rp-verdict{
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:4px; padding:18px 10px 16px; border-radius:var(--radius);
+  gap:4px; padding:14px 12px 12px; border-radius:var(--radius);
   background:var(--bg3); border:1px solid var(--border);
   box-shadow:inset 0 1px 0 var(--edge-hi);
-  margin-bottom:12px; /* R8 D19 修订:判定卡与下方仪表卡的主从间距(原 5px,注释与值不符一并修正) */
+  position:relative; overflow:hidden;
+}
+/* 判定卡顶部状态条:卡体着色之外再加一条恒定位置的「结果色」,
+ * 余光扫过就知道本页最后判成什么。 */
+.rp-verdict::before{
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  background:var(--border2);
+}
+.rp-verdict.st-pass::before{ background:var(--green); }
+.rp-verdict.st-reject::before,.rp-verdict.st-error::before{ background:var(--red); }
+.rp-verdict.st-drain::before,.rp-verdict.st-replay::before{ background:var(--amber); }
+/* 未判定时的扫描光:给「等待」一个活的读法,又不过度抢戏 */
+.rp-verdict.idle::after{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(180deg,transparent 0%,rgba(34,211,238,.07) 50%,transparent 100%);
+  animation:rp-scan 3.6s linear infinite;
+}
+@keyframes rp-scan{ from{ transform:translateY(-100%); } to{ transform:translateY(100%); } }
+.rp-eyebrow{
+  font-size:var(--fs-xs); color:var(--muted);
+  letter-spacing:.24em; text-transform:uppercase;
 }
 /* R8 D19:判定卡承载判定 —— 卡体随结果着色(状态色渐变+描边),「PASS」不再
  * 是灰卡上单独发光的一张贴纸;色相沿用语义色 token,未新造颜色。 */
@@ -467,7 +553,7 @@
 .rp-idle b{ color:var(--cyan); font-weight:700; }
 .rp-idle .mono{ color:var(--text); }
 .rp-big{
-  font-size:52px; line-height:1.05; font-weight:800; letter-spacing:2px;
+  font-size:clamp(42px,3.4vw,64px); line-height:1.05; font-weight:800; letter-spacing:2px;
   color:var(--muted);
 }
 /* R8 D19:辉光收敛一半(26px/.5 → 16px/.35)—— 荧光感来自过大的模糊半径,
@@ -478,14 +564,33 @@
 .rp-big.drain{ color:var(--amber); }
 .rp-big.replay{ color:var(--amber); animation:shake-x .45s ease-in-out 1; }
 .rp-sub{ font-size:var(--fs-md); color:var(--text); text-align:center; }
-.rp-meta{ font-size:var(--fs-sm); color:var(--muted); text-align:center; }
+.rp-meta{ font-size:var(--fs-sm); color:var(--muted); text-align:center; margin-top:4px; }
+/* 专家读数三块:HD / 响应数 / 阈值 */
+.rp-stats{
+  display:grid; grid-template-columns:repeat(3,1fr); gap:6px;
+  width:100%; margin-top:8px;
+}
+.rp-stat{
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:4px 3px; border-radius:8px;
+  background:rgba(7,11,20,.42); border:1px solid var(--border);
+}
+.rp-stat-k{ font-size:var(--fs-xs); color:var(--muted); white-space:nowrap; }
+.rp-stat-v{
+  font-size:var(--fs-lg); font-weight:700; color:var(--text);
+  font-variant-numeric:tabular-nums; line-height:1.2;
+}
 /* R8 D19 修订:阈值是判定依据,绿/红两词上语义色(仍是既有 token,非新色) */
 .rp-meta .th-ok{ color:var(--green); font-weight:600; }
 .rp-meta .th-no{ color:var(--red); font-weight:600; }
+.rp-stat .th-ok{ color:var(--green); font-weight:700; }
+.rp-stat .th-no{ color:var(--red); font-weight:700; }
+.rp-stat .th-sep{ color:var(--muted); margin:0 1px; font-weight:400; }
 
 .rp-block{
   padding:10px 12px; border-radius:var(--radius);
-  border:1px solid var(--red); background:var(--red-bg);
+  border:1px solid var(--red); border-left-width:4px; background:var(--red-bg);
+  box-shadow:0 8px 26px -16px rgba(239,68,68,.65);
   animation:pulse-glow 1.4s ease-in-out infinite;
 }
 .rp-block-t{ font-size:var(--fs-xl); font-weight:800; color:var(--red); letter-spacing:1px; }
@@ -493,18 +598,22 @@
 
 .rp-card{
   background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
-  padding:10px 11px; box-shadow:inset 0 1px 0 var(--edge-hi);
+  padding:10px 12px; box-shadow:inset 0 1px 0 var(--edge-hi);
 }
 .rp-card-h{
   display:flex; align-items:center; justify-content:space-between; gap:8px;
-  font-size:var(--fs-sm); font-weight:700; color:var(--muted); margin-bottom:7px;
+  font-size:var(--fs-sm); font-weight:700; color:var(--muted); margin-bottom:6px;
   letter-spacing:.06em;
 }
 .rp-note{ font-size:var(--fs-sm); color:var(--muted); line-height:1.55; margin-top:6px; }
 .rp-r2{ display:flex; align-items:center; gap:8px; }
 /* R8 D19 修订:16 位 hex + 徽章挤一行时 break-all 会切出孤字节 —— 降半档
  * 字号收窄字距求单行,break-all 保留为窄屏兜底。 */
-.rp-r2 code{ flex:1; font-size:var(--fs-sm); letter-spacing:.5px; color:var(--cyan); word-break:break-all; }
+.rp-r2 code{
+  flex:1; font-size:var(--fs-sm); letter-spacing:.8px; color:var(--cyan);
+  word-break:break-all; padding:2px 7px; border-radius:6px;
+  background:rgba(7,11,20,.45); border:1px solid var(--border);
+}
 .chip.gold{
   color:#ffd45e; border-color:#ffd45e; background:rgba(255,212,94,.12);
   font-weight:800; letter-spacing:.4px;
@@ -528,21 +637,32 @@
   background:var(--bg4); border:1px solid var(--border);
 }
 .hg-band{ position:absolute; top:0; bottom:0; }
+/* 阈值位置线:只标示边界,不写字 */
+.hg-mark{
+  position:absolute; top:0; bottom:0; width:1px; z-index:2;
+  background:rgba(255,255,255,.42); pointer-events:none;
+}
+/* 底色:全量程三段淡色带(原有观感不变) */
 .hg-pass{ background:rgba(0,214,143,.20); }
 .hg-gray{ background:rgba(245,158,11,.20); }
 .hg-reject{ background:rgba(239,68,68,.20); }
-.hg-pointer{ position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--text); transform:translateX(-1px); }
-.hg-pointer>i{ position:absolute; top:-1px; left:-4px; width:10px; height:10px; transform:rotate(45deg); background:var(--text); }
+/* 提亮层:同几何的高亮副本,由 JS 按汉明距离裁切 */
+.hg-lit{ position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+.hg-pass-lit{ background:rgba(0,214,143,.82); }
+.hg-gray-lit{ background:rgba(245,158,11,.82); }
+.hg-reject-lit{ background:rgba(239,68,68,.82); }
+.hg-pointer{ position:absolute; top:-2px; bottom:-2px; width:1px; background:rgba(255,255,255,.9); transform:translateX(-.5px); }
+.hg-pointer>i{ position:absolute; top:-1px; left:-3px; width:7px; height:7px; transform:rotate(45deg); background:var(--text); }
 /* 刻度行(数字贴刻度)＋图例行(阈值语义)。两行分开,避免短栏宽下标签互叠。 */
-.hg-scale{ position:relative; min-height:13px; padding-bottom:20px; }
-.hg-tick{ position:absolute; font-size:var(--fs-xs); color:var(--muted); white-space:nowrap; }
+/* 刻度占用一行,图例在下一行自然流排 —— 两者不再绝对定位互压 */
+.hg-scale{ position:relative; padding-top:14px; }
+.hg-tick{ position:absolute; top:0; font-size:var(--fs-xs); color:var(--muted); white-space:nowrap; }
 .hg-tick-0{ left:0; }
 .hg-tick-max{ color:var(--muted); }
 .hg-tick-pass{ color:var(--green); }
 .hg-tick-reject{ color:var(--red); }
 .hg-legend{
-  position:absolute; left:0; right:0; bottom:0;
-  display:flex; flex-wrap:wrap; gap:4px 8px; font-size:var(--fs-xs);
+  display:flex; flex-wrap:wrap; gap:2px 9px; font-size:var(--fs-xs);
 }
 .hg-legend .lg{ white-space:nowrap; }
 .hg-legend .lg-pass{ color:var(--green); }
@@ -551,7 +671,7 @@
 .hg-legend .lg-dim{ color:var(--muted); }
 .hg-bars{ display:flex; flex-direction:column; gap:5px; }
 .hg-bars-head{ font-size:var(--fs-sm); color:var(--muted); letter-spacing:.06em; }
-.hg-bars-row{ display:flex; align-items:flex-end; gap:5px; height:56px; }
+.hg-bars-row{ display:flex; align-items:flex-end; gap:5px; height:46px; }
 .hg-bar{
   position:relative; flex:1; height:100%; display:flex; align-items:flex-end;
   background:var(--bg4); border-radius:4px; overflow:hidden;
@@ -580,6 +700,13 @@
 .al-count{ color:var(--cyan); }
 .al-spacer{ flex:1; }
 .al-head .btn{ padding:3px 9px; font-size:var(--fs-sm); }
+/* 操作按钮沉到日志区最底部,与滚动内容分开 */
+.al-foot{
+  display:flex; align-items:center; gap:6px;
+  padding:5px 12px; border-top:1px solid var(--border);
+  background:var(--bg2);
+}
+.al-foot .btn{ padding:3px 9px; font-size:var(--fs-sm); }
 .al-viewport{ flex:1; min-height:0; overflow-y:auto; position:relative; }
 /* 虚拟滚动:al-scroll 的高度由 JS 设为 行数×var(--log-row) 撑出滚动条,
  * al-layer 绝对定位在视口原点并 translateY 到窗口起点 —— 它随滚动内容一起平移。 */
@@ -656,7 +783,7 @@
    * 而视口只有约 1250 —— 不裁就一定有东西够不着。裁的原则是**留信息、去点缀**:
    *   品牌副标题「· 演示控制台」(79px)、池标签「池最低水位」(55px)、
    *   快捷键提示 H(16px)—— 三者都不是数据,池与品牌的 title 提示仍在。
-   * 数据类(链路徽章/池数值/帧速/剧本/数据源/时钟)一个不动。
+   * 数据类(链路徽章/池数值/帧速/数据源/时钟)一个不动。
    * 池数值与品牌标题另给 ellipsis:文字比预期长时宁可截断,也不要把右边的
    * 时钟挤出视口 —— 被裁掉的数字不会报错,只会默默不存在。 */
   .topbar{ gap:10px; }
@@ -716,8 +843,8 @@
 
 /* ================= finals-demo-drone:无人机演示 HUD(右下悬浮) ================= */
 .drone-panel {
-  position: fixed; right: 14px; bottom: 44px; z-index: 60;
-  width: 292px; padding: 10px 12px;
+  position: absolute; right: 12px; bottom: 12px; z-index: 60;
+  width: 300px; padding: 10px 12px;
   background: #10151d; border: 1px solid #2a3242;
   border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.45);
   font-size: 12px;
@@ -729,19 +856,19 @@
 .dp-chip.locked { background: #4a1f24; color: #ff9aa5; }
 .dp-chip.idle { background: #1d3342; color: #7ec8f0; }
 .dp-chip.fly { background: #16351f; color: #7df0a2; }
-.dp-body { display: flex; gap: 10px; align-items: center; }
-.dp-horizon { width: 108px; height: 108px; flex: none; }
+.dp-body { display: flex; gap: 9px; align-items: center; }
+.dp-horizon { width: 96px; height: 96px; flex: none; }
 .dp-sky { fill: #2d6cb5; } .dp-ground { fill: #6b5a2c; }
 .dp-hline { stroke: rgba(255,255,255,.85); stroke-width: 1.2; }
 .dp-hline.dim { stroke: rgba(255,255,255,.35); }
 .dp-ring { fill: none; stroke: #3a445a; stroke-width: 2; }
 .dp-plane line { stroke: #ffd257; stroke-width: 2.6; }
 .dp-plane circle { fill: #ffd257; }
-.dp-reads { display: grid; grid-template-columns: auto auto; gap: 2px 10px; flex: 1; }
-.dp-reads div { display: flex; gap: 5px; align-items: baseline; }
-.dp-reads span { opacity: .6; }
-.dp-reads b { font-size: 13px; min-width: 38px; text-align: right; }
-.dp-reads i { opacity: .5; font-style: normal; font-size: 10px; }
+.dp-reads { display: grid; grid-template-columns: auto auto; gap: 2px 7px; flex: 1; min-width: 0; }
+.dp-reads div { display: flex; gap: 4px; align-items: baseline; min-width: 0; }
+.dp-reads span { opacity: .6; white-space: nowrap; font-size: 11px; }
+.dp-reads b { font-size: 12px; min-width: 28px; text-align: right; }
+.dp-reads i { opacity: .5; font-style: normal; font-size: 9px; }
 .dp-hint { margin: 7px 0 6px; color: #ffb86b; }
 .dp-actions { display: flex; gap: 6px; margin-top: 6px; }
 .dp-actions .btn { flex: 1; padding: 4px 0; font-size: 12px; }
@@ -869,10 +996,6 @@
 /* ===== N11: 左栏/卡片抗挤压(放大页面时按钮换行而非消失) ===== */
 .console-grid{ grid-template-columns:clamp(252px, 22vw, 324px) minmax(0,1fr) 300px; }
 .left-panel{ min-width:0; }
-.tc-actions{ flex-wrap:wrap; }
-.tc-actions .btn{ flex:1 1 auto; min-width:max-content; white-space:nowrap; }
-.scen-btn span{ display:block; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.lp-scen{ grid-template-columns:repeat(auto-fit, minmax(106px, 1fr)); }
 
 
 /* ===== N11b: HD 仪表头/图例抗挤压(放大时 caption 文字换行互压) ===== */

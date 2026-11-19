@@ -47,7 +47,7 @@ export function renderV3(
   const title = el('text', { x: 16, y: 20, class: 'pl-title' }, svg);
   title.textContent = `终端 ${tid} · 模板响应位矩阵(每 seed 一条多数投票响应)`;
   const sub = el('text', { x: 16, y: 36, class: 'pl-sec-sub' }, svg);
-  sub.textContent = `显示 ${shown.length} / ${total} 条 CRP · 位序 MSB 在左(列 1 = 位 63)`;
+  sub.textContent = `显示 ${shown.length} / ${total} 组挑战-响应对 · 位序高位在左（列 1 = 位 63）`;
   if (shown.length < total) {
     const more = el('text', { x: matX + matW, y: 36, 'text-anchor': 'end', class: 'pl-sec-sub' }, svg);
     more.textContent = `另有 ${total - shown.length} 条未显示(受图高限制)`;
@@ -130,7 +130,7 @@ export function renderV3(
   }
 
   const foot = el('text', { x: 16, y: maskY + 38, class: 'pl-sec-sub' }, svg);
-  foot.textContent = '掩码 = 每 seed 多次测量的翻位率,再跨 seed 取平均 —— 全 1 不等于每个 CRP 都稳,逐 CRP 抖动见 V4。';
+  foot.textContent = '掩码 = 每组挑战多次测量的翻位率，再跨组取平均 —— 全 1 不等于每组挑战-响应对都稳定，逐组抖动见 V4。';
 
   return svg;
 }

@@ -131,19 +131,19 @@ tauBar.innerHTML = `
   <span class="vt-title">阈值 τ</span>
   <div class="vt-range">
     <input type="range" id="tau" min="0" max="63" step="1" value="${TAU_PASS}"
-      aria-label="接受上界 τ(HD ≤ τ 判接受)"
-      title="接受上界:HD ≤ τ 判接受。与 threshold.py decide() 同向(含等号)" />
+      aria-label="判决上界 τ（汉明距离不超过 τ 判通过）"
+      title="判决上界：汉明距离不超过 τ 判通过，含等号" />
     <span class="vt-val mono" id="tau-val">τ = ${TAU_PASS}</span>
   </div>
   <div class="vt-quick">
-    <button class="btn ghost" data-tau="${TAU_PASS}">TAU_PASS 6</button>
-    <button class="btn ghost" data-tau="${TAU_REJECT - 1}">灰区上沿 15</button>
+    <button class="btn ghost" data-tau="${TAU_PASS}">通过阈值 6</button>
+    <button class="btn ghost" data-tau="${TAU_REJECT - 1}">待定区上沿 15</button>
     <button class="btn ghost" data-tau="32">随机猜测 32</button>
   </div>
   <div class="vt-note">
-    <b>滑杆联动</b>:V1 的接受上界分割线 · V2 的 ROC 工作点与混淆矩阵四数。
-    <b>图内直拖</b>:在 V1 绘图区或 V2 曲线附近<b>按住水平拖动</b>同样改 τ,松手后全图联动。
-    <b>灰区</b>:τ ∈ 7–15 时协议既不判 PASS 也不判 REJECT,而是加测 EXTRA_CHALLENGE ——
+    <b>滑杆联动</b>：V1 的判决分割线 · V2 的工作点与混淆矩阵。
+    <b>图内直拖</b>：在 V1 绘图区或 V2 曲线附近<b>按住水平拖动</b>也可改 τ，松手后全图联动。
+    <b>待定区</b>：τ ∈ 7–15 时协议既不判通过也不判拒绝，而是加测 ——
     该区间的工作点在图上有琥珀色提示,不应作为最终门限。
     <b>口径</b>:TAU_PASS=${TAU_PASS} / TAU_REJECT=${TAU_REJECT} 源自 threshold.py 代码常量(实读核对)。
   </div>`;
@@ -408,7 +408,7 @@ async function loadLive(fresh = false): Promise<Bundle> {
   try {
     hd = await api.getHd(fresh);
     if (!hd.intra.length) {
-      notes.push('桥接返回的 HD 序列为空 —— 终端尚未注册?先在 console 页跑 S1 或 S6。');
+      notes.push('桥接返回的 HD 序列为空 —— 终端尚未注册?先在 console 页完成一次认证或注册。');
       hd = null;
     }
   } catch (e) {

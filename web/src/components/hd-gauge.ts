@@ -26,6 +26,10 @@ export class HdGauge {
   private bandPass!: HTMLElement;
   private bandGray!: HTMLElement;
   private bandReject!: HTMLElement;
+  private lit!: HTMLElement;
+  private litPass!: HTMLElement;
+  private litGray!: HTMLElement;
+  private litReject!: HTMLElement;
   private pointer!: HTMLElement;
   private scale!: HTMLElement;
   private caption!: HTMLElement;
@@ -36,13 +40,19 @@ export class HdGauge {
     this.el.className = 'hd-gauge';
     this.el.innerHTML = `
       <div class="hg-head">
-        <span class="hg-title">HD 汉明距离仪</span>
+        <span class="hg-title">汉明距离</span>
         <span class="hg-caption chip" id="hg-cap">待判定</span>
       </div>
       <div class="hg-track" id="hg-track">
         <div class="hg-band hg-pass"  id="hg-pass"></div>
         <div class="hg-band hg-gray"  id="hg-gray"></div>
         <div class="hg-band hg-reject" id="hg-reject"></div>
+        <!-- 提亮层:同一组色带的高亮副本,按汉明距离裁切 -->
+        <div class="hg-lit" id="hg-lit">
+          <div class="hg-band hg-pass-lit"  id="hg-lit-pass"></div>
+          <div class="hg-band hg-gray-lit"  id="hg-lit-gray"></div>
+          <div class="hg-band hg-reject-lit" id="hg-lit-reject"></div>
+        </div>
         <div class="hg-pointer" id="hg-ptr"><i></i></div>
       </div>
       <div class="hg-scale" id="hg-scale"></div>
@@ -50,6 +60,10 @@ export class HdGauge {
     this.bandPass = this.q('#hg-pass');
     this.bandGray = this.q('#hg-gray');
     this.bandReject = this.q('#hg-reject');
+    this.lit = this.q('#hg-lit');
+    this.litPass = this.q('#hg-lit-pass');
+    this.litGray = this.q('#hg-lit-gray');
+    this.litReject = this.q('#hg-lit-reject');
     this.pointer = this.q('#hg-ptr');
     this.scale = this.q('#hg-scale');
     this.caption = this.q('#hg-cap');
@@ -65,6 +79,7 @@ export class HdGauge {
     this.bandPass.style.display = 'none';
     this.bandGray.style.display = 'none';
     this.bandReject.style.display = 'none';
+    this.lit.style.display = 'none';
     this.pointer.style.display = 'none';
     this.scale.textContent = '';
     this.bars.replaceChildren();
@@ -82,6 +97,7 @@ export class HdGauge {
       this.bandPass.style.display = 'none';
       this.bandGray.style.display = 'none';
       this.bandReject.style.display = 'none';
+      this.lit.style.display = 'none';
       this.pointer.style.display = 'none';
       this.scale.textContent = '量程 0(本轮 0 个响应,HD 哨兵值 0xFF)';
       this.caption.className = 'chip ' + (v.result === 3 ? 'amber' : 'red');
@@ -92,41 +108,52 @@ export class HdGauge {
 
     const { scaled_pass: sp, scaled_reject: sr } = v.thresholds;
     const at = (x: number) => `${Math.max(0, Math.min(100, (x / max) * 100))}%`;
+    // hd 可能到 254(饱和);量程上界 max 可能 <254 → 夹取到末端
+    const hd = Math.min(v.hd, max);
+
+    /* 底色色带保持全量程(绿/黄/红三段不变);上面再叠一组同几何的
+     * 提亮副本,按汉明距离从左侧裁切 —— 偏差多大,亮色就延伸多长,
+     * 像进度条一样把经过的那段色带「点亮」。 */
+    const passW = (Math.min(sp, max) / max) * 100;
+    const grayW = sr > sp ? ((Math.min(sr, max) - sp) / max) * 100 : 0;
+    const rejectW = max > sr ? ((max - sr) / max) * 100 : 0;
 
     this.bandPass.style.display = '';
     this.bandPass.style.left = '0%';
-    this.bandPass.style.width = at(sp);
+    this.bandPass.style.width = `${passW}%`;
 
-    if (sr > sp) {
-      this.bandGray.style.display = '';
-      this.bandGray.style.left = at(sp);
-      this.bandGray.style.width = `${((Math.min(sr, max) - sp) / max) * 100}%`;
-    } else {
-      this.bandGray.style.display = 'none';
-    }
+    this.bandGray.style.display = sr > sp ? '' : 'none';
+    this.bandGray.style.left = at(sp);
+    this.bandGray.style.width = `${grayW}%`;
 
-    if (max > sr) {
-      this.bandReject.style.display = '';
-      this.bandReject.style.left = at(sr);
-      this.bandReject.style.width = `${((max - sr) / max) * 100}%`;
-    } else {
-      this.bandReject.style.display = 'none';
-    }
+    this.bandReject.style.display = max > sr ? '' : 'none';
+    this.bandReject.style.left = at(sr);
+    this.bandReject.style.width = `${rejectW}%`;
 
-    // hd 可能到 254(饱和);量程上界 max 可能 <254 → 夹取到末端
+    this.litPass.style.left = '0%';
+    this.litPass.style.width = `${passW}%`;
+    this.litGray.style.display = sr > sp ? '' : 'none';
+    this.litGray.style.left = at(sp);
+    this.litGray.style.width = `${grayW}%`;
+    this.litReject.style.display = max > sr ? '' : 'none';
+    this.litReject.style.left = at(sr);
+    this.litReject.style.width = `${rejectW}%`;
+    this.lit.style.display = '';
+    this.lit.style.clipPath = `inset(0 ${100 - (hd / max) * 100}% 0 0)`;
+
     this.pointer.style.display = '';
-    this.pointer.style.left = at(Math.min(v.hd, max));
+    this.pointer.style.left = at(hd);
 
     const inPass = v.hd < sp;
     const inReject = v.hd >= sr;
     this.caption.className = 'chip ' + (v.result === 0 ? 'green' : v.result === 1 ? 'red' : 'amber');
     this.caption.textContent =
-      `HD ${v.hd}${v.hd >= HD_SATURATED ? '+(已封顶 0xFE)' : ''} / ${max}`
-      + (inPass ? ' · 绿区' : inReject ? ' · 红区' : ' · 灰区');
+      `偏差 ${v.hd}${v.hd >= HD_SATURATED ? '+(封顶)' : ''} / ${max}`
+      + (inPass ? ' · 通过' : inReject ? ' · 拒绝' : ' · 待定');
 
-    // 刻度只放**数字**(位置精确,故必须窄);阈值语义交给下面那行图例。
-    // 早先把「PASS< 24」「REJECT≥ 64」整串贴在刻度上,在 300px 栏宽里
-    // 两个标签会叠成一团(PASS<24REJECT≥64),故拆成两行各司其职。
+    /* 量程两端只标 0 与最大值;24/64 这类阈值不再浮在轨道上方 ——
+     * 它们按比例落在色带边界处,与下方的文字图例对不齐,反而像错位。
+     * 阈值统一写在图例里,色带边界本身就是分割线。 */
     this.scale.replaceChildren();
     const mk = (x: number, label: string, cls: string, edge: boolean) => {
       const s = document.createElement('span');
@@ -138,17 +165,27 @@ export class HdGauge {
     };
     this.scale.append(
       mk(0, '0', 'hg-tick-0', true),
-      mk(sp, String(sp), 'hg-tick-pass', false),
-      mk(sr, String(sr), 'hg-tick-reject', false),
       mk(max, String(max), 'hg-tick-max', false),
     );
 
+    /* 阈值只用轨道内的细线标记位置(24 / 64),不写数字 —— 数字飘在轨道
+     * 上方时必然与下方文字图例对不齐,被读成「错位」。 */
+    const track = this.el.querySelector<HTMLElement>('.hg-track');
+    if (track) {
+      track.querySelectorAll('.hg-mark').forEach(e => e.remove());
+      for (const x of sr > sp ? [sp, sr] : [sp]) {
+        const m = document.createElement('i');
+        m.className = 'hg-mark';
+        m.style.left = at(x);
+        track.append(m);
+      }
+    }
+
     const legend = document.createElement('div');
     legend.className = 'hg-legend';
-    legend.innerHTML = `<span class="lg lg-pass">绿区 &lt;${sp}</span>`
-      + (sr > sp ? `<span class="lg lg-gray">灰区 ${sp}–${sr}·加测</span>` : '')
-      + `<span class="lg lg-reject">红区 ≥${sr}</span>`
-      + `<span class="lg lg-dim">阈值由桥接按本轮 ${n} 个响应下发</span>`;
+    legend.innerHTML = `<span class="lg lg-pass">通过 &lt;${sp}</span>`
+      + (sr > sp ? `<span class="lg lg-gray">待定 ${sp}–${sr - 1}</span>` : '')
+      + `<span class="lg lg-reject">拒绝 ≥${sr}</span>`;
     this.scale.append(legend);
 
     this.renderBars(v);
@@ -160,7 +197,7 @@ export class HdGauge {
     if (v.hd_per_response.length === 0) return;
     const head = document.createElement('div');
     head.className = 'hg-bars-head';
-    head.textContent = `逐响应 HD(共 ${v.hd_per_response.length} 个响应,各自 0–64)`;
+    head.textContent = `逐组偏差 · ${v.hd_per_response.length} 组`;
     this.bars.append(head);
 
     const row = document.createElement('div');
@@ -172,8 +209,7 @@ export class HdGauge {
       cell.className = 'hg-bar';
       // 单响应口径:与未缩放阈值 TAU_PASS/TAU_REJECT 比(每响应满分 64)
       cell.classList.add(hd < tauPass ? 'ok' : hd >= tauReject ? 'bad' : 'gray');
-      cell.title = `响应 #${i + 1}:HD=${hd}`
-        + `(单响应阈值 PASS<${tauPass} / REJECT≥${tauReject})`;
+      cell.title = `第 ${i + 1} 组：偏差 ${hd}（单组阈值 通过<${tauPass} / 拒绝≥${tauReject}）`;
       const fill = document.createElement('i');
       fill.style.height = `${Math.max(3, Math.min(100, (hd / 64) * 100))}%`;
       cell.append(fill);

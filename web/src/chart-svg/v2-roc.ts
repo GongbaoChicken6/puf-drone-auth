@@ -144,7 +144,7 @@ export function renderV2(
     const gl = el('text', {
       x: x(mid.far) + 8, y: y(mid.tpr) + 22, class: 'pl-grayband-lab',
     }, p.g);
-    gl.textContent = `τ=${gray[0].tau}–${gray[gray.length - 1].tau} 灰区(加测,非合法工作点)`;
+    gl.textContent = `τ=${gray[0].tau}–${gray[gray.length - 1].tau} 待定区（加测，非合法工作点）`;
   }
 
   // EER 点
@@ -159,8 +159,8 @@ export function renderV2(
     el('circle', { cx: x(pt.far), cy: y(pt.tpr), r: 4, fill: 'none', stroke: color, 'stroke-width': 2 }, p.g);
     el('text', { x: x(pt.far) + 7, y: y(pt.tpr) - 6, class: 'pl-tick' }, p.g).textContent = label;
   };
-  mk(o.tauPass, COLOR.pass, `TAU_PASS=${o.tauPass}`);
-  mk(o.tauReject - 1, COLOR.reject, `灰区上沿=${o.tauReject - 1}`);
+  mk(o.tauPass, COLOR.pass, `通过阈值=${o.tauPass}`);
+  mk(o.tauReject - 1, COLOR.reject, `待定区上沿=${o.tauReject - 1}`);
 
   /* 全 τ 逐点悬停(D14)。滑杆只能一格一格拖,而「τ 再放一格会怎样」是这张图
    * 最常被问的问题 —— 把 65 个 τ 都做成命中目标,指针扫过去就能读出该 τ 的
@@ -170,7 +170,7 @@ export function renderV2(
     p.hitRound(x(pt.far), y(pt.tpr), 6,
       `τ=${pt.tau}\nTPR=${(pt.tpr * 100).toFixed(1)}%(同设备接受)\n`
       + `FAR=${(pt.far * 100).toFixed(1)}%(跨设备误接受)\nFRR=${(pt.frr * 100).toFixed(1)}%\n`
-      + (pt.tau > o.tauPass && pt.tau < o.tauReject ? '⚠ 灰区:协议在此 τ 下加测' : ''));
+      + (pt.tau > o.tauPass && pt.tau < o.tauReject ? '⚠ 待定区：协议在此阈值下加测' : ''));
   });
 
   // 当前工作点(R7 加 pl-opdot 类:拖拽时要就地平移它,查询需要稳定句柄)
@@ -179,7 +179,7 @@ export function renderV2(
     cx: x(r.at.far), cy: y(r.at.tpr), r: 5.5, fill: opColor, class: 'pl-opdot',
   }, p.g);
   const opLab = el('text', { x: x(r.at.far) + 9, y: y(r.at.tpr) + 16, class: 'pl-op-lab' }, p.g);
-  opLab.textContent = `工作点 τ=${o.tau}${r.grayAt ? '(灰区)' : ''}`;
+  opLab.textContent = `工作点 τ=${o.tau}${r.grayAt ? '(待定区)' : ''}`;
 
   /* R7:在曲线附近按住拖 = 沿 x(FAR)吸附到最近的阶梯点改 τ。
    * 与 V1 同一套 move/end 纪律:move 只平移工作点两节点,end 才提交全页重绘
@@ -206,7 +206,7 @@ export function renderV2(
       opDot.setAttribute('fill', g ? COLOR.gray : pt.far === 0 ? COLOR.pass : COLOR.reject);
       opLab.setAttribute('x', String(x(pt.far) + 9));
       opLab.setAttribute('y', String(y(pt.tpr) + 16));
-      opLab.textContent = `工作点 τ=${t}${g ? '(灰区)' : ''}`;
+      opLab.textContent = `工作点 τ=${t}${g ? '(待定区)' : ''}`;
     };
     p.svg.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 || !e.isPrimary) return;
@@ -232,7 +232,7 @@ export function renderV2(
 
   drawLegend(p.overlay, bx.x0 + 8, bx.y0 + 14, [
     { label: 'ROC(HD ≤ τ 即接受)', color: COLOR.comm },
-    { label: '灰区段', color: COLOR.gray, kind: 'dash' },
+    { label: '待定区段', color: COLOR.gray, kind: 'dash' },
   ], side - 16);
 
   /* ---------- 混淆矩阵 ---------- */
@@ -266,7 +266,7 @@ export function renderV2(
   if (r.grayAt) {
     footY += 16;
     const warn = el('text', { x: mx, y: footY, class: 'pl-graywarn' }, p.overlay);
-    warn.textContent = `τ=${o.tau} 在灰区:协议不判 PASS/REJECT,而是加测`;
+    warn.textContent = `τ=${o.tau} 落在待定区：协议不判通过或拒绝，而是加测`;
   }
 
   el('rect', { x: bx.x0, y: bx.y0, width: side, height: gy, class: 'pl-frame' }, p.axisLayer);

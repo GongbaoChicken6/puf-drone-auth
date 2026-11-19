@@ -50,21 +50,23 @@ export class AuditLog {
         <span class="al-title">审计日志</span>
         <label class="al-filter">终端 <select id="al-tid"><option value="all">全部</option></select></label>
         <label class="al-filter">严重级 <select id="al-sev">
-          <option value="all">全部</option><option value="info">info</option>
-          <option value="warn">warn</option><option value="error">error</option></select></label>
+          <option value="all">全部</option><option value="info">提示</option>
+          <option value="warn">警告</option><option value="error">错误</option></select></label>
         <label class="al-filter">类型 <select id="al-type"><option value="all">全部</option></select></label>
         <span class="al-count" id="al-count">0 行</span>
-        <span class="al-spacer"></span>
-        <button class="btn ghost" id="al-follow" aria-pressed="true" title="钉在底部自动跟随最新事件">跟随 ✓</button>
-        <button class="btn ghost" id="al-export-run"
-          title="导出当前 run 的原始 SSE 事件流(含 seq/ts 信封),作为答辩证据附件">
-          导出本次运行</button>
-        <button class="btn ghost" id="al-export-all"
-          title="导出全部已缓存事件(同为本进程真实收到的原始信封)">导出全部</button>
-        <button class="btn ghost" id="al-clear">清屏</button>
       </div>
       <div class="al-viewport" id="al-vp">
         <div class="al-scroll" id="al-sp"><div class="al-layer" id="al-ly"></div></div>
+      </div>
+      <div class="al-foot">
+        <span class="al-spacer"></span>
+        <button class="btn ghost" id="al-follow" aria-pressed="true" title="钉在底部自动跟随最新事件">跟随 ✓</button>
+        <button class="btn ghost" id="al-export-run"
+          title="导出当前轮次的原始事件流（含序号与时间），作为答辩证据附件">
+          导出本次运行</button>
+        <button class="btn ghost" id="al-export-all"
+          title="导出全部已缓存事件（均为本进程真实收到的原始事件）">导出全部</button>
+        <button class="btn ghost" id="al-clear">清屏</button>
       </div>`;
 
     this.viewport = this.q('#al-vp');
@@ -136,7 +138,7 @@ export class AuditLog {
     if (this.filterTid.options.length - 1 !== tids.size) {
       this.filterTid.replaceChildren(new Option('全部', 'all'));
       [...tids].sort((a, b) => a - b)
-        .forEach(t => this.filterTid.append(new Option(`tid ${t}`, String(t))));
+        .forEach(t => this.filterTid.append(new Option(`终端 ${t}`, String(t))));
       this.filterTid.value = keepTid;
     }
     const keepType = this.filterType.value;
@@ -154,7 +156,7 @@ export class AuditLog {
       this.exportRunBtn.disabled = currentRunId == null;
       this.exportRunBtn.title = currentRunId == null
         ? '当前无运行:按钮禁用(「导出全部」仍可用)'
-        : '导出当前 run 的原始 SSE 事件流(含 seq/ts 信封),作为答辩证据附件';
+        : '导出当前轮次的原始事件流（含序号与时间），作为答辩证据附件';
     }
     this.populateFilters();
     this.apply();
@@ -171,7 +173,7 @@ export class AuditLog {
     this.painted = '';
     this.spacer.style.height = `${this.rows.length * ROW_H}px`;
     this.countEl.textContent = `${this.rows.length} / ${this.all.length} 行`
-      + (this.currentRunId ? ` · 当前 run ${this.currentRunId}` : '');
+      + (this.currentRunId ? ` · 当前轮次 ${this.currentRunId}` : '');
     if (this.follow) this.scrollToEnd();
     else this.paint();
   }
@@ -210,7 +212,7 @@ export class AuditLog {
       tx.className = 'al-text';
       tx.textContent = l.text;
       row.append(ts, ty, tid, tx);
-      row.title = `${l.ts}\n${l.type}${l.runId ? ` · run ${l.runId}` : ''}`
+      row.title = `${l.ts}\n${l.type}${l.runId ? ` · 认证轮次 ${l.runId}` : ''}`
         + `\n${l.text}`;
       frag.append(row);
     }

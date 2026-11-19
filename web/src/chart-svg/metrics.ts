@@ -51,14 +51,14 @@ export const METRICS: MetricCard[] = [
   },
   {
     key: 'crp',
-    label: '有效 CRP 空间',
+    label: '有效挑战-响应空间',
     value: '120',
     unit: '种配对',
     sub: 'C(16,2),而非 2⁶⁴',
     prov: {
       source: 'docs/project_design.md',
-      quote: '「有效 CRP 空间 = C(16,2)=120 种配对比较,而非 2^64」'
-        + ';同文件实验 B 亦写「~120 条带噪 CRP 即可高概率重构」',
+      quote: '「有效挑战-响应空间 = C(16,2)=120 种配对比较，而非 2^64」'
+        + '；同一文件实验 B 亦写「约 120 组带噪挑战-响应对即可高概率重构」',
       grade: 'REAL-STATIC',
       snapshot: '仓库静态文件,2026-10-14 读取',
     },
@@ -85,7 +85,7 @@ export const METRICS: MetricCard[] = [
     label: '验证资产(本机实测)',
     value: '13',
     unit: '套 TB',
-    sub: '单测 77 个 · 黄金帧 7 条 · 测试向量 1,195 行',
+    sub: '单测 77 个 · 标准帧 7 条 · 测试向量 1,195 行',
     prov: {
       source: '组员仓库 sim/ · tests/ · docs/protocol_contract.md §4',
       quote: 'sim/ 下 tb_*.v 共 13 个,scripts/ci_regression.ps1 全部引用'

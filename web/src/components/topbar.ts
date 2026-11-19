@@ -1,7 +1,7 @@
 /* ============================================================
  * 顶栏 —— 报告 §6.1 / §6.2
  * 品牌｜链路徽章(可点开详情)｜池水位概览(悬停分终端)｜帧速滑杆
- * ｜剧本模式键｜数据源徽章(三态,可点开清单)｜时钟+run 计数
+ * ｜数据源徽章(三态,可点开清单)｜时钟+run 计数
  *
  * 链路徽章的四态是**合成量**,不是 link.status 单字段:
  *   OFF〜   : 尚未收到 link.status(桥接未启动/首连中)
@@ -13,14 +13,9 @@ import { barScale, hhmmss } from '../core/format';
 import type { SseState } from '../core/api';
 import type { AppState, TerminalState } from '../core/store';
 import type { LinkBadgeState } from '../core/types';
-import { QUEUE_ALL, QUEUE_MUTEX, SCENARIOS, type PlayerStatus } from '../core/scenario';
 
 export interface TopbarDeps {
   onFrameMs(ms: number): void;
-  onPlay(ids: readonly ('S1' | 'S2' | 'S3' | 'S4' | 'S5' | 'S6' | 'S7' | 'S8')[]): void;
-  onStep(): void;
-  onPauseToggle(): void;
-  onStop(): void;
 }
 
 export class Topbar {
@@ -36,10 +31,6 @@ export class Topbar {
   private sourceTip!: HTMLElement;
   private clock!: HTMLElement;
   private counter!: HTMLElement;
-  private scenStat!: HTMLElement;
-  private playBtn!: HTMLButtonElement;
-  private stepBtn!: HTMLButtonElement;
-  private pauseBtn!: HTMLButtonElement;
   private popup: HTMLElement | null = null;
 
   constructor(deps: TopbarDeps) {
@@ -49,44 +40,34 @@ export class Topbar {
     this.el.innerHTML = `
       <div class="tb-brand">
         <span class="tb-logo"></span>
-        <span class="tb-title">PUF 无人机认证 <em>· 演示控制台</em></span>
+        <span class="tb-title">基于PUF的无人机身份认证系统<em>·演示控制台</em></span>
       </div>
 
       <button class="tb-link" id="tb-link" aria-expanded="false" title="点击查看链路详情">
         <i class="dot"></i><span id="tb-link-text">连接中…</span>
       </button>
 
-      <div class="tb-pool" id="tb-pool" title="所有终端 CRP 池最低水位">
-        <span class="k">池最低水位</span>
+      <div class="tb-pool" id="tb-pool" title="所有终端挑战池余量的最低值">
+        <span class="k">挑战池最低余量</span>
         <span class="v mono" id="tb-pool-text">—</span>
         <div class="tb-bar"><i id="tb-pool-bar" style="transform:scaleX(0)"></i></div>
       </div>
 
-      <label class="tb-slider" title="帧速滑杆:仅调整前端动画节奏,不改变后端时序(§6.2)">
-        <span class="k">帧速</span>
+      <label class="tb-slider" title="动画速度:只调整界面动画节奏,不改变认证时序与判决结果">
+        <span class="k">动画速度</span>
         <input type="range" id="tb-ms" min="200" max="2000" step="50" value="600"
-          aria-label="帧速:每帧推进的毫秒数" />
+          aria-label="动画速度:每帧推进的毫秒数" />
         <span class="v mono" id="tb-ms-val">600 ms</span>
       </label>
 
-      <div class="tb-scripts">
-        <span class="k">剧本</span>
-        <button class="btn ghost" id="tb-play-mutex" title="一键连播 S1→S2(默认互斥叙事)">S1→S2</button>
-        <button class="btn ghost" id="tb-play-all" title="全场景连播 S1…S8(以认证解锁飞行收尾)">全场景</button>
-        <button class="btn ghost" id="tb-step" title="逐幕单步(暂停态下推一幕)">单步</button>
-        <button class="btn ghost" id="tb-pause" title="暂停/继续自动推进">暂停</button>
-        <button class="btn ghost" id="tb-stop" title="停止并清空剧本队列">停止</button>
-        <span class="tb-scen-stat mono" id="tb-scen-stat">idle</span>
-      </div>
-
       <span class="tb-spacer"></span>
 
-      <button class="tb-source" id="tb-source" aria-expanded="false" title="点击查看数据源清单(§4.4)">
-        <i class="dot"></i><span id="tb-source-text">REAL-LIVE</span>
+      <button class="tb-source" id="tb-source" aria-expanded="false" title="点击查看数据来源说明">
+        <i class="dot"></i><span id="tb-source-text">实时数据</span>
       </button>
 
       <div class="tb-clock">
-        <span class="mono" id="tb-run">run 0</span>
+        <span class="mono" id="tb-run">第 0 轮</span>
         <span class="mono" id="tb-clock">--:--:--.---</span>
       </div>
 
@@ -99,10 +80,6 @@ export class Topbar {
     this.sourceBadge = this.q('#tb-source');
     this.clock = this.q('#tb-clock');
     this.counter = this.q('#tb-run');
-    this.scenStat = this.q('#tb-scen-stat');
-    this.playBtn = this.q<HTMLButtonElement>('#tb-play-mutex');
-    this.stepBtn = this.q<HTMLButtonElement>('#tb-step');
-    this.pauseBtn = this.q<HTMLButtonElement>('#tb-pause');
 
     this.poolTip = this.mkPopup('tb-pool-tip');
     this.sourceTip = this.mkPopup('tb-source-tip');
@@ -128,27 +105,6 @@ export class Topbar {
       this.sliderVal.textContent = `${ms} ms`;
       this.deps.onFrameMs(ms);
     });
-
-    /* 单幕键 S1…S7:只跑一幕、结束定格 —— 互斥连播 S1→S2 会把 S1 的 PASS
-     * 定格瞬间立刻覆盖成 S2 的 REJECT,录像/讲解需要「认证通过」可停在屏上。 */
-    const one = document.createElement('span');
-    one.className = 'tb-one-shots';
-    one.title = '单幕播放:只跑所选场景,结束后画面定格在判定结果';
-    for (const s of SCENARIOS) {
-      const b = document.createElement('button');
-      b.className = 'btn ghost';
-      b.textContent = s.id;
-      b.title = `${s.id} ${s.name} —— ${s.focus}\n预期:${s.expect}\n(单幕播放,结束后定格)`;
-      b.addEventListener('click', () => this.deps.onPlay([s.id]));
-      one.appendChild(b);
-    }
-    this.playBtn.parentElement!.insertBefore(one, this.playBtn);
-
-    this.playBtn.addEventListener('click', () => this.deps.onPlay(QUEUE_MUTEX));
-    this.q('#tb-play-all').addEventListener('click', () => this.deps.onPlay(QUEUE_ALL));
-    this.stepBtn.addEventListener('click', () => this.deps.onStep());
-    this.pauseBtn.addEventListener('click', () => this.deps.onPauseToggle());
-    this.q('#tb-stop').addEventListener('click', () => this.deps.onStop());
 
     this.linkBadge.addEventListener('click', () => this.toggleLinkDetail());
     this.sourceBadge.addEventListener('click', () => this.toggleSourceList());
@@ -212,18 +168,20 @@ export class Topbar {
     p.innerHTML = `
       <div class="tp-title">链路详情</div>
       <dl>
-        <dt>transport</dt><dd class="mono">${link ? (link.mode === 'loopback' ? 'loopback(PC 自环)' : '串口 serial') : '—'}</dd>
-        <dt>connected</dt><dd class="mono">${link ? String(link.connected) : '—'}</dd>
-        <dt>uptime</dt><dd class="mono">${link ? `${link.uptime_s.toFixed(1)} s` : '—'}</dd>
-        <dt>终端侧代演</dt><dd class="mono">${link ? (link.proxy ? '是(proxy=true)' : '否') : '—'}</dd>
-        <dt>桥接版本</dt><dd class="mono">${link?.version ?? '—'}</dd>
-        <dt>SSE</dt><dd class="mono">${this.sseState}</dd>
+        <dt>连接方式</dt><dd class="mono">${link ? (link.mode === 'loopback' ? '本机模拟(PC 自环)' : '串口') : '—'}</dd>
+        <dt>连接状态</dt><dd class="mono">${link ? (link.connected ? '已连接' : '未连接') : '—'}</dd>
+        <dt>运行时长</dt><dd class="mono">${link ? `${link.uptime_s.toFixed(1)} s` : '—'}</dd>
+        <dt>终端侧响应</dt><dd class="mono">${link ? (link.proxy ? '由 PC 模拟' : '真实终端') : '—'}</dd>
+        <dt>基站服务版本</dt><dd class="mono">${link?.version ?? '—'}</dd>
+        <dt>实时推送</dt><dd class="mono">${this.sseState === 'live' ? '正常'
+          : this.sseState === 'polling' ? '降级轮询'
+            : this.sseState === 'reconnecting' ? '重连中' : '连接中'}</dd>
       </dl>
       ${link?.version?.endsWith('-mock')
-        ? '<div class="tp-warn">该桥接以 --mock 启动:以下全部事件为 MOCK 回放,不可作为实测证据。</div>'
+        ? '<div class="tp-warn">该基站服务以示例模式启动：以下事件为示例回放，不能作为实测证据。</div>'
         : ''}
       ${link?.proxy
-        ? '<div class="tp-note">终端侧三帧由桥接代演(§8.1)。答辩话术:PC 模拟终端行为,板可用后换真终端。</div>'
+        ? '<div class="tp-note">终端侧响应由 PC 模拟。答辩口径：当前 PC 代替终端产生响应，接入实板后由真实终端生成。</div>'
         : ''}
       <div class="tp-note">点击任意处关闭</div>`;
     document.body.appendChild(p);
@@ -247,21 +205,21 @@ export class Topbar {
   private showSourceTip(): void {
     const cur = this.last?.source ?? 'REAL-LIVE';
     const rows = [
-      ['REAL-LIVE', '桥接层实时产生的事件(含代演终端)。本页默认态。'],
-      ['REAL-STATIC', '落盘后回读的数据:tools/sample_hd.py 采样 JSON、导入文件。'],
-      ['MOCK', '内置样例 / 桥接 --mock 回放。页内一律以前缀 MOCK 标注,不可作为实测证据。'],
+      ['REAL-LIVE', '实时数据', '认证过程中由基站服务实时产生的事件（含 PC 模拟的终端响应）。本页默认来源。'],
+      ['REAL-STATIC', '回读数据', '已落盘后回读的数据：采样文件、导入文件。'],
+      ['MOCK', '示例数据', '内置示例或基站服务示例回放，仅用于界面演示，不能作为实测证据。'],
     ] as const;
     this.sourceTip.innerHTML = `
-      <div class="tp-title">数据源清单(§4.4)</div>
+      <div class="tp-title">数据来源说明</div>
       <ul class="tp-src">
-        ${rows.map(([n, d]) => `
+        ${rows.map(([n, cn, d]) => `
           <li class="${n === cur ? 'cur' : ''}">
-            <span class="chip ${n === 'MOCK' ? 'amber' : n === 'REAL-STATIC' ? '' : 'green'}">${n}</span>
+            <span class="chip ${n === 'MOCK' ? 'amber' : n === 'REAL-STATIC' ? '' : 'green'}">${cn}</span>
             <span class="tp-src-d">${d}</span>
             ${n === cur ? '<span class="tp-src-cur">当前</span>' : ''}
           </li>`).join('')}
       </ul>
-      <div class="tp-note">切换:viz 页右上角三态选择器;console 页跟随桥接(link.version 以 -mock 结尾即 MOCK)。</div>`;
+      <div class="tp-note">切换：系统总览页右上角选择器；本页跟随基站服务的运行模式。</div>`;
     this.place(this.sourceTip, this.sourceBadge);
   }
 
@@ -269,17 +227,17 @@ export class Topbar {
   private showPoolTip(): void {
     const ts = this.terminals;
     this.poolTip.innerHTML = `
-      <div class="tp-title">分终端 CRP 池</div>
+      <div class="tp-title">各终端挑战池余量</div>
       ${ts.length === 0 ? '<div class="tp-note">尚无终端</div>' : `
       <ul class="tp-pool">
         ${ts.map(t => `
           <li>
-            <span class="mono">tid ${t.id}</span>
+            <span class="mono">终端 ${t.id}</span>
             <div class="tb-bar ${t.pool_pct < 20 ? 'warn' : ''}"><i style="${barScale(t.pool_pct)}"></i></div>
-            <span class="mono">${t.pool_remaining}/${t.pool_size || '—'} (${t.pool_pct}%)</span>
+            <span class="mono">${t.pool_remaining}/${t.pool_size || '—'} 组 (${t.pool_pct}%)</span>
           </li>`).join('')}
       </ul>`}
-      <div class="tp-note">分母 pool_size 是该设备的历史容量上限,不是当前余额。</div>`;
+      <div class="tp-note">分母是该设备注册时的容量上限，不是当前余量。</div>`;
     this.place(this.poolTip, this.poolOverview);
   }
 
@@ -302,7 +260,7 @@ export class Topbar {
     this.sourceTip.remove();
   }
 
-  update(s: AppState, sse: SseState, player: PlayerStatus): void {
+  update(s: AppState, sse: SseState): void {
     this.last = s;
     this.sseState = sse;
     this.terminals = [...s.terminals.values()].sort((a, b) => a.id - b.id);
@@ -314,8 +272,8 @@ export class Topbar {
     else if (s.link == null) bs = 'OFFLINE';
     else bs = s.link.mode === 'loopback' ? 'LOOPBACK' : 'SERIAL';
     const label = bs === 'SERIAL'
-      ? `SERIAL${s.link?.connected ? '' : '(未连接)'}`
-      : bs === 'RECONNECTING' ? '重连中…' : bs === 'OFFLINE' ? '离线' : 'LOOPBACK';
+      ? `串口${s.link?.connected ? '' : '(未连接)'}`
+      : bs === 'RECONNECTING' ? '重连中…' : bs === 'OFFLINE' ? '离线' : '本机模拟';
     this.linkBadge.className = `tb-link st-${bs.toLowerCase()}`
       + (bs === 'RECONNECTING' ? ' blink' : '');
     this.q('#tb-link-text').textContent = label;
@@ -326,7 +284,7 @@ export class Topbar {
       : withPool.reduce((a, b) => (a.pool_pct <= b.pool_pct ? a : b));
     this.q('#tb-pool-text').textContent = min == null
       ? '—'
-      : `${min.pool_pct}%  (tid ${min.id} ${min.pool_remaining}/${min.pool_size})`;
+      : `${min.pool_pct}%  (终端 ${min.id} ${min.pool_remaining}/${min.pool_size} 组)`;
     const bar = this.q('#tb-pool-bar');
     bar.setAttribute('style', barScale(min?.pool_pct));
     bar.parentElement!.className = 'tb-bar' + ((min?.pool_pct ?? 100) < 20 ? ' warn' : '');
@@ -337,31 +295,13 @@ export class Topbar {
       this.sliderVal.textContent = `${s.ui.frameMs} ms`;
     }
 
-    /* 剧本状态 */
-    const cur = player.current;
-    const scen = cur ? SCENARIOS.find(x => x.id === cur) : null;
-    /* 序号必须夹到 [1, len]:advanceOne() 返回时 index 已指向**下一幕**,
-     * 单步到末幕时 index === queue.length,`index+1` 会渲染成「2/1」。
-     * 连播态看不出这个毛病 —— loop() 末尾会把 index 归零,而那条清理只在
-     * 'running' 下执行,暂停态永远走不到。夹一下,并把「已完成全部」也读作
-     * 末幕,是这里能给出的最不误导的读数。 */
-    const n = player.queue.length;
-    const at = n ? Math.min(player.index + 1, n) : 0;
-    this.scenStat.textContent = player.state === 'idle'
-      ? 'idle'
-      : `${player.state === 'paused' ? '暂停' : '连播'} ${at}/${n}`
-        + (scen ? ` · ${scen.id} ${scen.name}` : '');
-    this.scenStat.title = scen ? `焦点:${scen.focus}\n预期:${scen.expect}` : '';
-    this.pauseBtn.textContent = player.state === 'paused' ? '继续' : '暂停';
-    this.pauseBtn.disabled = player.state === 'idle';
-    this.stepBtn.disabled = player.state === 'running';
-
     /* 数据源徽章 */
     const src = s.source;
     this.sourceBadge.className = 'tb-source st-'
       + (src === 'MOCK' ? 'mock' : src === 'REAL-STATIC' ? 'static' : 'live');
-    this.q('#tb-source-text').textContent = src;
+    this.q('#tb-source-text').textContent =
+      src === 'MOCK' ? '示例数据' : src === 'REAL-STATIC' ? '回读数据' : '实时数据';
 
-    this.counter.textContent = `run ${s.runCount}`;
+    this.counter.textContent = `第 ${s.runCount} 轮`;
   }
 }

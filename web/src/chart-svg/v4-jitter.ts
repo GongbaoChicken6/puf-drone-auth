@@ -90,7 +90,7 @@ export function renderV4(s: JitterStats, o: { expectMean: number }): SVGSVGEleme
   const yMax = Math.max(4, s.peak + 1);
   const p = new Plot([0, Math.max(1, s.crps.length - 1)], [0, yMax], {
     w: 760, h: 320, pad: { l: 52, r: 20, t: 34, b: 44 },
-    xLabel: 'CRP 序号(注册时实际测量的挑战)', yLabel: '与模板的 HD(bit)',
+    xLabel: '挑战-响应对序号（注册时实际测量的挑战）', yLabel: '与模板的汉明距离（位）',
   });
   p.gridY(intTicks(0, yMax, 4));
   p.gridX(intTicks(0, Math.max(1, s.crps.length - 1), 10));
@@ -113,7 +113,7 @@ export function renderV4(s: JitterStats, o: { expectMean: number }): SVGSVGEleme
       }, p.g);
     }
     p.hit(x - 8, p.box.y0, 16, base - p.box.y0,
-      `CRP #${i} 0x${c.seed}\nHD = ${c.hds.join(', ')}\n${s.rounds} 次重复测量`, 'band');
+      `挑战-响应对 #${i} 0x${c.seed}\n汉明距离 = ${c.hds.join(', ')}\n${s.rounds} 次重复测量`, 'band');
   });
 
   // 实测均值 vs 报告注释口径(~1.3bit/64bit):两者接近即为口径自洽的证据
@@ -134,7 +134,7 @@ export function renderV4(s: JitterStats, o: { expectMean: number }): SVGSVGEleme
     { label: 'HD 1–2', color: COLOR.amber, kind: 'dot' },
     { label: 'HD ≥3', color: COLOR.reject, kind: 'dot' },
     {
-      label: `每 CRP ${s.rounds} 次测量 · ${s.crps.length} 个 CRP`,
+      label: `每组 ${s.rounds} 次测量 · ${s.crps.length} 组挑战-响应对`,
       color: COLOR.dim, kind: 'line',
     },
   ], p.box.x1 - p.box.x0 - 16);

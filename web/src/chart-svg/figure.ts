@@ -24,11 +24,11 @@ const GRADE_CLS: Record<Grade, string> = {
 };
 
 const GRADE_TIP: Record<Grade, string> = {
-  'REAL-LIVE': '本机 loopback 运行时实测数据,经桥接 REST/SSE 获取',
-  'REAL-LIVE(捕获后)': '注册过程经桥接旁路捕获的真实多次测量;进程重启即清空,需重跑 S6 注册',
+  'REAL-LIVE': '本机模拟运行时的实时数据，经基站服务获取',
+  'REAL-LIVE(捕获后)': '注册过程中由基站服务旁路捕获的真实多次测量；进程重启即清空，需重新执行注册',
   'REAL-STATIC': '来自仓库内静态文件(设计文档/契约/代码常量),非运行时数据',
   'IMPORTED': '真实测量数据,但来自本地导入的 JSON 文件(离线回放),并非本次运行实测',
-  'MODEL': '黄金模型(ROPairingPUF)以真实器件参数推演:算法与输入真实,但非上板实测',
+  'MODEL': '参考模型以真实器件参数推演：算法与输入真实，但不是上板实测',
   'MOCK': '占位数据,非实测;报告 §4.4 强制标注',
 };
 

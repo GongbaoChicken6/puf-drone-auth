@@ -29,7 +29,7 @@ function render(online: boolean, mode = '—'): void {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
       <a class="card active hoverlift" href="./console.html" style="padding:26px;display:block;text-decoration:none;color:inherit;">
         <h2 style="font-size:19px;color:var(--cyan);">🛰 演示控制台</h2>
-        <p style="color:var(--muted);margin:10px 0 0;">认证五帧实时动画 · 双向判定 · 场景演示 S1–S7 · 3D 认证舞台</p>
+        <p style="color:var(--muted);margin:10px 0 0;">认证五帧实时动画 · 双向判定 · 3D 认证舞台</p>
         <p class="mono" style="color:var(--muted);margin:14px 0 0;font-size:11px;">P1 · 互斥演示主舞台</p>
       </a>
       <a class="card wait hoverlift" href="./viz.html" style="padding:26px;display:block;text-decoration:none;color:inherit;">

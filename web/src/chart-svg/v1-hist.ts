@@ -79,9 +79,9 @@ export function renderV1(d: HdSeries, o: V1Opts): SVGSVGElement {
       t.textContent = label;
     }
   };
-  band(0, o.tauPass + 1, 'pl-band-pass', `PASS HD ≤${o.tauPass}`);
-  band(o.tauPass + 1, o.tauReject, 'pl-band-gray', `灰区 ${o.tauPass + 1}–${o.tauReject - 1}`);
-  band(o.tauReject, BITS + 1, 'pl-band-reject', `REJECT ≥${o.tauReject}`);
+  band(0, o.tauPass + 1, 'pl-band-pass', `通过 HD ≤${o.tauPass}`);
+  band(o.tauPass + 1, o.tauReject, 'pl-band-gray', `待定区 ${o.tauPass + 1}–${o.tauReject - 1}`);
+  band(o.tauReject, BITS + 1, 'pl-band-reject', `拒绝 ≥${o.tauReject}`);
 
   /* 并列柱:intra 靠左、inter 靠右(D14 细标记 + 2px 缝 + 顶圆角)
    *
@@ -142,7 +142,7 @@ export function renderV1(d: HdSeries, o: V1Opts): SVGSVGElement {
    * R7:τ 线/标签落灰区时改琥珀 —— 此前「灰区」只在滑杆读数与 V2 上可见,
    * V1 自己那根线拖进 7–15 仍是青色,等于本图在附和「这也是个合法门限」。 */
   const gray = (t: number) => t > o.tauPass && t < o.tauReject;
-  const tauLab = (t: number) => `接受上界 τ=${t}${gray(t) ? '(灰区)' : ''}`;
+  const tauLab = (t: number) => `接受上界 τ=${t}${gray(t) ? '(待定区)' : ''}`;
   const tauEdge = p.box.x0 + binW * (o.tau + 1);
   const tauLine = el('line', {
     x1: tauEdge, y1: p.box.y0, x2: tauEdge, y2: p.box.y1,
