@@ -2521,6 +2521,15 @@ class RealSerialListener:
         c2 = ar_f.get("c2", b"\0"*8)
         self._ef(rid,tid,0x0090,ar_raw,False)
         self._log(f"REAL auth tid={tid} run={rid}")
+        # N13 不变式:可抽种子 ⊆ 有模板对。桥启动会把仓库池播种进沙箱,未录入种子
+        # 一旦被抽中即 KeyError('no template for seed')。每次认证前幂等收敛。
+        try:
+            _tpl = self.proto.templates.templates.get(str(tid)) or {}
+            if _tpl:
+                self.proto.pools.get(tid).limit_to(_tpl.keys())
+        except Exception as _e:  # noqa: BLE001 —— 不变式失败不阻断认证,仅告警
+            self._log(f"REAL pool-invariant warn: {type(_e).__name__}: {_e}", "warn")
+
         try: chal = self.proto.on_access_request(tid, c2=c2)
         except Exception as e:
             self._log(f"REAL error: {e}","error")
