@@ -107,7 +107,7 @@ if ($occ) {
 $portArg = ''
 if ($SerialPort -eq 'auto') {
     $wmi = Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match 'COM\d' -and $_.Name -match 'CH340|CP210|FTDI|USB.*(Serial|UART)' } |
+        Where-Object { $_.DeviceID -match '^USB\\' -and $_.Name -match '\(COM\d+\)' } |
         ForEach-Object { if ($_.Name -match '(COM\d+)') { $Matches[1] } } | Select-Object -Unique
     $dotnet = [System.IO.Ports.SerialPort]::GetPortNames() | Select-Object -Unique
     $cand = @($wmi)

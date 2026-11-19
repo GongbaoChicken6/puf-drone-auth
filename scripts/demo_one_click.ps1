@@ -50,14 +50,13 @@ $com = $null
 if ($SerialPort -eq 'none') {
     Ok '彩排模式(loopback):跳过串口/烧写/链路自检'
 } else {
-    if ($SerialPort -ne 'auto') { $com = $SerialPort; Ok "显式指定: $com" }
+    if ($SerialPort -ne 'auto') { $script:CandList = @($SerialPort); Ok "显式指定: $SerialPort" }
     else {
         $cands = Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue |
-            Where-Object { $_.DeviceID -match 'VID_1A86' -or $_.Name -match 'CH340' }
+            Where-Object { $_.DeviceID -match '^USB\\' -and $_.Name -match '\(COM\d+\)' }
         $ports = @($cands | ForEach-Object { if ($_.Name -match '(COM\d+)') { $Matches[1] } } | Select-Object -Unique)
-        if ($ports.Count -eq 1) { $com = $ports[0]; Ok "唯一候选: $com" }
-        elseif ($ports.Count -gt 1) { Die "多个 USB 串口候选: $($ports -join ', ') -- 用 -SerialPort COMx 显式指定" }
-        else { Die '未探测到 LinkE/CH340 串口。检查: PC侧HC-12的USB转接板是否插好; 若COM号与蓝牙撞名(设备管理器改COM10)后重试' }
+        if ($ports.Count -ge 1) { $script:CandList = $ports; Ok "串口候选: $($ports -join ', ')(多个时由链路自检自动裁决)" }
+        else { Die '未探测到 USB 串口(扫描一切带COM号的USB设备,插哪个口/变几号都行)。检查: PC侧HC-12的USB转接板是否插好; 若COM号与蓝牙撞名(设备管理器改COM10)后重试' }
     }
 }
 
@@ -67,7 +66,7 @@ if ($SerialPort -eq 'none' -or $NoBurn) {
     Warn '跳过烧写(板子必须仍带电持有bit;断电过请去掉 -NoBurn)'
 } else {
     $jtag = Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match 'Digilent|JTAG-SMT2' }
+        Where-Object { $_.DeviceID -match 'VID_0403' -or $_.Name -match 'Digilent|JTAG' }
     if (-not $jtag) {
         Warn 'JTAG 不在线 -- 跳过烧写;若板子断电过bit已丢,链路自检会暴露'
     } else {
@@ -89,8 +88,14 @@ if ($SerialPort -eq 'none' -or $NoBurn) {
 
 # ---------- [4/7] 无线链路自检 ----------
 Step 4 'AUTH_POLL 链路自检(PC - HC-12 - 板A)'
-if ($SerialPort -eq 'none' -or $NoLinkTest) {
+$com = $null
+if ($SerialPort -eq 'none') {
     Warn '跳过链路自检'
+    $com = 'LOOPBACK'
+} elseif ($NoLinkTest) {
+    if ($CandList.Count -gt 1) { Die "多个串口候选($($CandList -join ', '))且 -NoLinkTest 跳过自检,无法裁决 -- 去掉 -NoLinkTest 或 -SerialPort COMx 指定" }
+    $com = $CandList[0]
+    Warn "跳过链路自检(使用 $com)"
 } else {
     $py = @'
 import sys, time
@@ -112,13 +117,16 @@ for attempt in (1, 2):
 mid, fl = P.parse(rx)
 print('LINK_OK', P.msg_name(mid), 'tid', fl.get('terminal_id'))
 '@
-    $py = $py.Replace('PORTSTR', ("'" + $com + "'")).Replace('REPOSTR', $repo)
     $tmp = Join-Path $env:TEMP 'puf_linktest.py'
-    Set-Content -Encoding utf8 $tmp $py
-    $r = & python $tmp 2>&1 | Out-String
+    $fails = @()
+    foreach ($c in $CandList) {
+        Set-Content -Encoding utf8 $tmp ($py.Replace('PORTSTR', ("'" + $c + "'")).Replace('REPOSTR', $repo))
+        $r = & python $tmp 2>&1 | Out-String
+        if ($r -match 'LINK_OK ACCESS_REQUEST') { $com = $c; Ok ("板A 经 $c 应答正常: " + ($r -replace "\r?\n", ' ').Trim()); break }
+        else { $fails += "$c 无应答"; Warn "$c 无应答,试下一个" }
+    }
     Remove-Item $tmp -ErrorAction SilentlyContinue
-    if ($r -match 'LINK_OK ACCESS_REQUEST') { Ok ('板A 应答正常: ' + ($r -replace "\r?\n", ' ').Trim()) }
-    else { Die ("链路不通(COM ${com}): " + $r.Trim() + ') 排查: 板子12V/DS22亮; SW11=00000且已烧bit; 两侧HC-12同C001/115200; 板侧HC-12供电共地') }
+    if (-not $com) { Die ("全部候选链路不通: " + ($fails -join '; ') + ' 排查: 板子12V/DS22亮; SW11=00000且已烧bit; 两侧HC-12同C001/115200; 板侧HC-12供电共地') }
 }
 
 # ---------- [5/7] 演示沙箱(持久) ----------
