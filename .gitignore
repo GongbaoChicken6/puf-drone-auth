@@ -114,3 +114,6 @@ web/.out/
 # Vivado xsim / MCP session artifacts at repo root
 /.vivado-ai/
 /clockInfo.txt
+
+# N12 one-click demo runtime state (persistent sandbox: templates/pool survive restarts)
+.demo_state/
