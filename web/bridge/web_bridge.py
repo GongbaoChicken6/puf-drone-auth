@@ -2636,7 +2636,17 @@ class RealSerialListener:
             except Exception as _e:  # noqa: BLE001
                 self._log(f"REVOKED round error: {type(_e).__name__}: {_e}", "error")
             finally:
-                self._emit_session(int(tid))
+                # N16-fix: revoked 轮也要收闸门+发 access.finished,否则前端弹窗不收回
+                self.hub.publish("session.update",
+                                {"terminal_id": int(tid), "state": "BLOCKED"})
+                _rg = getattr(self.app, "access_gate", None)
+                if _rg is not None and _rg.enabled:
+                    try:
+                        if _rg.finish(int(tid), "BLOCKED"):
+                            self.hub.publish("access.finished",
+                                             {"terminal_id": int(tid), "state": "BLOCKED"})
+                    except Exception as _ge:  # noqa: BLE001
+                        self._log(f"REVOKED gate finish error: {_ge}", "error")
             return
         # N4(finals-demo): poll 超时判定的观测点——每次收到 ACCESS_REQUEST 都刷新
         self.app.last_access_request_ts = time.time()
