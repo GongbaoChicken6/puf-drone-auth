@@ -94,7 +94,7 @@ if ($SerialPort -eq 'none' -or $NoLinkTest) {
 } else {
     $py = @'
 import sys, time
-sys.path.insert(0, r'D:\puf-drone-auth')
+sys.path.insert(0, r'REPOSTR')
 import serial
 from src.python.server.protocol import HFIDAProtocol
 P = HFIDAProtocol()
@@ -112,7 +112,7 @@ for attempt in (1, 2):
 mid, fl = P.parse(rx)
 print('LINK_OK', P.msg_name(mid), 'tid', fl.get('terminal_id'))
 '@
-    $py = $py.Replace('PORTSTR', ("'" + $com + "'"))
+    $py = $py.Replace('PORTSTR', ("'" + $com + "'")).Replace('REPOSTR', $repo)
     $tmp = Join-Path $env:TEMP 'puf_linktest.py'
     Set-Content -Encoding utf8 $tmp $py
     $r = & python $tmp 2>&1 | Out-String
@@ -145,13 +145,17 @@ $up = $false
 foreach ($i in 1..20) {
     Start-Sleep -Seconds 1
     if ($proc.HasExited) { Die "桥提前退出(exit=$($proc.ExitCode)); 日志: $log.err" }
-    try {
-        $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$Port/api/status" -TimeoutSec 2
-        if ($r.StatusCode -eq 200) { $up = $true; break }
-    } catch { }
+    foreach ($p in $Port..($Port + 5)) {
+        try {
+            $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$p/api/status" -TimeoutSec 2
+            if ($r.StatusCode -eq 200) { $script:BoundPort = $p; $up = $true; break }
+        } catch { }
+    }
+    if ($up) { break }
 }
 if (-not $up) { Die "桥 20s 未就绪; 日志: $log.err" }
-Ok "桥就绪: http://127.0.0.1:$Port/console.html (pid $($proc.Id))"
+if (-not $BoundPort) { $BoundPort = $Port }
+Ok "桥就绪: http://127.0.0.1:$BoundPort/console.html (pid $($proc.Id))"
 
 # ---------- [7/7] 补密钥 + 模板就绪 ----------
 Step 7 '补板内密钥 + 确认 tid1 模板'
