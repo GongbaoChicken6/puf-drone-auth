@@ -310,8 +310,129 @@ def _rogue_web(ser, args, r2_fake, send, log) -> int:
     return 0
 
 
+def _bridge_call(base: str, path: str, payload: dict | None = None):
+    import urllib.request
+    url = base.rstrip('/') + path
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(url, data=data,
+                                 headers={'Content-Type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return resp.status, json.loads(resp.read().decode())
+
+
+def _rogue_bridge_once(args, r2_fake, log) -> int:
+    burst = build_rogue_burst(tid=args.rogue_tid,
+                              banner=not args.no_banner, r2_fake=r2_fake)
+    frames = [f.hex() for _, f in burst]
+    code, j = _bridge_call(args.via_bridge, '/api/attack/inject',
+                           {'frames': frames, 'note': 'rogue access burst'})
+    log(f">>> ROGUE(via-bridge) inject http={code} ok={j.get('ok')} "
+        f"frames={len(frames)}")
+    return 0 if j.get('ok') else 1
+
+
+def _rogue_web_bridge(args, r2_fake, log) -> int:
+    """N15: 单按钮网页,点击经桥注入(共享信道);另配武装竞速按钮。"""
+    import http.server
+    base = args.via_bridge
+    state = {"rounds": 0, "armed": 0}
+
+    class _H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):                      # noqa: N802
+            if self.path.split('?')[0] != '/':
+                self.send_error(404); return
+            body = _ROGUE_PAGE_BRIDGE.encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self):                      # noqa: N802
+            pth = self.path.split('?')[0]
+            n = int(self.headers.get('Content-Length', 0))
+            payload = json.loads(self.rfile.read(n) or b'{}')
+            if pth == '/attack':
+                burst = build_rogue_burst(tid=args.rogue_tid,
+                                          banner=not args.no_banner,
+                                          r2_fake=r2_fake)
+                code, j = _bridge_call(base, '/api/attack/inject',
+                    {'frames': [f.hex() for _, f in burst],
+                     'note': 'rogue access burst'})
+                state['rounds'] += 1 if j.get('ok') else 0
+                out = json.dumps({'ok': j.get('ok'),
+                                  'rounds': state['rounds'],
+                                  'detail': j}).encode('utf-8')
+            elif pth == '/arm':
+                tid = int(payload.get('terminal_id', 1))
+                code, j = _bridge_call(base, '/api/attack/arm',
+                    {'terminal_id': tid, 'r2_hex': r2_fake.hex()})
+                state['armed'] = tid if j.get('ok') else 0
+                out = json.dumps({'ok': j.get('ok'), 'armed': state['armed'],
+                                  'detail': j}).encode('utf-8')
+            else:
+                self.send_error(404); return
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+
+        def log_message(self, fmt, *a):
+            pass
+
+    try:
+        srv = http.server.ThreadingHTTPServer(('127.0.0.1', int(args.rogue_web)), _H)
+    except OSError as exc:
+        print(f'[ROGUE-WEB] 端口 {args.rogue_web} 起不来({exc}) — 换: --rogue-web 8644',
+              file=sys.stderr)
+        return 3
+    print(f'[ROGUE-WEB via-bridge {base}] http://127.0.0.1:{int(args.rogue_web)}/ '
+          f'— Ctrl+C 退出', file=sys.stderr)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
+_ROGUE_PAGE_BRIDGE = """<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<title>伪基站控制台(共享信道)</title><style>
+ body{background:#160608;color:#f5c8c8;font-family:system-ui,'Segoe UI',sans-serif;
+       display:flex;flex-direction:column;align-items:center;margin-top:8vh;gap:18px}
+ h1{font-size:22px;letter-spacing:2px} button{font-size:20px;padding:16px 42px;
+   background:#7a1220;color:#fff;border:1px solid #ff5a5a;border-radius:10px;
+   cursor:pointer;margin:6px} button:active{transform:scale(.97)}
+ #out{white-space:pre-wrap;font:12px/1.6 Consolas,monospace;color:#ffb3b3;
+       max-width:760px;word-break:break-all} .tip{color:#a97;font-size:13px}
+ input{width:64px;font-size:18px;text-align:center;padding:8px}
+</style></head><body>
+<h1>☠ 伪基站控制台(共享信道·经基站电台注入)</h1>
+<div><button onclick="fire()">伪基站接入(tid 77)</button>
+目标板 tid <input id="tid" value="1">
+<button onclick="arm()">⚔ 武装竞速注入</button></div>
+<div class="tip">【接入】= 注入伪 RESULT + 未注册接入请求(真站 IDS 红横幅+拒绝警报)。
+【竞速】= 该板下一轮认证的 R1 刚到即注入伪造 RESULT——板端 R2 校验识破,
+CONFIRM_FAIL 上报+BLOCKED,真站关联告警。共享信道下两块板都能听见注入帧。</div>
+<div id="out">待命…</div>
+<script>
+async function fire(){out('注入中…');
+ try{const r=await fetch('/attack',{method:'POST'});const j=await r.json();
+  out('已发起 #'+j.rounds+'\n'+JSON.stringify(j.detail));}catch(e){out('失败:'+e);}}
+async function arm(){out('武装中…');
+ const tid=parseInt(document.getElementById('tid').value||'1',10);
+ try{const r=await fetch('/arm',{method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({terminal_id:tid})});const j=await r.json();
+  out('已武装 tid='+j.armed+' — 去真站页面选中该板开始验证');}catch(e){out('失败:'+e);}}
+function out(s){document.getElementById('out').textContent=s;}
+</script></body></html>"""
+
+
 def main(argv: list[str] | None = None) -> int:
+
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("--via-bridge", default="http://127.0.0.1:8642",
+                   help="N15: 经桥注入(共享信道,无需攻击者串口);值为桥基址")
     p.add_argument("--port", default=None,
                    help="攻击者电台串口(如 COM9);--simulate 模式可不填")
     p.add_argument("--baud", type=int, default=115_200)
@@ -370,7 +491,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if (args.mode == "passive" or atk.injected_rounds == 1) else 1
 
     if not args.port:
-        p.error("--port is required for real-serial mode (or use --simulate)")
+        p.error("--port is required for real-serial mode (or use --simulate / --via-bridge)")
+    if getattr(args, 'via_bridge', None) and args.port is None:
+        # N15: 共享信道单 HC-12 拓扑——攻击帧经基站电台上空(桥 API 注入),
+        # 无需攻击者独立串口;两块板都能听见注入帧。
+        if args.rogue_web is not None:
+            return _rogue_web_bridge(args, r2, atk._log)
+        if args.rogue:
+            return _rogue_bridge_once(args, r2, atk._log)
+        print('--via-bridge 需配 --rogue 或 --rogue-web 使用', file=sys.stderr)
+        return 2
+
     try:
         import serial  # 仅真信道需要
     except ImportError:

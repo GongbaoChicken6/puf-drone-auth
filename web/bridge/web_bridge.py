@@ -1399,6 +1399,73 @@ class RealApp:
         return bool(self.orch.submit_sync(
             Job(kind="demo_reset", tid=tid), timeout=300).result)
 
+
+    # ---------- N15(finals-demo): 共享信道伪基站攻击 API ----------
+    def rogue_inject(self, frames, note: str = "rogue burst") -> tuple[int, dict]:
+        """POST /api/attack/inject:把原始帧(hex 列表)经基站电台发上共享信道。
+
+        单 HC-12 拓扑:攻击者不再需要独立串口——C001 是公开空口参数,这里用
+        基站自己的电台模拟攻击者发射(空中效果等同:两块板都听得见)。
+        每帧发布 frame.tx(source=rogue-inject) + channel.intrusion。
+        """
+        ln = getattr(self, "serial_listener", None)
+        if ln is None or not getattr(ln, "running", False):
+            return 409, {"ok": False,
+                         "error": "inject requires real-serial mode (--serial-port)"}
+        import binascii
+        try:
+            raws = [bytes.fromhex(str(f)) for f in frames]
+        except ValueError as exc:
+            return 400, {"ok": False, "error": f"bad hex: {exc}"}
+        if not raws:
+            return 400, {"ok": False, "error": "frames empty"}
+        sent = []
+        with self.serial_bus_lock:
+            for frm in raws:
+                ln.ser.write(frm); ln.ser.flush()
+                mid = int.from_bytes(frm[7:10], "little") if len(frm) >= 12 else 0
+                tid = int.from_bytes(frm[10:14], "little") if len(frm) >= 14 and mid == 0x0090 else None
+                self.hub.publish("frame.tx", {
+                    "run_id": "rogue", "terminal_id": tid or 0,
+                    "msg_id": mid, "name": self.protocol.msg_name(mid)
+                    if mid in self.protocol._MSG_NAMES else f"0x{mid:04x}",
+                    "hex": frm.hex(), "len": len(frm),
+                    "dir": "server->term", "source": "rogue-inject"})
+                self.hub.publish("channel.intrusion", {
+                    "msg_id": mid,
+                    "name": self.protocol.msg_name(mid)
+                    if mid in self.protocol._MSG_NAMES else f"0x{mid:04x}",
+                    "hex": frm.hex(), "len": len(frm),
+                    "note": note + " -- injected via shared channel "
+                            "(attacker emulated on station radio)",
+                    "kind": "access" if mid == 0x0090 else "frame",
+                    "source": "rogue-inject",
+                    **({"terminal_id": tid} if tid is not None else {})})
+                sent.append(frm.hex())
+        self.hub.publish("server.log", {"level": "error",
+            "msg": f"ROGUE INJECT: {len(raws)} frame(s) on shared channel ({note})"})
+        return 200, {"ok": True, "sent": sent}
+
+    def rogue_arm(self, tid: int, r2_hex: str = "") -> tuple[int, dict]:
+        """POST /api/attack/arm:武装竞速——该 tid 下一轮 RESPONSE_R1 到场后,
+        零延迟注入伪 RESULT(钩子在 RealSerialListener._auth 的 R1 解析点)。"""
+        if not tid:
+            return 400, {"ok": False, "error": "terminal_id required"}
+        r2 = r2_hex or "deadbeefcafe0110"
+        try:
+            bytes.fromhex(r2)
+        except ValueError:
+            return 400, {"ok": False, "error": "r2_hex must be hex"}
+        self.rogue_armed = {"tid": int(tid), "r2_hex": r2}
+        self.hub.publish("server.log", {"level": "warn",
+            "msg": f"ROGUE ARMED: next auth round of tid={tid} will be "
+                   f"raced with a forged RESULT (r2={r2})"})
+        return 200, {"ok": True, "armed_for": int(tid), "r2_hex": r2}
+
+    def rogue_disarm(self) -> tuple[int, dict]:
+        self.rogue_armed = None
+        return 200, {"ok": True, "disarmed": True}
+
     def drone_cmd(self, tid: int, cmd: str, body: dict) -> dict:
         """finals-demo-drone:飞行指令(REST /api/drone/cmd)。
 
@@ -1908,6 +1975,17 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 return self._json(r, 200 if r.get("ok") else 409)
             if path == "/api/access/select":       # finals-demo-N6: 人工选择唤醒
                 code, body_out = app.access_select(int(body["terminal_id"]))
+                return self._json(body_out, code)
+            if path == "/api/attack/inject":       # N15: 共享信道伪基站注入(经基站电台)
+                code, body_out = app.rogue_inject(
+                    body.get("frames") or [], str(body.get("note", "rogue burst")))
+                return self._json(body_out, code)
+            if path == "/api/attack/arm":          # N15: 武装竞速(下一轮 R1 后零延迟伪 RESULT)
+                code, body_out = app.rogue_arm(
+                    int(body.get("terminal_id", 0)), str(body.get("r2_hex", "") or ""))
+                return self._json(body_out, code)
+            if path == "/api/attack/disarm":
+                code, body_out = app.rogue_disarm()
                 return self._json(body_out, code)
             if path == "/api/access/dismiss":      # finals-demo-N6: 手动撤下
                 code, body_out = app.access_dismiss(int(body["terminal_id"]))
@@ -2576,6 +2654,26 @@ class RealSerialListener:
             self._early_reject(tid, rid, {"result": 2, "hd": 255})
             return
         r1s = rf["r1s"]
+        # N15: 伪基站竞速武装——R1 到场后延迟 50ms 注入伪 RESULT(共享信道)
+        # (50ms = HC-12 RX->TX 转换保护间隔;真 RESULT ~400ms 后才到,竞速必赢)
+        _armed = getattr(self.app, "rogue_armed", None)
+        if _armed and _armed.get("tid") == int(tid):
+            self.app.rogue_armed = None          # 一次性
+            try:
+                _fake = self.proto.pack(0x0093, result=0, hd=0,
+                                        r2=bytes.fromhex(_armed["r2_hex"]))
+                time.sleep(0.05)
+                self.ser.write(_fake); self.ser.flush()
+                self._ef(rid, tid, 0x0093, _fake, True, source="rogue-inject")
+                self.hub.publish("channel.intrusion", {
+                    "msg_id": 0x0093, "name": "RESULT",
+                    "hex": _fake.hex(), "len": len(_fake),
+                    "note": "rogue fake RESULT injected on shared channel (race won, R2 forged)",
+                    "kind": "frame", "source": "rogue-inject",
+                    "terminal_id": int(tid)})
+                self._log("ROGUE RACE: fake RESULT injected 50ms after R1 (tid=%d, run=%s)" % (tid, rid), "error")
+            except Exception as _re:  # noqa: BLE001
+                self._log(f"ROGUE inject failed: {type(_re).__name__}: {_re}", "error")
         time.sleep(0.2)
         self._ef(rid,tid,0x0092,rep,False)
         # RESULT → board
@@ -2754,7 +2852,7 @@ class RealSerialListener:
             self._log(f"ACCESS GATE: parked tid={tid} ({e['label']}) on "
                       f"{e['port']} repeats={e['repeats']} -- waiting for manual select")
 
-    def _ef(self,rid,tid,mid,frm,out):
+    def _ef(self,rid,tid,mid,frm,out,source=None):
         self.hub.publish("frame.tx" if out else "frame.rx", {
             "run_id":rid,"terminal_id":tid,"msg_id":mid,
             "name":self.P.msg_name(mid),
