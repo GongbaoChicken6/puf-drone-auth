@@ -93,6 +93,14 @@ def _do_enroll_real(app, job) -> str:
         s = result["summary"]
         app.real_serial_tids.add(tid)
         app.persist_terminal(tid)
+        # N13: 录入后限池——只允许有模板对的种子被认证抽中
+        # (否则 KeyError 'no template for seed ...'，2026-11-19 真板复现)
+        try:
+            _tpl = app.protocol.templates.templates.get(str(tid)) or {}
+            pool.limit_to(_tpl.keys())
+        except Exception as _le:  # noqa: BLE001 —— 限池失败不阻断录入成功
+            app.hub.publish("server.log", {"level": "warn",
+                "msg": f"enroll limit_to failed: {type(_le).__name__}: {_le}"})
         app.hub.publish("enroll.done", {
             "terminal_id": tid,
             "n_pairs": s.get("n_pairs", n),

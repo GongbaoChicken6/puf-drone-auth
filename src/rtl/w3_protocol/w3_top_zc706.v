@@ -34,6 +34,11 @@ module w3_top_zc706 # (
     // 复位与控制
     input  wire         sys_rst_btn_n ,   // SW13 PL_CPU_RESET（A8）板上实测：空闲0/按下1（高有效，2026-10-22 23:27 health 实证；端口名沿用 _n 是历史命名，勿按名推极性）
     input  wire         auth_btn      ,   // SW7 GPIO_SW_LEFT（AK25）板上实测：空闲0/按下1（2026-10-22 23:27 health 实证，推翻 UG954 图纸解读）
+    // N13(2026-11-19): 按键冗余——SW7 触点在决赛前突然失效，把 SW8/SW9 并联进
+    // 认证触发（SW8=R27 LVCMOS25 / SW9=K15 LVCMOS15，UG954 v1.8 Table 1-29）。
+    // 三键任一按下即等效 SW7；演示时选实测能用的那个键。
+    input  wire         auth_btn2     ,   // SW8 GPIO_SW_RIGHT（R27）
+    input  wire         auth_btn3     ,   // SW9 GPIO_SW_CENTER（K15）
     input  wire [3:0]   term_id_dip   ,   // SW12 pin1..4（ON=1 / OFF=0）
 
     // UART（PMOD1 J58，经 TXS0108E 电平移位，USB-TTL 3.3V 直插）
@@ -50,6 +55,9 @@ output wire [2:0]   ext_led       ,   // 绿2/红/琥珀（10mm 大灯）
 inout  wire         ext_fan       ,   // J58.3 三态输出：ARM 释放(Hi-Z)=L9110上拉导通 / 驱动低=停
     output wire         ext_buzzer        // 有源蜂鸣器（高=响）
   );
+
+// N13: 三键并联（惰性极性一致：空闲0/按下1），OR 后送消抖
+wire auth_btn_any = auth_btn | auth_btn2 | auth_btn3;
 
 //---------------- 时钟适配 ---------------//
 wire clk_100m;                        // clk_wiz_0 输出的 100MHz 单端
@@ -88,7 +96,7 @@ w3_top # ( .FREQ_HZ   ( 100_000_000 ),   // 板上时钟 100MHz
     .sys_rst_n     ( rst_n                 ),
     .radio_txd     ( radio_txd             ),
     .radio_rxd     ( radio_rxd             ),
-    .auth_btn      ( auth_btn              ),
+    .auth_btn      ( auth_btn_any          ),   // N13: SW7|SW8|SW9
     .term_id_sw    ( { 4'h0, term_id_dip } ),   // SW12 有 4 位，高 4 位 tie 0
     .led_busy      ( led_busy_raw          ),
     .led_result    ( led_result_raw        ),

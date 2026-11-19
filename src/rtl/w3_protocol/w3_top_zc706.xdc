@@ -14,6 +14,8 @@ create_clock -period 5.000 -name sys_clk_p [get_ports clk_p]
 # === 异步 I/O false_path（防伪时序违例）===
 set_false_path -from [get_ports sys_rst_btn_n]
 set_false_path -from [get_ports auth_btn]
+set_false_path -from [get_ports auth_btn2]
+set_false_path -from [get_ports auth_btn3]
 set_false_path -from [get_ports {term_id_dip[*]}]
 set_false_path -to [get_ports led_*]
 
@@ -22,6 +24,9 @@ set_property -dict {PACKAGE_PIN A8 IOSTANDARD LVCMOS15} [get_ports sys_rst_btn_n
 
 # === AUTH 按钮：SW7 GPIO_SW_LEFT（AK25，bank11，板上实测：空闲0/按下1）===
 set_property -dict {PACKAGE_PIN AK25 IOSTANDARD LVCMOS25} [get_ports auth_btn]
+# N13: SW8/SW9 并联认证（UG954 v1.8 Table 1-29；SW9=K15 属 1.5V 组,写 25 会 BIVB-1）
+set_property -dict {PACKAGE_PIN R27 IOSTANDARD LVCMOS25} [get_ports auth_btn2]   ;# SW8 GPIO_SW_RIGHT
+set_property -dict {PACKAGE_PIN K15 IOSTANDARD LVCMOS15} [get_ports auth_btn3]   ;# SW9 GPIO_SW_CENTER
 
 # === UART：PMOD1(J58) 经 TXS0108E 3.3V<->2.5V 移位——3.3V USB-TTL 直插免分压 ===
 # ⚠ 用 J58（信号名 PMOD1_x 在 J58）；勿插 J57（TCA6416 I2C 扩展器，UART 不可用）
@@ -41,8 +46,8 @@ set_property -dict {PACKAGE_PIN A17 IOSTANDARD LVCMOS15} [get_ports led_heartbea
 # === N7(finals-demo): PMOD J58 外接大灯/蜂鸣器 —— UG954 v1.8 Table 1-31 实读 ===
 # （锚点自校验: PMOD1_0=AJ21/PMOD1_2=AB21 与上方 UART 两行一致；勿用 J57=I2C 扩展口）
 # 外接 10mm LED+330Ω 到 J58 对应脚与 GND；断电插拔（R4 红线）
-set_property -dict {PACKAGE_PIN AB16 IOSTANDARD LVCMOS25} [get_ports ext_fan]   ;# PMOD1_3 = J58.7 三态风扇口（v5:换通道避开J58.3的TXS反灌）
-set_property -dict {PACKAGE_PIN AK21 IOSTANDARD LVCMOS25} [get_ports {ext_led[0]}]   ;# PMOD1_1 = J58.1 绿1（v5:与ext_fan交换）
+set_property -dict {PACKAGE_PIN AK21 IOSTANDARD LVCMOS25} [get_ports ext_fan]   ;# PMOD1_1 = J58.3 三态风扇口（N13:回 v4 映射,匹配现场接线）
+set_property -dict {PACKAGE_PIN AB16 IOSTANDARD LVCMOS25} [get_ports {ext_led[0]}]   ;# PMOD1_3 = J58.7 绿1（N13:回 v4 映射）
 set_property -dict {PACKAGE_PIN Y20  IOSTANDARD LVCMOS25} [get_ports {ext_led[1]}]   ;# PMOD1_4 = J58.2  红
 set_property -dict {PACKAGE_PIN AA20 IOSTANDARD LVCMOS25} [get_ports {ext_led[2]}]   ;# PMOD1_5 = J58.4  琥珀
 set_property -dict {PACKAGE_PIN AC18 IOSTANDARD LVCMOS25} [get_ports ext_buzzer]     ;# PMOD1_6 = J58.6  蜂鸣器

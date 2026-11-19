@@ -142,6 +142,22 @@ class CRPPool:
             self._persist_locked()
         return added
 
+    def limit_to(self, keys: Iterable[str]) -> None:
+        """N13: restrict drawable seeds to those that have template pairs.
+
+        Called after enrollment: every seed ever minted stays in the pool,
+        but only measured ones are drawable -- otherwise authentication can
+        draw an un-paired seed and the template lookup raises KeyError
+        ('no template for seed ...').  Displaced seeds move to *used* so the
+        state file keeps a full audit trail.
+        """
+        keep = {str(k).lower() for k in keys}
+        with self._lock:
+            stale = self._available - keep
+            self._used |= stale
+            self._available &= keep
+            self._persist_locked()
+
     def reserve(self, count: int) -> list[bytes]:
         """Mint count fresh CSPRNG seeds and register them as available.
 
