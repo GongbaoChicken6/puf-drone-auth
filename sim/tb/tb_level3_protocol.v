@@ -80,7 +80,7 @@ module tb_level3_protocol;
         .ring_freq   (ra_ring_freq  )
     );
 
-    terminal_fsm # (.TIMEOUT_CYCLES(2000), .MEASURE_CYCLES(32'd64)) u_fsm (
+    terminal_fsm # (.POLL_GATE_EN(0), .TIMEOUT_CYCLES(2000), .MEASURE_CYCLES(32'd64)) u_fsm (
         .clk           (clk           ),
         .rst           (rst           ),
         .auth_start    (auth_start    ),

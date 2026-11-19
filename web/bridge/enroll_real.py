@@ -66,7 +66,14 @@ def _do_enroll_real(app, job) -> str:
             def respond(self, tid_, batch, frame=None):
                 while not app.enroll_response_q.empty():
                     app.enroll_response_q.get_nowait()
+                # N14(单信道): 共享信道下必须点名——先发 AUTH_POLL(tid, nonce=0) 打开
+                # 该板的授权窗口（nonce=0 = 只开窗、不起认证），紧跟着的 CHALLENGE
+                # 才会被它接受；另一块板没被点名 -> 不开窗 -> 自动丢弃。
+                _arm = app.protocol.pack(
+                    type(app.protocol).MSG_AUTH_POLL, terminal_id=tid_, nonce=0)
                 with app.serial_bus_lock:
+                    ln.ser.write(_arm)
+                    ln.ser.flush()
                     ln.ser.write(frame)
                     ln.ser.flush()
                 app.hub.publish("frame.tx", {

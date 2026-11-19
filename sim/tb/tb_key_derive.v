@@ -69,8 +69,7 @@ module tb_key_derive;
         .busy(ra_busy), .done(ra_done), .ring_freq(ra_ring_freq));
 
     // DUT: ENABLE_KEY_DERIVE=1
-    terminal_fsm # (
-        .TIMEOUT_CYCLES(32'd5000),
+    terminal_fsm # (.POLL_GATE_EN(0), .TIMEOUT_CYCLES(32'd5000),
         .MEASURE_CYCLES(32'd64),
         .PUF_WD_CYCLES(32'd12000),
         .ENABLE_KEY_DERIVE(1)          // <<< 密钥派生启用

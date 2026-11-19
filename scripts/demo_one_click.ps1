@@ -112,8 +112,8 @@ if (Test-Path $manifest) {
 } else { Warn '无 bit 清单(首次运行), 录入成功后自动生成' }
 
 # ---------- [4/8] 串口归类 ----------
-Step 4 '串口自动归类(挡位AUTH_POLL点名, 回谁 tid 就是谁)'
-$allPorts = @()
+Step 4 '串口归类(点名 tid; 同一口同时应答 tid1+tid2 = 单 HC-12 统一信道)'
+$portTids = @{}   # COM -> 应答过的 tid 列表
 if ($SerialPort -eq 'none') { Warn '彩排模式(loopback): 跳过串口/桥走仿真' }
 elseif ($TidMap) {
     foreach ($kv in ($TidMap -split ',')) { $a = $kv -split '='; if ($a.Count -eq 2) { $map[[int]$a[0].Trim()] = $a[1].Trim() } }
@@ -144,28 +144,37 @@ for want in (1, 2):
                 if n: rx += s.read(n)
                 else: time.sleep(0.02)
     except Exception as e:
-        print('PORT_ERR', e); break
+        print('CLASSIFY', want, 'err'); continue
     if rx.startswith(b'\xfd'):
         try:
             mid, fl = P.parse(rx)
-            print('CLASSIFY', fl.get('terminal_id'))
+            print('CLASSIFY', want, fl.get('terminal_id'))
         except Exception:
-            print('CLASSIFY none')
-        break
-else:
-    print('CLASSIFY none')
+            print('CLASSIFY', want, 'parsefail')
+    else:
+        print('CLASSIFY', want, 'none')
 '@
     $tmp = Join-Path $env:TEMP 'puf_classify.py'
+    $sharedPort = $null
     foreach ($c in $candList) {
         Set-Content -Encoding utf8 $tmp ($py.Replace('PORT', $c).Replace('REPO', $repo))
         $r = & python $tmp 2>&1 | Out-String
         Remove-Item $tmp -ErrorAction SilentlyContinue
-        if ($r -match 'CLASSIFY\s+([12])') {
-            $tid = [int]$Matches[1]
-            if (-not $map.ContainsKey($tid)) { $map[$tid] = $c; Ok "$c -> tid$tid" }
+        $hits = @()
+        foreach ($line in ($r -split "`n")) {
+            if ($line -match 'CLASSIFY\s+([12])\s+([12])') { if ([int]$Matches[1] -eq [int]$Matches[2]) { $hits += [int]$Matches[2] } }
+        }
+        if ($hits.Count -gt 0) {
+            $hits = @($hits | Select-Object -Unique)
+            $portTids[$c] = $hits
+            Ok ("$c 应答 tid: " + ($hits -join ','))
+            if (-not $map.ContainsKey(1) -and ($hits -contains 1)) { $map[1] = $c }
+            if (-not $map.ContainsKey(2) -and ($hits -contains 2)) { $map[2] = $c }
         } else { Warn "$c 无应答" }
     }
-    if ($map.Count -lt 1) { Die '所有候选串口都没应答. 排查: 板子12V+DS22亮; SW11=00000且已烧bit; 两侧HC-12同C001/115200; 板侧HC-12供电共地' }
+    foreach ($kv in $portTids.GetEnumerator()) { if ($kv.Value.Count -ge 2) { $sharedPort = $kv.Key } }
+    if ($sharedPort) { Ok "共享信道: $sharedPort 同时应答 tid1+tid2 -> 单 HC-12 模式(帧内 tid 区分 A/B)" }
+    if ($map.Count -lt 1) { Die '所有候选串口都没应答. 排查: 板子12V+DS22亮; SW11=00000且已烧bit; 三只HC-12同C001/115200/FU3; 板侧HC-12供电共地' }
 }
 
 # ---------- [5/8] 起桥 ----------
@@ -173,8 +182,11 @@ Step 5 '启动 web 桥(多口路由 + 接入闸门)'
 $bargs = @('-u','web/bridge/web_bridge.py','--repo-root','.','--data-dir',$state,'--port',"$Port")
 if ($SerialPort -eq 'none') { $bargs += '--loopback' }
 else {
-    $ports = @($map.Values | Sort-Object)
-    if ($ports.Count -gt 1) {
+    $ports = @($map.Values | Sort-Object -Unique)
+    if ($sharedPort) {
+        $bargs += @('--serial-port', $sharedPort)
+        Ok "单 HC-12 统一信道: --serial-port $sharedPort（下行靠点名、上行靠帧内 tid）"
+    } elseif ($ports.Count -gt 1) {
         $bargs += @('--serial-multi', ($ports -join ','))
         $tp = (@($map.Keys | Sort-Object | ForEach-Object { "$_=$($map[$_])" }) -join ',')
         $bargs += @('--tid-port', $tp)
@@ -184,6 +196,8 @@ else {
         $bargs += @('--serial-port', $map[$only])
         Warn "单板模式: 只有 tid$only ($($map[$only])) 在线"
     }
+
+
 }
 $bargs += @('--access-gate','--access-label','1=板A,2=板B')
 if (-not $NoBrowser) { $bargs += '--open' }

@@ -841,7 +841,8 @@ class Orchestrator:
                 "poll requires real-serial mode (--serial-port): "
                 "loopback/mock has no board to wake; multi-port mode needs "
                 "--tid-port (or a queued SW7 entry) to locate this tid's port")
-        nonce = time.time_ns() & 0xFFFFFFFF
+        # N14: nonce==0 在板端表示"只开注册窗口、不起认证"，唤醒必须给非 0
+        nonce = (time.time_ns() & 0xFFFFFFFF) or 1
         frame = self.protocol.pack(
             self.P.MSG_AUTH_POLL, terminal_id=tid, nonce=nonce)
         base = getattr(app, "last_access_request_ts", 0.0)
@@ -1283,7 +1284,8 @@ class RealApp:
     def _poll_wake_once(self, ln, tid: int, run_id: str) -> None:
         """发一帧 AUTH_POLL 并等 ACCESS_REQUEST(3s)。纪律照抄 _do_poll:
         串口锁内写、先写后发(时间线不出现未发出的帧)。超时抛 TimeoutError。"""
-        nonce = time.time_ns() & 0xFFFFFFFF
+        # N14: nonce==0 在板端表示"只开注册窗口、不起认证"，唤醒必须给非 0
+        nonce = (time.time_ns() & 0xFFFFFFFF) or 1
         frame = self.protocol.pack(
             type(self.protocol).MSG_AUTH_POLL, terminal_id=tid, nonce=nonce)
         # auto-review(R3): 成功判据 per-tid(本板有新请求才算回应)。

@@ -31,6 +31,10 @@ module terminal_fsm # (
     // wrapper 置 1，支持站端 enroll 的背靠背 CHALLENGE→R1 轮询）；0=默认——
     // 全部既有语义与黄金完全不变。S_WAIT_RESULT 内 0x0093/0x0095 判定保持在前
     // （认证语义优先，与注册挑战无 msgid/长度重叠）。
+    // N14(单信道): 点名与授权窗口开关。1=只认被点名的板（共享信道必需）；
+    // 0=旧行为（任何 AUTH_POLL 都醒、IDLE 恒可接受注册挑战），仅老 TB 使用。
+    parameter POLL_GATE_EN = 1,
+    parameter [31:0] POLL_WIN_CYC = 32'd300_000_000,  // 3s @100MHz（点名授权窗口）
     parameter ENROLL_IDLE_ACCEPT = 0
 ) (
     input  wire        clk       ,
@@ -85,30 +89,31 @@ module terminal_fsm # (
 );
 
     //========================================================================
-    // 状态定义（4-bit，最多 16 态）
+    // 状态定义（5-bit：N14 新增 S_POLL_CHK）
     //========================================================================
-    localparam [3:0] S_IDLE        = 4'd0 ,   // 空闲等 auth_start
-                     S_TX_ACCESS   = 4'd1 ,   // 发 ACCESS_REQUEST
-                     S_WAIT_CHALL  = 4'd2 ,   // 等 CHALLENGE 帧
-                     S_KEY_MEASURE = 4'd3,   // W4-P4 T1: PUF 测 key_seed 响应 → k_boot
-                     S_TX_R1       = 4'd4 ,   // 发 RESPONSE_R1（4×8B）
-                     S_WAIT_RESULT = 4'd5 ,   // 等 RESULT 或 EXTRA_CHALLENGE
-                     S_VERIFY_R2   = 4'd6 ,   // 验证 R2
-                     S_TX_CONFIRM  = 4'd7 ,   // 发 CONFIRM
-                     S_SESSION     = 4'd8 ,   // 认证通过
-                     S_KEY_DERIVE  = 4'd9,   // W4-P4 T1: Speck×2 KDF → key_reg
-                     S_TX_R1_EXTRA = 4'd10,   // 发 RESPONSE_R1（3×8B=24B）
-                     S_BLOCKED     = 4'd11,   // 认证失败阻断
-                     S_CALC_R2     = 4'd12,   // 启动 Speck 计算 R2（共享起始状态）
-                     S_PUF_DECODE  = 4'd13,   // W4：读种子 → 解码配对表 ×4/×3
-                     S_PUF_MEASURE = 4'd14,   // W4：热稳定 7 窗 + 测量 1 窗
-                     S_PUF_PACK    = 4'd15;   // W4：64 对比较位 → resp_buf
+    localparam [4:0] S_IDLE        = 5'd0 ,   // 空闲等 auth_start
+                     S_TX_ACCESS   = 5'd1 ,   // 发 ACCESS_REQUEST
+                     S_WAIT_CHALL  = 5'd2 ,   // 等 CHALLENGE 帧
+                     S_KEY_MEASURE = 5'd3,   // W4-P4 T1: PUF 测 key_seed 响应 → k_boot
+                     S_TX_R1       = 5'd4 ,   // 发 RESPONSE_R1（4×8B）
+                     S_WAIT_RESULT = 5'd5 ,   // 等 RESULT 或 EXTRA_CHALLENGE
+                     S_VERIFY_R2   = 5'd6 ,   // 验证 R2
+                     S_TX_CONFIRM  = 5'd7 ,   // 发 CONFIRM
+                     S_SESSION     = 5'd8 ,   // 认证通过
+                     S_KEY_DERIVE  = 5'd9,   // W4-P4 T1: Speck×2 KDF → key_reg
+                     S_TX_R1_EXTRA = 5'd10,   // 发 RESPONSE_R1（3×8B=24B）
+                     S_BLOCKED     = 5'd11,   // 认证失败阻断
+                     S_CALC_R2     = 5'd12,   // 启动 Speck 计算 R2（共享起始状态）
+                     S_PUF_DECODE  = 5'd13,   // W4：读种子 → 解码配对表 ×4/×3
+                     S_PUF_MEASURE = 5'd14,   // W4：热稳定 7 窗 + 测量 1 窗
+                     S_PUF_PACK    = 5'd15,
+                     S_POLL_CHK    = 5'd16;   // N14：AUTH_POLL 点名校验（tid 匹配才醒）
 
-    reg [3:0] state = S_IDLE;
+    reg [4:0] state = S_IDLE;
 
-    // finals-demo N4: AUTH_POLL(0x0097) —— 站端主动巡检帧。板端忽略载荷，
-    // 收到合法帧即等效 auth_start（遥控 SW7），从 S_IDLE/S_SESSION 发起完整
-    // 五帧认证。复用 idle-accept 的 1 拍采样窗口惯用法（见 S_IDLE 注释）。
+    // finals-demo N4: AUTH_POLL(0x0097) —— 站端主动巡检帧。
+    // N14(单信道): 板端**必须校验载荷里的 tid**（共享信道上一条 poll 若广播唤醒
+    // 全部板子，会双发 0x0090 撞包）；nonce==0 表示只要开注册窗口、不起认证。
     localparam [23:0] ID_POLL = 24'h0097;
 
     //========================================================================
@@ -118,8 +123,15 @@ module terminal_fsm # (
     reg [31:0] timeout_cnt  = 32'd0;            // 超时计数（32-bit：板上 200M 需要 28-bit）
     reg        rx_ok_latch  = 1'b0;             // frame_ok 粘滞
     reg [1:0]  result_r     = 2'd0;             // auth_result 寄存
-    // finals-demo N4: 巡检启动条件（rx_ok_latch 声明后此处才可见）
-    wire poll_start = rx_ok_latch && (fp_msg_id == ID_POLL);
+    // finals-demo N4 / N14(单信道): 巡检启动条件。共享信道上不能"听到就醒"——
+    // 必须先把载荷 <II>(tid 4B + nonce 4B) 读出来比对 tid；nonce==0 表示
+    // 站端只要"开注册窗口"不起认证（enroll 用）。
+    wire poll_frame = rx_ok_latch && (fp_msg_id == ID_POLL) && (fp_pay_len == 8'd8);
+    reg  [3:0]  poll_chk_idx = 4'd0;
+    reg  [7:0]  poll_b0 = 8'h00, poll_b1 = 8'h00, poll_b2 = 8'h00, poll_b3 = 8'h00;
+    reg  [7:0]  poll_n0 = 8'h00, poll_n1 = 8'h00, poll_n2 = 8'h00, poll_n3 = 8'h00;
+    reg  [31:0] poll_win_cnt = 32'd0;
+    reg         poll_win     = 1'b0;   // 授权窗口：窗口内 S_IDLE 才接受注册 CHALLENGE
 
     // 发送载荷缓冲（最大 32B，发 ACCESS/R1/CONFIRM 前预填）
     reg [7:0]  tx_buf [0:31];
@@ -368,6 +380,9 @@ module terminal_fsm # (
             mf_seq      <= 8'h00;
             fp_rd_addr  <= 5'd0;
             tx_idx      <= 6'd0;
+            poll_chk_idx<= 4'd0;
+            poll_win    <= 1'b0;
+            poll_win_cnt<= 32'd0;
         end else begin
             // 默认单拍脉冲清零
             mf_start     <= 1'b0;
@@ -383,13 +398,19 @@ module terminal_fsm # (
                 timeout_cnt <= 32'd0;
             end
 
+            // N14: 点名授权窗口倒计时（3s 后自动关闭；enroll 每轮由站端刷新）
+            if (poll_win) begin
+                if (poll_win_cnt == 32'd0) poll_win <= 1'b0;
+                else poll_win_cnt <= poll_win_cnt - 32'd1;
+            end
+
             case (state)
                 //====================================================
                 S_IDLE: begin
                     // result_r 不在此清零——BLOCKED 的结果需要被外部读到
                     // 只在新一轮认证启动时才清
-                    // finals-demo N4: AUTH_POLL(0x0097) 等效遥控按下 SW7
-                    if (auth_start || poll_start) begin
+                    // finals-demo N4/N14: AUTH_POLL 需先过点名校验（S_POLL_CHK）
+                    if (auth_start || (!POLL_GATE_EN && rx_ok_latch && fp_msg_id == ID_POLL)) begin
                         result_r <= 2'd0;
                         calc_done_flag <= 1'b0;   // B-P2: 每会话重置
                         if (ENABLE_KEY_DERIVE && !key_valid_r) begin
@@ -400,8 +421,12 @@ module terminal_fsm # (
                         end else begin
                             state <= S_CALC_R2;
                         end
-                    end else if (ENROLL_IDLE_ACCEPT && rx_ok_latch &&
-                                  fp_msg_id == 24'h0091 && fp_pay_len == 8'd32) begin
+                    end else if (POLL_GATE_EN && poll_frame) begin
+                        // N14: 点名帧 → 校验 tid（共享信道上只有被点名者可以醒）
+                        poll_chk_idx <= 4'd0;
+                        state        <= S_POLL_CHK;
+                    end else if (ENROLL_IDLE_ACCEPT && (POLL_GATE_EN ? poll_win : 1'b1) &&
+                                  rx_ok_latch && fp_msg_id == 24'h0091 && fp_pay_len == 8'd32) begin
                         // Phase 8a：注册模式——站端主动挑战（无按键），接受体与
                         // S_WAIT_CHALL 一致。⚠ 1 拍采样窗口：S_IDLE 不在锁存块
                         // 保持列表，fp_frame_ok 脉冲后的下一拍恰好可见 rx_ok_latch=1
@@ -417,6 +442,53 @@ module terminal_fsm # (
                 end
 
                 //====================================================
+                // N14: AUTH_POLL 点名校验（8 字节载荷顺序读，tid 匹配才认）
+                S_POLL_CHK: begin
+                    if (poll_chk_idx == 4'd0) begin
+                        fp_rd_addr   <= 5'd0;
+                        poll_chk_idx <= 4'd1;
+                    end else if (poll_chk_idx <= 4'd8) begin
+                        // idx=k 时组合读到的正是 payload[k-1]（地址寄存一拍）
+                        case (poll_chk_idx)
+                            4'd1: poll_b0 <= fp_rd_data;   // payload[0] tid LSB
+                            4'd2: poll_b1 <= fp_rd_data;   // payload[1]
+                            4'd3: poll_b2 <= fp_rd_data;   // payload[2]
+                            4'd4: poll_b3 <= fp_rd_data;   // payload[3]
+                            4'd5: poll_n0 <= fp_rd_data;   // payload[4] nonce[0]
+                            4'd6: poll_n1 <= fp_rd_data;   // payload[5]
+                            4'd7: poll_n2 <= fp_rd_data;   // payload[6]
+                            4'd8: poll_n3 <= fp_rd_data;   // payload[7] nonce[3]
+                            default: ;
+                        endcase
+                        if (poll_chk_idx < 4'd8) fp_rd_addr <= fp_rd_addr + 5'd1;
+                        poll_chk_idx <= poll_chk_idx + 4'd1;
+                    end else begin
+                        // idx==9：8 字节已齐，此时判定（非阻塞赋值上一拍已落定）
+                        poll_chk_idx <= 4'd0;
+                        if ((poll_b0 == terminal_id) && (poll_b1 == 8'h00) &&
+                            (poll_b2 == 8'h00) && (poll_b3 == 8'h00)) begin
+                            poll_win     <= 1'b1;
+                            poll_win_cnt <= POLL_WIN_CYC;
+                            if (poll_n0 | poll_n1 | poll_n2 | poll_n3) begin
+                                // 点名即唤醒（等效按 SW8）
+                                result_r       <= 2'd0;
+                                calc_done_flag <= 1'b0;
+                                if (ENABLE_KEY_DERIVE && !key_valid_r) begin
+                                    state       <= S_KEY_MEASURE;
+                                    km_substate <= 2'd0;
+                                    timeout_cnt <= 32'd0;
+                                end else begin
+                                    state <= S_CALC_R2;
+                                end
+                            end else begin
+                                state <= S_IDLE;   // 仅开注册窗口（enroll 用）
+                            end
+                        end else begin
+                            state <= S_IDLE;       // 点名不是本机：无视（不醒不开窗）
+                        end
+                    end
+                end
+
                 // 发送帧（共用逻辑：start → 等窗口 → 喂载荷 → 等 done）
                 //====================================================
                 S_TX_ACCESS, S_TX_R1, S_TX_CONFIRM, S_TX_R1_EXTRA: begin
@@ -614,8 +686,8 @@ module terminal_fsm # (
                         puf_dec_busy<= 1'b0;
                         timeout_cnt <= 32'd0;        // 审查 D-P1：同上
                         state       <= S_PUF_DECODE;
-                    end else if (ENROLL_IDLE_ACCEPT && rx_ok_latch &&
-                                  fp_msg_id == 24'h0091 && fp_pay_len == 8'd32) begin
+                    end else if (ENROLL_IDLE_ACCEPT && (POLL_GATE_EN ? poll_win : 1'b1) &&
+                                  rx_ok_latch && fp_msg_id == 24'h0091 && fp_pay_len == 8'd32) begin
                         // Phase 8a：注册背靠背轮——上轮 R1 发出后站端立即发下一批
                         // 种子（S_WAIT_RESULT 在锁存保持列表内，无 1 拍窗口问题）
                         fp_rd_addr  <= 5'd0;
@@ -694,8 +766,9 @@ module terminal_fsm # (
                 S_SESSION: begin
                     // 认证通过。auth_start 直接启动新一轮（不经过 IDLE——
                     // 否则 auth_start 脉冲被本态消费后 IDLE 看不到）
-                    // finals-demo N4: 巡检可唤醒会话态板子（二次认证入口）
-                    if (auth_start || poll_start) begin
+                    // N14: 会话中只认本机按键，不被点名打断（共享信道防串扰）。
+                    // 老 TB（POLL_GATE_EN=0）保留"会话态可被巡检唤醒"的历史语义。
+                    if (auth_start || (!POLL_GATE_EN && rx_ok_latch && fp_msg_id == ID_POLL)) begin
                         result_r <= 2'd0;
                         calc_done_flag <= 1'b0;   // B-P2: 每会话重置
                         if (ENABLE_KEY_DERIVE && !key_valid_r) begin

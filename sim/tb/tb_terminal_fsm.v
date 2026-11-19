@@ -86,10 +86,10 @@ module tb_terminal_fsm;
     //------------------------------------------------------------------------
 `ifdef ENROLL_NEG
     // 负向变体（手动 xvlog -d ENROLL_NEG，不入 CI）：参数=0 默认行为回归锁
-    terminal_fsm # (.TIMEOUT_CYCLES(1000), .MEASURE_CYCLES(32'd64)) dut (
+    terminal_fsm # (.POLL_GATE_EN(0), .TIMEOUT_CYCLES(1000), .MEASURE_CYCLES(32'd64)) dut (
 `else
     // 默认（CI）：参数=1——Phase 8a 注册流覆盖 + 全部既有流程回归
-    terminal_fsm # (.TIMEOUT_CYCLES(1000), .MEASURE_CYCLES(32'd64),
+    terminal_fsm # (.POLL_GATE_EN(0), .TIMEOUT_CYCLES(1000), .MEASURE_CYCLES(32'd64),
                     .ENROLL_IDLE_ACCEPT(1)) dut (
 `endif
         .clk           (clk          ),

@@ -95,8 +95,7 @@ module tb_puf_path;
         .ring_freq   (ra_ring_freq  )
     );
 
-    terminal_fsm # (
-        .TIMEOUT_CYCLES (32'd1000),
+    terminal_fsm # (.POLL_GATE_EN(0), .TIMEOUT_CYCLES (32'd1000),
         .MEASURE_CYCLES (32'd64),
         .PUF_WD_CYCLES  (32'd12000)     // 预算：解码 4x2058 + 测量 8x64 + 裕量（T3/T4 触发值）
     ) dut (

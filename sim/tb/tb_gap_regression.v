@@ -80,7 +80,7 @@ module tb_gap_regression;
         .ring_freq   (ra_ring_freq  )
     );
 
-    terminal_fsm # (.TIMEOUT_CYCLES(1000), .MEASURE_CYCLES(32'd64)) dut (
+    terminal_fsm # (.POLL_GATE_EN(0), .TIMEOUT_CYCLES(1000), .MEASURE_CYCLES(32'd64)) dut (
         .clk(clk), .rst(rst), .auth_start(auth_start), .terminal_id(terminal_id),
         .auth_busy(auth_busy), .auth_result(auth_result),
         // W4-T2 可注入端口 tie-off（黄金零改动）
