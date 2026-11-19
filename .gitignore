@@ -117,3 +117,30 @@ web/.out/
 
 # N12 one-click demo runtime state (persistent sandbox: templates/pool survive restarts)
 .demo_state/
+
+# ==== 2026-11-19 cleanup: local scratch / big build artifacts ====
+/_*
+/.playwright-cli/
+/build/BOOT*.bin
+/build/boot*.bif
+/build/test_min.bif
+/build/*.bin
+/build/*.prm
+/build/vitis_*/
+/build/qspi_*/
+/build/dbg/
+/build/muttest*/
+/build/board_zc706_seed2_arm/
+/build/board_zc706_seed2/
+/build/board_zc706_seed2b/
+/build/board_zc706_arm_v4b/
+/build/bg_std*.txt
+/build/sd_boot/*.bin
+/build/sd_boot/*.bit
+/build/sd_boot/*.elf
+/paper.zip
+/xicom_zynq_bin2964
+/data/web_bridge_state.json
+/data/templates/*.bak*
+/data/ml_attack_backup_1101/
+/build/*.elf

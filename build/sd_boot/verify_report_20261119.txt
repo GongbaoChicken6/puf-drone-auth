@@ -1,0 +1,21 @@
+verify time: 2026-11-19 16:35:01
+dir: D:\puf-drone-auth\build\sd_boot
+C1_FSBL=PASS  fsbl_zc706.elf sha256
+C2_BIT_V4=PASS  v4 ARM bitstream sha256
+C3_FC_ELF=PASS  flight controller DDR ELF sha256
+C4_FINAL_SHA=PASS  BOOT_SD_FINAL_V4_FC.bin sha256
+C4_FINAL_LEN=PASS  size==13410976
+C5_IMG_COUNT=PASS  boot image holds 3 partitions
+C5_NAME_FSBL=PASS  partition 1 = fsbl
+C5_NAME_BIT=PASS  partition 2 = v4 bit
+C5_NAME_ELF=PASS  partition 3 = fc elf
+C5_ELF_LOAD=PASS  fc elf load addr 0x10000000
+C6_ELF_SP=PASS  sp literal in image = 0x1000FF80
+C6_ELF_BANNER=PASS  fc banner string present in app partition
+C7_STAGE1_SHA=PASS  BOOT_SD_STAGE1_V4.bin sha256
+C7_STAGE1_NO_ELF=PASS  stage1 must NOT contain the fc banner (bit-only image)
+C8_REPRO_VERIFIED=PASS  diff vs teacher image = 4 bytes (expect 4: FSBL __TIME__ only)
+C9_BOARDB_SHA=PASS  BOOT_SD_BOARDB_SEED2.bin sha256
+C9_BOARDB_2PART=PASS  board B image holds 2 partitions
+
+ALL_CHECKS_PASS

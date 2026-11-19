@@ -1,0 +1,30 @@
+﻿DUAL-BOARD REAL-HARDWARE AUTHENTICATION PASS - 2026-11-15
+
+Board A (production layout, tid=1, COM6/LinkE):
+  JTAG SN: 210251A0195C
+  Bit: build/board_zc706/w3_top_zc706.bit (SHA 260A3E1B...)
+  Enrollment: 30 CRPs, 64bit stable, 100%
+  Auth: verdict=0 (PASS), HD=6, CONFIRM=0 (PASS)
+  Result: DS8 GREEN LED confirmed by user
+  
+Board B (seed2 variant X1Y0, tid=2, COM11/CH340):
+  JTAG SN: 210251A04F2C  
+  Bit: build/board_zc706_seed2/w3_top_zc706_seed2.bit (SHA F8A916EA...)
+  Enrollment: 30 CRPs, 64bit stable, 100%
+  Auth: verdict=0 (PASS), HD=0 (perfect match), CONFIRM=0 (PASS)
+  Result: DS8 GREEN LED pending user confirmation
+
+Protocol verified end-to-end:
+  AUTH_POLL(0x0097) -> ACCESS_REQUEST(0x0090) -> CHALLENGE(0x0091) 
+  -> RESPONSE_R1(0x0092) -> RESULT(0x0093) -> CONFIRM(0x0094)
+
+Key fixes applied:
+  1. SpeckHSM (not SimulatedHSM) with key 0001020308090a0b10111213
+  2. Pool restricted to template-backed seeds after enrollment
+  3. AUTH_POLL (N4) used to wake board instead of SW7
+
+Features verified on hardware:
+  - N4 AUTH_POLL (0x0097): both boards respond to poll
+  - Full 5-frame mutual authentication: PASS on both boards
+  - PUF stability: 64bit 100% on both boards
+  - N1 LED: DS8 green on PASS (user confirmed Board A)

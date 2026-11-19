@@ -1,0 +1,313 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 图标用 data: URI 内联,不新增可请求文件 —— §4.3「禁 CDN/全离线」下,
+       一个 favicon.ico 会变成浏览器自动发出、桥接必然 404 的请求。
+       画的是同心弧(硬件指纹的抽象),青=主强调,底=画布色。 -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070b14'/%3E%3Cg fill='none' stroke='%2322d3ee' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 19a10 10 0 0 1 20 0'/%3E%3Cpath d='M11 21.5a5 5 0 0 1 10 0'/%3E%3Cpath d='M16 24v3.5'/%3E%3C/g%3E%3C/svg%3E">
+  <title>PUF 无人机认证 · 演示控制台</title>
+  <script type="module" crossorigin="" src="./assets/console-DFko3Zn8.js"></script>
+  <link rel="modulepreload" crossorigin="" href="./assets/api-Bl8fzrui.js">
+  <link rel="stylesheet" crossorigin="" href="./assets/api-D7cmChOE.css">
+  <link rel="stylesheet" crossorigin="" href="./assets/console-ChJyD0iF.css">
+<link rel="modulepreload" as="script" crossorigin="" href="http://127.0.0.1:8799/assets/stage3d-D4EVrWVM.js"><link rel="modulepreload" as="script" crossorigin="" href="http://127.0.0.1:8799/assets/three-DEO2rK90.js"></head>
+<body>
+  <div id="app">
+    <div class="topbar">
+      <div class="tb-brand">
+        <span class="tb-logo"></span>
+        <span class="tb-title">PUF 无人机认证 <em>· 演示控制台</em></span>
+      </div>
+
+      <button class="tb-link st-serial" id="tb-link" aria-expanded="false" title="点击查看链路详情">
+        <i class="dot"></i><span id="tb-link-text">SERIAL</span>
+      </button>
+
+      <div class="tb-pool" id="tb-pool" title="所有终端 CRP 池最低水位">
+        <span class="k">池最低水位</span>
+        <span class="v mono" id="tb-pool-text">—</span>
+        <div class="tb-bar"><i id="tb-pool-bar" style="transform:scaleX(0.0000)"></i></div>
+      </div>
+
+      <label class="tb-slider" title="帧速滑杆:仅调整前端动画节奏,不改变后端时序(§6.2)">
+        <span class="k">帧速</span>
+        <input type="range" id="tb-ms" min="200" max="2000" step="50" value="600" aria-label="帧速:每帧推进的毫秒数">
+        <span class="v mono" id="tb-ms-val">600 ms</span>
+      </label>
+
+      <div class="tb-scripts">
+        <span class="k">剧本</span>
+        <span class="tb-one-shots" title="单幕播放:只跑所选场景,结束后画面定格在判定结果"><button class="btn ghost" title="S1 正常认证 —— 五帧全绿 + 大字 PASS + R2
+预期:ACCESS_REQUEST → CHALLENGE → RESPONSE_R1 → RESULT(PASS) → CONFIRM(OK)
+(单幕播放,结束后定格)">S1</button><button class="btn ghost" title="S2 仿冒攻击 —— 大字 REJECT + 逐响应 HD 差异高亮
+预期:同上但 RESULT(REJECT)
+(单幕播放,结束后定格)">S2</button><button class="btn ghost" title="S3 重放攻击 —— 琥珀警示 + 日志高亮
+预期:旧 C2 重发 → RESULT(result=4 重放嫌疑)
+(单幕播放,结束后定格)">S3</button><button class="btn ghost" title="S4 灰区加测 —— EXTRA_CHALLENGE 分支展开动画
+预期:CHALLENGE → RESPONSE → gray.extra(加测) → RESULT
+(单幕播放,结束后定格)">S4</button><button class="btn ghost" title="S5 池耗尽 —— 池水位空 + 维护引导
+预期:反复认证至 draw 失败 → RESULT(result=3 池耗尽)
+(单幕播放,结束后定格)">S5</button><button class="btn ghost" title="S6 注册刷新 —— 左栏卡片刷新
+预期:POST /api/enroll → enroll.done(n_pairs / added / stable bits)
+(单幕播放,结束后定格)">S6</button><button class="btn ghost" title="S7 假基站 —— 双向拒绝另一半:终端侧 BLOCKED
+预期:RESULT(PASS 但 R2 被篡改) → 终端侧 BLOCKED(不发 CONFIRM)
+(单幕播放,结束后定格)">S7</button><button class="btn ghost" title="S8 认证解锁飞行 —— PASS 解锁 → 起飞 → 航点A → 返航降落
+预期:verdict(PASS) → drone.state(TAKEOFF→HOVER→MOVE→HOVER→RTL→LANDED)
+(单幕播放,结束后定格)">S8</button></span><button class="btn ghost" id="tb-play-mutex" title="一键连播 S1→S2(默认互斥叙事)">S1→S2</button>
+        <button class="btn ghost" id="tb-play-all" title="全场景连播 S1…S8(以认证解锁飞行收尾)">全场景</button>
+        <button class="btn ghost" id="tb-step" title="逐幕单步(暂停态下推一幕)">单步</button>
+        <button class="btn ghost" id="tb-pause" title="暂停/继续自动推进" disabled="">暂停</button>
+        <button class="btn ghost" id="tb-stop" title="停止并清空剧本队列">停止</button>
+        <span class="tb-scen-stat mono" id="tb-scen-stat" title="">idle</span>
+      </div>
+
+      <span class="tb-spacer"></span>
+
+      <button class="tb-source st-live" id="tb-source" aria-expanded="false" title="点击查看数据源清单(§4.4)">
+        <i class="dot"></i><span id="tb-source-text">REAL-LIVE</span>
+      </button>
+
+      <div class="tb-clock">
+        <span class="mono" id="tb-run">run 0</span>
+        <span class="mono" id="tb-clock">08:50:31.878</span>
+      </div>
+
+      <span class="tb-hint" title="快捷键 H 隐藏/显示顶栏">H</span><button class="tb-help" title="快捷键帮助(?)" aria-label="快捷键帮助">?</button></div>
+    <main id="console-layout">
+      <div class="left-panel">
+      <div class="lp-head">
+        <span class="lp-title">终端注册表</span>
+        <span class="lp-count mono" id="lp-count">0</span>
+      </div>
+      <div class="lp-list" id="lp-list"></div>
+      <div class="lp-empty" id="lp-empty">
+        尚无终端。<br>桥接启动时会幂等注册演示终端(7/8/9);注册键位于各终端卡内,为既有终端补测模板。
+      </div>
+
+      <div class="lp-head lp-head-scen">
+        <span class="lp-title">一键演示场景 S1–S7</span>
+      </div>
+      <div class="lp-scen" id="lp-scen"><button class="btn scen-btn" data-scen="S1" aria-pressed="false" title="预期:ACCESS_REQUEST → CHALLENGE → RESPONSE_R1 → RESULT(PASS) → CONFIRM(OK)
+UI 焦点:五帧全绿 + 大字 PASS + R2
+快捷键:Shift+1"><b>S1</b><span>正常认证</span></button><button class="btn scen-btn" data-scen="S2" aria-pressed="false" title="预期:同上但 RESULT(REJECT)
+UI 焦点:大字 REJECT + 逐响应 HD 差异高亮
+快捷键:Shift+2"><b>S2</b><span>仿冒攻击</span></button><button class="btn scen-btn" data-scen="S3" aria-pressed="false" title="预期:旧 C2 重发 → RESULT(result=4 重放嫌疑)
+UI 焦点:琥珀警示 + 日志高亮
+快捷键:Shift+3"><b>S3</b><span>重放攻击</span></button><button class="btn scen-btn" data-scen="S4" aria-pressed="false" title="预期:CHALLENGE → RESPONSE → gray.extra(加测) → RESULT
+UI 焦点:EXTRA_CHALLENGE 分支展开动画
+快捷键:Shift+4"><b>S4</b><span>灰区加测</span></button><button class="btn scen-btn" data-scen="S5" aria-pressed="false" title="预期:反复认证至 draw 失败 → RESULT(result=3 池耗尽)
+UI 焦点:池水位空 + 维护引导
+固定终端:tid 99
+快捷键:Shift+5"><b>S5</b><span>池耗尽</span></button><button class="btn scen-btn" data-scen="S6" aria-pressed="false" title="预期:POST /api/enroll → enroll.done(n_pairs / added / stable bits)
+UI 焦点:左栏卡片刷新
+快捷键:Shift+6"><b>S6</b><span>注册刷新</span></button><button class="btn scen-btn" data-scen="S7" aria-pressed="false" title="预期:RESULT(PASS 但 R2 被篡改) → 终端侧 BLOCKED(不发 CONFIRM)
+UI 焦点:双向拒绝另一半:终端侧 BLOCKED
+快捷键:Shift+7"><b>S7</b><span>假基站</span></button><button class="btn scen-btn" data-scen="S8" aria-pressed="false" title="预期:verdict(PASS) → drone.state(TAKEOFF→HOVER→MOVE→HOVER→RTL→LANDED)
+UI 焦点:PASS 解锁 → 起飞 → 航点A → 返航降落
+快捷键:Shift+8"><b>S8</b><span>认证解锁飞行</span></button></div></div>
+      <div class="stage">
+      <div class="stage-title">
+        <span class="st-name" id="st-name">认证舞台</span>
+        <span class="st-run mono" id="st-run">run —</span>
+        <span class="st-dur mono" id="st-dur">—</span>
+        <span class="st-cams" id="st-cams" title="相机预设(快捷键 1–4);F 截图" hidden="">
+          <button class="btn ghost st-cam" data-cam="1">全景</button>
+          <button class="btn ghost st-cam" data-cam="2">跟踪</button>
+          <button class="btn ghost st-cam" data-cam="3">特写</button>
+          <button class="btn ghost st-cam" data-cam="4">俯瞰</button>
+          <button class="btn ghost st-cam" data-cam="shot" title="导出当前舞台画面(F)">⤓</button>
+        </span>
+        <span class="tb-spacer"></span>
+        <button class="btn ghost" title="右栏在 &lt;1280px 下折叠为抽屉(快捷键 R)" aria-expanded="false">判定面板</button><span class="st-hud" id="st-hud">2D 保底时序(3D 舞台未接管)</span>
+      </div>
+      <div class="stage-view">
+        <!-- three.js 挂载点(#stage-3d 由 console.html 预留,§8.5 契约) -->
+        <div class="stage-fallback" id="stage-fallback"><div class="frame-timeline">
+      <div class="ft-main" id="ft-main"><div class="ft-node ft-idle"><span class="ft-name">ACCESS_REQUEST</span>
+        <span class="ft-dir"></span><span class="ft-st">未到达</span></div><div class="ft-arrow">⇄</div><div class="ft-node ft-idle"><span class="ft-name">CHALLENGE</span>
+        <span class="ft-dir"></span><span class="ft-st">未到达</span></div><div class="ft-arrow">⇄</div><div class="ft-node ft-idle"><span class="ft-name">RESPONSE_R1</span>
+        <span class="ft-dir"></span><span class="ft-st">未到达</span></div><div class="ft-arrow">⇄</div><div class="ft-node ft-idle"><span class="ft-name">RESULT</span>
+        <span class="ft-dir"></span><span class="ft-st">未到达</span></div><div class="ft-arrow">⇄</div><div class="ft-node ft-idle"><span class="ft-name">CONFIRM</span>
+        <span class="ft-dir"></span><span class="ft-st">未到达</span></div></div>
+      <div class="ft-fork" id="ft-fork"><div class="ft-fork-link"></div><span class="ft-fork-label">灰区分叉</span><div class="ft-node ft-node-fork ft-idle"><span class="ft-name">EXTRA_CHALLENGE</span>
+        <span class="ft-dir"></span><span class="ft-st">未到达</span></div><div class="ft-arrow">⇄</div><div class="ft-node ft-node-fork ft-idle"><span class="ft-name">RESPONSE_R1</span>
+        <span class="ft-dir"></span><span class="ft-st">未到达</span></div></div>
+      <div class="ft-note" id="ft-note">等待指令 —— 五个帧节点:接入请求 / 挑战 / 响应 / 判定 / 确认</div></div></div>
+        <div class="stage-hint" id="stage-hint" hidden="">按住拖拽旋转 · 滚轮缩放</div>
+      <div id="stage-3d"></div></div>
+      <div class="stage-hex" id="stage-hex"><div class="hex-viewer">
+      <div class="hv-head">
+        <span class="hv-title">帧结构查看器</span>
+        <div class="hv-modes">
+          <button class="btn hv-mode primary" data-mode="live">实时帧</button>
+          <button class="btn hv-mode" data-mode="golden">黄金帧回放</button>
+        </div>
+        <span class="hv-note" id="hv-note"></span>
+      </div>
+      <div class="hv-pick" id="hv-pick"></div>
+      <div class="hv-body" id="hv-body"></div>
+      <div class="hv-diff" id="hv-diff"></div></div></div></div>
+      <div class="right-panel">
+      <div class="rp-verdict" id="rp-verdict">
+        <div class="rp-big" id="rp-big">待判定</div>
+        <div class="rp-sub" id="rp-sub">等待一次认证</div>
+        <div class="rp-meta mono" id="rp-meta">—</div>
+        <div class="rp-idle" id="rp-idle">
+          开始演示:左栏 <b>S1–S7</b> 场景 · 终端卡「认证」<br>
+          <span class="mono">Shift+1–7</span> 快捷触发 · <span class="mono">?</span> 全部快捷键
+        </div>
+      </div>
+
+      <div class="rp-block" id="rp-block" hidden="">
+        <div class="rp-block-t">终端侧:BLOCKED</div>
+        <div class="rp-block-d">检出假基站(R2 被篡改)—— 终端拒绝发 CONFIRM,双向认证未闭环。</div>
+      </div>
+
+      <section class="rp-card" id="rp-hd"><div class="hd-gauge">
+      <div class="hg-head">
+        <span class="hg-title">HD 汉明距离仪</span>
+        <span class="hg-caption chip" id="hg-cap">待判定</span>
+      </div>
+      <div class="hg-track" id="hg-track">
+        <div class="hg-band hg-pass" id="hg-pass" style="display: none;"></div>
+        <div class="hg-band hg-gray" id="hg-gray" style="display: none;"></div>
+        <div class="hg-band hg-reject" id="hg-reject" style="display: none;"></div>
+        <div class="hg-pointer" id="hg-ptr" style="display: none;"><i></i></div>
+      </div>
+      <div class="hg-scale" id="hg-scale"></div>
+      <div class="hg-bars" id="hg-bars"></div></div></section>
+
+      <section class="rp-card">
+        <div class="rp-card-h">
+          <span>R2(K_terminal 派生的会话确认值)</span>
+          <span class="chip gold" id="rp-r2-badge" hidden="">黄金 R2 ✓</span>
+        </div>
+        <div class="rp-r2">
+          <code class="mono" id="rp-r2">—</code>
+          <button class="btn ghost" id="rp-r2-copy" title="复制 R2(hex)" disabled="">复制</button>
+        </div>
+        <div class="rp-note" id="rp-r2-note">R2 仅在判定 PASS 时下发(RESULT 载荷 result|hd|R2,R2 占 8B)。</div>
+      </section>
+
+      <section class="rp-card">
+        <div class="rp-card-h"><span>CRP 池水位</span><span class="mono" id="rp-pool-text">—</span></div>
+        <div class="tb-bar rp-pool-bar warn"><i id="rp-pool-bar" style="transform:scaleX(0.0000)"></i></div>
+        <div class="rp-note">分母 pool_size = 该设备历史容量上限;pool.warning 在 remaining_pct &lt; 20 时下发。</div>
+      </section>
+
+      <section class="rp-card">
+        <div class="rp-card-h"><span>会话计数</span><span class="mono" id="rp-sess-state">—</span></div>
+        <div class="rp-kv" id="rp-sess"><div class="rp-kv-row"><span class="k">challenges_issued</span><span class="v mono">—</span></div><div class="rp-kv-row"><span class="k">responses_scored</span><span class="v mono">—</span></div><div class="rp-kv-row"><span class="k">hd_sum</span><span class="v mono">—</span></div></div>
+      </section></div>
+    </main>
+    <div class="audit-log">
+      <div class="al-head">
+        <span class="al-title">审计日志</span>
+        <label class="al-filter">终端 <select id="al-tid"><option value="all">全部</option></select></label>
+        <label class="al-filter">严重级 <select id="al-sev">
+          <option value="all">全部</option><option value="info">info</option>
+          <option value="warn">warn</option><option value="error">error</option></select></label>
+        <label class="al-filter">类型 <select id="al-type"><option value="all">全部</option><option value="server.log">server.log</option></select></label>
+        <span class="al-count" id="al-count">2 / 2 行</span>
+        <span class="al-spacer"></span>
+        <button class="btn ghost" id="al-follow" aria-pressed="true" title="钉在底部自动跟随最新事件">跟随 ✓</button>
+        <button class="btn ghost" id="al-export-run" title="当前无运行:按钮禁用(「导出全部」仍可用)" disabled="">
+          导出本次运行</button>
+        <button class="btn ghost" id="al-export-all" title="导出全部已缓存事件(同为本进程真实收到的原始信封)">导出全部</button>
+        <button class="btn ghost" id="al-clear">清屏</button>
+      </div>
+      <div class="al-viewport" id="al-vp">
+        <div class="al-scroll" id="al-sp" style="height: 44px;"><div class="al-layer" id="al-ly" style="transform: translateY(0px);"><div class="al-row tone-info sev-info" title="2026-11-16T00:50:28.923Z
+server.log
+黄金向量已载入 0 条 · 金标准 — R2=— —— 右栏金角标据此逐字符比对。" style="height: 22px;"><span class="al-ts mono">08:50:28.923</span><span class="al-type mono">server.log</span><span class="al-tid mono">—</span><span class="al-text">黄金向量已载入 0 条 · 金标准 — R2=— —— 右栏金角标据此逐字符比对。</span></div><div class="al-row tone-replay sev-warn" title="2026-11-16T00:50:28.923Z
+server.log
+3D 舞台未接管,已切 2D 保底时序:WebGL 上下文创建失败:THREE.WebGLRenderer: Error creating WebGL context." style="height: 22px;"><span class="al-ts mono">08:50:28.923</span><span class="al-type mono">server.log</span><span class="al-tid mono">—</span><span class="al-text">3D 舞台未接管,已切 2D 保底时序:WebGL 上下文创建失败:THREE.WebGLRenderer: Error creating WebGL context.</span></div></div></div>
+      </div></div>
+  </div>
+
+
+
+<div class="tb-popup" id="tb-pool-tip" hidden=""></div><div class="tb-popup" id="tb-source-tip" hidden=""></div><div class="ids-banner" role="alert" hidden=""></div><div class="frame-flight"></div><div class="drone-panel dp-none">
+      <div class="dp-head">
+        <span class="dp-title">无人机演示 HUD · <span class="dp-tid mono">tid —</span></span>
+        <span class="dp-chip locked" data-chip="">🔒 未解锁</span>
+      </div>
+      <div class="dp-body">
+        <svg class="dp-horizon" viewBox="-50 -50 100 100" aria-hidden="true">
+          <defs><clipPath id="dp-clip"><circle cx="0" cy="0" r="44"></circle></clipPath></defs>
+          <g data-horizon="" transform="rotate(0.0)">
+            <g data-pitch="" transform="translate(0 0.00)">
+              <rect x="-90" y="-90" width="180" height="90" class="dp-sky"></rect>
+              <rect x="-90" y="0" width="180" height="90" class="dp-ground"></rect>
+              <line x1="-40" y1="0" x2="40" y2="0" class="dp-hline"></line>
+              <line x1="-20" y1="-10" x2="20" y2="-10" class="dp-hline dim"></line>
+              <line x1="-20" y1="10" x2="20" y2="10" class="dp-hline dim"></line>
+            </g>
+          </g>
+          <circle cx="0" cy="0" r="44" class="dp-ring"></circle>
+          <g class="dp-plane"><line x1="-26" y1="0" x2="-8" y2="0"></line><line x1="8" y1="0" x2="26" y2="0"></line><circle cx="0" cy="0" r="2.2"></circle></g>
+        </svg>
+        <div class="dp-reads mono">
+          <div><span>alt</span><b data-alt="">—</b><i>m</i></div>
+          <div><span>v</span><b data-spd="">—</b><i>m/s</i></div>
+          <div><span>yaw</span><b data-yaw="">—</b><i>°</i></div>
+          <div><span>pos</span><b data-pos="">—</b></div>
+        </div>
+      </div>
+      <div class="dp-hint" data-hint="">先认证解锁 —— 板上 SW7 或终端卡「巡检」</div>
+      <div class="dp-actions">
+        <button class="btn green" data-cmd="takeoff" disabled="">解锁起飞</button>
+        <button class="btn" data-cmd="wpA" disabled="">航点 A</button>
+        <button class="btn" data-cmd="wpB" disabled="">航点 B</button>
+      </div>
+      <div class="dp-actions">
+        <button class="btn" data-cmd="hold" disabled="">悬停</button>
+        <button class="btn amber" data-cmd="rtl" disabled="">返航</button>
+        <button class="btn amber" data-cmd="land" disabled="">降落</button>
+        <button class="btn ghost" data-cmd="lock" disabled="">上锁</button>
+      </div>
+      <div class="dp-flash" data-flash="" hidden=""></div></div><div class="enroll-wizard" hidden="" role="dialog">
+      <div class="ew-card">
+        <div class="ew-head">
+          <span>真板指纹录入</span>
+          <button class="btn ghost" data-close="" title="关闭">✕</button>
+        </div>
+        <div class="ew-body">
+          <div class="ew-form" data-step="form">
+            <label>终端 ID (tid)
+              <input type="number" data-tid="" value="7" min="1" max="255" class="mono">
+            </label>
+            <label>挑战数
+              <input type="number" data-n="" value="100" min="4" max="500" class="mono">
+            </label>
+            <label>测量次数
+              <input type="number" data-m="" value="3" min="1" max="10" class="mono">
+            </label>
+            <div class="ew-hint">确保板子已上电、拨码 SW12 设为正确 tid、ENROLL_EN=1</div>
+            <button class="btn green" data-start="">开始录入</button>
+          </div>
+          <div class="ew-progress" data-step="progress" hidden="">
+            <div class="ew-bar"><div data-bar="" class="ew-fill"></div></div>
+            <div class="mono" data-ptext="">准备中…</div>
+          </div>
+          <div class="ew-result" data-step="result" hidden="">
+            <div class="ew-stats mono" data-stats=""></div>
+            <button class="btn" data-verify="" title="POST /api/poll (AUTH_POLL)">验证认证</button>
+          </div>
+          <div class="ew-error" data-error="" hidden=""></div>
+        </div>
+      </div></div><div class="ap-overlay" role="dialog"><div class="ap-card">  <div class="ap-head">    <span>接入请求 · 人工选择验证顺序</span>    <button class="btn ghost" data-close="" title="收起(徽标仍在)">✕</button>  </div>  <div class="ap-body"><div class="ap-row">  <div class="ap-info">    <span class="ap-name">板A</span>    <span class="ap-meta">tid 1 · COM6      · 已等待 7 秒</span>  </div>  <div class="ap-actions"><button class="btn green" data-select="1">开始验证</button>    <button class="btn ghost" data-dismiss="1">撤下</button>  </div></div><div class="ap-row">  <div class="ap-info">    <span class="ap-name">板B</span>    <span class="ap-meta">tid 2 · COM11      · 已等待 5 秒 · 重复按压 2 次</span>  </div>  <div class="ap-actions"><button class="btn green" data-select="2">开始验证</button>    <button class="btn ghost" data-dismiss="2">撤下</button>  </div></div>  </div></div></div><button class="ap-badge" type="button">待接入 2</button><div class="help-ov" hidden="" role="dialog" aria-modal="true" aria-label="快捷键帮助">
+  <div class="help-card card" tabindex="-1">
+    <div class="help-title">快捷键</div>
+    <dl class="help-list">
+      <dt><kbd>Shift</kbd><kbd>1</kbd>–<kbd>8</kbd></dt>
+        <dd>触发场景 S1–S8(单跑该幕;S8=认证解锁飞行)</dd>
+      <dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>3D 相机:全景 / 跟踪 / 特写 / 俯瞰</dd>
+      <dt><kbd>F</kbd></dt><dd>导出当前舞台画面</dd>
+      <dt><kbd>H</kbd></dt><dd>隐藏 / 显示顶栏(录屏用)</dd>
+      <dt><kbd>R</kbd></dt><dd>右栏抽屉开合(窄屏)</dd>
+      <dt><kbd>?</kbd></dt><dd>本浮层</dd>
+    </dl>
+    <div class="help-foot">3D 舞台可按住拖拽旋转、滚轮缩放;审计日志行悬停可读全文。</div>
+  </div></div></body></html>

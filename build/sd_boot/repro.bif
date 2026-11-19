@@ -1,0 +1,5 @@
+the_ROM_image:
+{
+[bootloader]fsbl_from_pkg.elf
+w3_from_pkg.bit
+}

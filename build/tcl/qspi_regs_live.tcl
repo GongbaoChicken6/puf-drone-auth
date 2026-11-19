@@ -1,0 +1,16 @@
+connect -url tcp:localhost:3121
+targets
+stop
+puts "=== LIVE REGS after failed sf probe (board B) ==="
+puts "QSPI_REF_CTRL(0xF8000158)=[mrd 0xF8000158]"
+puts "APER_CLK(0xF800012C)=[mrd 0xF800012C]"
+puts "IO_PLL_CTRL(0xF8000108)=[mrd 0xF8000108]"
+foreach a {0xF8000700 0xF8000704 0xF8000708 0xF800070C 0xF8000710 0xF8000714 0xF8000718 0xF800071C 0xF8000720 0xF8000724 0xF8000728 0xF800072C 0xF8000730 0xF8000734} {
+  puts "MIO $a=[mrd $a]"
+}
+puts "QSPI_CFG(0xE000D000)=[mrd 0xE000D000]"
+puts "QSPI_STS(0xE000D00C)=[mrd 0xE000D00C]"
+puts "QSPI_SLCR(0xF800022C qspi_rst_ctrl)=[mrd 0xF800022C]"
+puts "LQSPI_CFG(0xE000D0A8)=[mrd 0xE000D0A8]"
+puts "REGS_DONE"
+exit

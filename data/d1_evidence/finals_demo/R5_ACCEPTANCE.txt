@@ -1,0 +1,12 @@
+﻿R5 FINAL ACCEPTANCE - 2026-11-14
+Verdict: GO (all 6 categories green)
+
+1. pytest full suite: 193 passed, 1 skipped, 3 subtests (0 fail)
+2. Contract sync: OK (protocol.py + puf_model == contract S4+S8+S9)
+3. TypeScript compile: 0 errors
+4. Bit SHA verify: A=True B=True (MANIFEST matches actual bits)
+5. CI regression: 19/19 PASS, 0 FAIL (includes wrapper lock, BOARD_LOCK dual-bit, 19 TB, pytest suite, contract sync, canary)
+6. Live bridge smoke: status=200 console=200 auth=200 poll=200 drone=409(auth-gated,correct)
+
+Notes: drone ARM returns 409 because drone is locked until auth PASS - this is the correct verdict-gate behavior.
+Working tree: only .xpr noise + historical untracked (acceptable).

@@ -1,0 +1,6 @@
+the_ROM_image:
+{
+[bootloader]fsbl_zc706.elf
+w3_top_zc706_v4b.bit
+flight_ctrl_ddr.elf
+}
