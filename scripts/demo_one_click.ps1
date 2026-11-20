@@ -60,7 +60,7 @@ StopBridge
 Get-Process hw_server -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
 
-# ---------- [2/8] JTAG 烧写(板A v4b + 板B seed2b) ----------
+# ---------- [2/8] 板子确认(SD 自举, 不烧录) ----------
 Step 2 '板子确认(SD 卡自举模式, 本脚本不烧录)'
 # 决赛口径: 两块板直接从 SD 卡自举(SW11=00110, 官方FSBL+v4c/seed2c), 无需 JTAG。
 # 请确认: 板已上电且 INIT(DS35) 黄+心跳; 若心跳异常 -> 检查卡在 J30/SW11/断电重启。
@@ -187,7 +187,7 @@ else {
 
 
 }
-$bargs += @('--access-gate','--access-label','1=板A,2=板B')
+$bargs += @('--access-gate','--access-label','1=板A,2=未登记终端 tid2')
 if ($RevokedTids) { $bargs += @('--revoked-tids', $RevokedTids); Ok "已吊销终端: $RevokedTids (排队->验证->REJECT 拒绝接入)" }
 if (-not $NoBrowser) { $bargs += '--open' }
 $log = Join-Path $state ('bridge_' + (Get-Date -Format HHmmss) + '.log')
@@ -313,6 +313,7 @@ Write-Host '  !! 板A 的 SW7 触点已坏, 不要按; SW7/SW9 为冗余备键' 
 Write-Host '  伪基站演示: python tools/attack/fake_result_attack.py --via-bridge --rogue-web 8643' -ForegroundColor Gray
 Write-Host '             然后浏览器开 http://127.0.0.1:8643 (武装竞速/伪基站接入 两按钮)' -ForegroundColor Gray
 Write-Host '  板B 剧本: SW12=0010 按 SW8=拒绝接入 | SW12=0001 按 SW8=假冒警报 (收尾拨回0010)' -ForegroundColor Yellow
+Write-Host '  展示口径: 板B 在前端显示为"未登记终端 tid2"(陌生机器), 板A 冒充轮仍显示 板A(冒用身份)' -ForegroundColor Gray
 Write-Host '  板子: SD 卡插 J30 + SW11=00110, 上电即自举(INIT 黄+心跳); 本脚本只管 PC 侧' -ForegroundColor Gray
 Write-Host '  不做: 不按SW13; PMOD断电才插拔; 换bit后必须重录模板(-Enroll)' -ForegroundColor Gray
 Write-Host '  ============================================' -ForegroundColor Green
